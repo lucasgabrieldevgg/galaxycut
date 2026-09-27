@@ -6,7 +6,7 @@
 
 **Editor de vídeo gratuito que roda 100% no seu navegador** (e também como app de desktop). Timeline com faixas estilo CapCut, legendas automáticas karaokê com Whisper local, detector de silêncio, gravação de voz, busca de músicas e efeitos livres — e **sem marca d'água**.
 
-- Web: **https://lucasgabrieldevgg.github.io/galaxycut/**
+- Web: **https://galaxycut.vercel.app**
 - Releases (AppImage Linux + Instalador Windows): **https://github.com/lucasgabrieldevgg/galaxycut/releases**
 
 ## Por que usar
@@ -34,7 +34,7 @@
 
 ### Web (recomendado)
 
-Abra **https://lucasgabrieldevgg.github.io/galaxycut/** no Chrome/Edge atualizado. Não precisa instalar nada.
+Abra **https://galaxycut.vercel.app** no Chrome/Edge atualizado. Não precisa instalar nada.
 
 ### Linux (AppImage)
 
@@ -70,7 +70,7 @@ npx electron-builder --win nsis              # gera o instalador Windows
 ### Publicar versão nova
 
 1. Atualize `src/lib/editor/changelog.json` (versão + itens) e o `version` do `package.json`.
-2. Commit na `main` (o site república sozinho no GitHub Pages).
+2. Commit na `main` (o site república sozinho na Vercel).
 3. `git tag vY.Z.K && git push origin vY.Z.K` — o GitHub Actions builda AppImage + Windows e cria o Release com o `latest.json` (o app usa isso pra avisar os usuários e mostrar o changelog).
 
 ## Estrutura

@@ -12,6 +12,7 @@ node_modules/
 .vercel/
 .vercel-token.txt
 .vercelignore
+/scripts/ghsecret/
 .claude/
 .z-ai-config/
 .zscripts/

@@ -1,0 +1,32 @@
+# GalaxyCut — publica o site na Vercel a cada push na main.
+# URL final: https://galaxycut.vercel.app
+# (o token vem do secret VERCEL_TOKEN; os IDs abaixo não são sensíveis)
+name: Deploy Web (Vercel)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instala Vercel CLI
+        run: npm i -g vercel
+
+      - name: Deploy de produção
+        run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: team_w9pdpVkOLH3larOUmPd1JT8z
+          VERCEL_PROJECT_ID: prj_l0W5N2IamGLcmPCd3DK8oHlAub7g

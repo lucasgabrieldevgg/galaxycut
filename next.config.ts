@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
-// BASE_PATH: vazio por padrão (raiz). O deploy do GitHub Pages builda com
-// BASE_PATH=/galaxycut (a URL lá é lucasgabrieldevgg.github.io/galaxycut/).
+// BASE_PATH: vazio por padrão (raiz — é assim que o site roda na Vercel,
+// em https://galaxycut.vercel.app). Só preencha se for hospedar em subpasta.
 const basePath = process.env.BASE_PATH ?? "";
 
 const nextConfig: NextConfig = {
