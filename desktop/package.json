@@ -1,0 +1,50 @@
+{
+  "name": "galaxycut-desktop",
+  "productName": "GalaxyCut",
+  "version": "6.0.0",
+  "private": true,
+  "description": "GalaxyCut — editor de vídeo grátis (pacote de desktop)",
+  "main": "main.js",
+  "author": "GalaxyCut",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:linux": "electron-builder --linux AppImage",
+    "dist:win": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "galaxycut.app",
+    "productName": "GalaxyCut",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": ["main.js", "preload.js", "build/icon.png", "www/**/*"],
+    "asar": true,
+    "icon": "build/icon.png",
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "AudioVideo",
+      "artifactName": "GalaxyCut-${version}-x86_64.AppImage"
+    },
+    "win": {
+      "target": ["nsis"],
+      "artifactName": "GalaxyCut-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "GalaxyCut"
+    },
+    "publish": null
+  }
+}

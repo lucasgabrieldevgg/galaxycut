@@ -1,0 +1,43 @@
+{
+  "version": "6.0.0",
+  "entries": [
+    {
+      "version": "6.0.0",
+      "date": "2026-09-27",
+      "items": [
+        "Nova página inicial: suas edições ficam salvas — criar, renomear, duplicar e excluir",
+        "Corrigido: o clipe agora cai EXATAMENTE onde você solta na timeline",
+        "Não dá mais pra empilhar clipe em cima de outro — só em espaço livre (cima, baixo ou entre clipes)",
+        "Menu do botão direito estável: um clique e ele fica",
+        "Medidor de áudio horizontal estilo OBS, com escala em decibéis",
+        "Gravação de voz direto no editor (vira áudio na timeline)",
+        "Prévia de vídeo na aba Mídia + player fixo embaixo com pausar, avançar e mexer livre",
+        "Verificador de atualizações com changelog (web e desktop)",
+        "Módulo de IA removido (as legendas continuam com Whisper local, no próprio navegador)",
+        "App de desktop (AppImage) com pasta própria de vídeos exportados",
+        "Otimizações gerais e build estático (carrega mais rápido)"
+      ]
+    },
+    {
+      "version": "5.0.0",
+      "date": "2026-09-26",
+      "items": [
+        "Detector de silêncio aplica em TODOS os clipes do arquivo",
+        "Vassoura: apaga de uma vez os clipes de áudio sem som",
+        "Extrair áudio vira arquivo WAV próprio na aba Áudio",
+        "A tela acompanha a setinha vermelha",
+        "Fim do clipe zumbi com mídia não carregada"
+      ]
+    },
+    {
+      "version": "4.0.0",
+      "date": "2026-09-25",
+      "items": [
+        "Atalhos de teclado editáveis",
+        "Mídia persistente no navegador (recarregar não perde nada)",
+        "Seleção múltipla com Ctrl+A e Delete",
+        "Busca com gêneros musicais e filtro de duração"
+      ]
+    }
+  ]
+}

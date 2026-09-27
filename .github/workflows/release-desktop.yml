@@ -1,0 +1,145 @@
+# GalaxyCut — build dos apps de desktop (AppImage Linux + Instalador Windows)
+# e publicação como Release do GitHub com changelog + latest.json pro
+# verificador de atualização do app.
+name: Release Desktop (AppImage + Windows)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instala dependências do site
+        run: npm ci
+
+      - name: Build estático do editor
+        run: npm run build
+
+      - name: Embala o editor no app
+        run: |
+          mkdir -p desktop/www
+          cp -r out/* desktop/www/
+
+      - name: Instala o Electron
+        working-directory: desktop
+        run: npm ci
+
+      - name: Gera o AppImage
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --linux AppImage --publish never
+
+      - name: Sobe o artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: desktop/release/*.AppImage
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instala dependências do site
+        run: npm ci
+
+      - name: Build estático do editor
+        run: npm run build
+
+      - name: Embala o editor no app
+        run: |
+          mkdir -p desktop/www
+          cp -r out/* desktop/www/
+
+      - name: Instala o Electron
+        working-directory: desktop
+        run: npm ci
+
+      - name: Gera o instalador
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win nsis --publish never
+
+      - name: Sobe o artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: desktop/release/*.exe
+          if-no-files-found: error
+
+  release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: appimage
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: dist
+
+      - name: Gera o latest.json (feed do verificador de atualização)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          node -e "
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('public/version.json', 'utf8'));
+          const entry = (data.changelog || []).find(c => c.version === data.version) || {};
+          const out = {
+            name: 'GalaxyCut ' + data.version,
+            version: data.version,
+            date: new Date().toISOString(),
+            notes: entry.items || ['Nova versão disponível.'],
+            url: 'https://github.com/lucasgabrieldevgg/galaxycut/releases/tag/${TAG}',
+            files: {
+              linux: 'GalaxyCut-' + data.version + '-x86_64.AppImage',
+              windows: 'GalaxyCut-Setup-' + data.version + '.exe'
+            }
+          };
+          fs.writeFileSync('dist/latest.json', JSON.stringify(out, null, 2));
+          console.log(JSON.stringify(out, null, 2));
+          "
+
+      - name: Cria o Release com changelog
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.AppImage
+            dist/*.exe
+            dist/latest.json
+          body: |
+            GalaxyCut ${{ github.ref_name }}
+
+            O que tem de novo está no changelog — a janela de atualização do app mostra a lista completa, ou veja [`changelog.json`](https://github.com/lucasgabrieldevgg/galaxycut/blob/main/src/lib/editor/changelog.json).
+
+            Downloads:
+            - Linux: `GalaxyCut-*-x86_64.AppImage`
+            - Windows: `GalaxyCut-Setup-*.exe`
+            - Web: https://lucasgabrieldevgg.github.io/galaxycut/

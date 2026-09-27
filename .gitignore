@@ -1,0 +1,51 @@
+# GalaxyCut — o que NÃO vai pro repositório público
+
+# dependências / build
+node_modules/
+/.next/
+/out/
+/coverage
+
+# ambiente e chaves
+.env*
+!.env.example
+.vercel/
+.vercel-token.txt
+.vercelignore
+.claude/
+.z-ai-config/
+.zscripts/
+/skills/
+/mini-services/
+
+# logs
+*.log
+dev.log
+server.log
+desktop-install.log
+*.tsbuildinfo
+next-env.d.ts
+
+# workspace de desenvolvimento (pessoal / de teste)
+/upload/
+/download/
+/tool-results/
+/tests/
+/examples/
+/db/
+/worklog.md
+/Caddyfile
+
+# scripts auxiliares: só os do app entram
+/scripts/*
+!/scripts/sync-version.mjs
+!/scripts/gen-icons.mjs
+
+# desktop: binários e build ficam fora (CI gera)
+/desktop/node_modules/
+/desktop/release/
+/desktop/www/
+
+# sistema
+.DS_Store
+*.pem
