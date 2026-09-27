@@ -49,7 +49,8 @@ function fallbackChain(requested: WhisperModelId): string[] {
 
 // ---------------- Web Worker: a transcrição NUNCA mais trava a interface ----------------
 // O modelo roda num worker próprio (blob module + import do CDN). O áudio é fatiado
-// em janelas de 10s com 0,8s de sobreposição — cada janela reporta progresso REAL,
+// em janelas de 30s com 0,8s de sobreposição (o chunk nativo do whisper) — cada
+// janela reporta progresso + um heartbeat estimado pra barra andar sempre,
 // dá pra cancelar (worker.terminate) e a UI continua fluida o tempo todo.
 
 const WORKER_SRC = `
@@ -107,21 +108,31 @@ self.onmessage = async (ev) => {
     const send = (o) => self.postMessage(o);
     send({ type: "stage", stage: "prepare", pct: 1 });
 
-    // janelas de 10s (não 30): o progresso anda 3× mais vezes — nada de
-    // ficar preso em 10% enquanto a IA processa meio minuto de áudio
-    const WIN = 10;
+    // janelas de 30s (o chunk NATIVO do whisper — testado com áudio real:
+    // janelas menores faziam o modelo tiny truncar a transcrição)
+    const WIN = 30;
     const OVERLAP = 0.8;
     const sr = 16000;
     const total = msg.pcm.length / sr;
     const n = Math.max(1, Math.ceil((total - OVERLAP) / (WIN - OVERLAP)));
     const allWords = [];
     let lastEnd = 0;
+    let estPerWin = 25; // chute inicial: 25s de processamento por janela (ajusta com a 1ª)
     for (let w = 0; w < n; w++) {
       const off = w * (WIN - OVERLAP);
       const len = Math.min(WIN, total - off);
       if (len <= 0.05) break;
       const slice = msg.pcm.subarray(Math.round(off * sr), Math.round((off + len) * sr));
-      send({ type: "stage", stage: "transcribe", pct: 0.1 + 0.85 * (w / n), window: w + 1, windows: n });
+      const basePct = 0.1 + 0.85 * (w / n);
+      const rangePct = 0.85 / n;
+      send({ type: "stage", stage: "transcribe", pct: basePct, window: w + 1, windows: n });
+      // heartbeat: a barra continua ANDANDO enquanto a janela processa
+      // (estimativa por tempo — não deixa o dono olhar uma barra congelada)
+      const t0 = performance.now();
+      const hb = setInterval(() => {
+        const frac = Math.min(0.9, (performance.now() - t0) / (estPerWin * 1000));
+        send({ type: "stage", stage: "transcribe", pct: basePct + rangePct * frac, window: w + 1, windows: n });
+      }, 3000);
       const out = await asr(slice, {
         language: msg.lang === "auto" ? null : msg.lang,
         task: "transcribe",
@@ -129,6 +140,8 @@ self.onmessage = async (ev) => {
         stride_chunk_s: 5,
         return_timestamps: "word",
       });
+      clearInterval(hb);
+      estPerWin = Math.max(3, (performance.now() - t0) / 1000);
       const chunks = out?.chunks ?? [];
       const winEnd = off + len;
       for (const c of chunks) {
