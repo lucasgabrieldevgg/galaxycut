@@ -31,8 +31,14 @@ function AspectSquare({ w, h, active }: { w: number; h: number; active: boolean 
 
 /** deixa o valor de largura/altura dentro do permitido (120–7680, par) */
 function clampSide(v: number): number {
-  if (!isFinite(v)) return 1080;
+  if (!isFinite(v) || v <= 0) return 1080;
   return Math.max(120, Math.min(7680, Math.round(v / 2) * 2));
+}
+
+/** só dígitos no input (vazio é válido enquanto a pessoa digita — o “0” que
+ *  não apagava acabou: o estado agora é TEXTO, o número só nasce no blur/criar) */
+function onlyDigits(s: string): string {
+  return s.replace(/[^0-9]/g, "").slice(0, 5);
 }
 
 export function NewProjectDialog({
@@ -48,13 +54,16 @@ export function NewProjectDialog({
   const t = useT();
   const [key, setKey] = useState("9:16");
   const [title, setTitle] = useState("");
-  // formato personalizado
-  const [cw, setCw] = useState(1080);
-  const [ch, setCh] = useState(1350);
+  // formato personalizado (string: pode ficar vazio enquanto a pessoa apaga)
+  const [cw, setCw] = useState("1080");
+  const [ch, setCh] = useState("1350");
 
   const isCustom = key === "custom";
+  // formato personalizado: guardado como TEXTO — "" é permitido enquanto digita
+  const cwN = clampSide(Number(cw || 0));
+  const chN = clampSide(Number(ch || 0));
   const chosen = isCustom
-    ? { w: clampSide(cw), h: clampSide(ch), key: "custom", label: `${clampSide(cw)}×${clampSide(ch)}`, hint: t("np.custom") }
+    ? { w: cwN, h: chN, key: "custom", label: `${cwN}×${chN}`, hint: t("np.custom") }
     : ASPECT_CHOICES.find((a) => a.key === key) ?? ASPECT_CHOICES[0];
   const mains = ASPECT_CHOICES.filter((a) => a.main);
   const others = ASPECT_CHOICES.filter((a) => !a.main);
@@ -64,8 +73,8 @@ export function NewProjectDialog({
     if (!v) {
       setKey("9:16");
       setTitle("");
-      setCw(1080);
-      setCh(1350);
+      setCw("1080");
+      setCh("1350");
     }
     onOpenChange(v);
   };
@@ -124,7 +133,7 @@ export function NewProjectDialog({
               </span>
               <span className="min-w-0 flex-1">
                 <span className={`block text-[11px] font-semibold ${isCustom ? "text-[var(--gc-accent)]" : "text-zinc-300"}`}>
-                  {t("np.custom")} {isCustom && `· ${clampSide(cw)}×${clampSide(ch)}`}
+                  {t("np.custom")} {isCustom && `· ${cwN}×${chN}`}
                 </span>
                 <span className="block text-[9px] text-zinc-500">{t("np.customHint")}</span>
               </span>
@@ -135,34 +144,32 @@ export function NewProjectDialog({
                   <div>
                     <Label className="mb-1 block text-[10px] text-zinc-400">{t("np.width")} (px)</Label>
                     <Input
-                      type="number"
-                      min={120}
-                      max={7680}
-                      step={2}
+                      type="text"
+                      inputMode="numeric"
                       value={cw}
-                      onChange={(e) => setCw(Number(e.target.value))}
-                      onBlur={(e) => setCw(clampSide(Number(e.target.value)))}
+                      onChange={(e) => setCw(onlyDigits(e.target.value))}
+                      onBlur={() => setCw(String(clampSide(Number(cw || 0))))}
+                      placeholder="1080"
                       className="h-8 border-[#2a3546] bg-[#0e1320] text-xs text-zinc-200"
                     />
                   </div>
                   <div>
                     <Label className="mb-1 block text-[10px] text-zinc-400">{t("np.height")} (px)</Label>
                     <Input
-                      type="number"
-                      min={120}
-                      max={7680}
-                      step={2}
+                      type="text"
+                      inputMode="numeric"
                       value={ch}
-                      onChange={(e) => setCh(Number(e.target.value))}
-                      onBlur={(e) => setCh(clampSide(Number(e.target.value)))}
+                      onChange={(e) => setCh(onlyDigits(e.target.value))}
+                      onBlur={() => setCh(String(clampSide(Number(ch || 0))))}
+                      placeholder="1920"
                       className="h-8 border-[#2a3546] bg-[#0e1320] text-xs text-zinc-200"
                     />
                   </div>
                 </div>
                 <div className="flex items-center justify-center gap-2">
-                  <AspectSquare w={clampSide(cw)} h={clampSide(ch)} active />
+                  <AspectSquare w={cwN} h={chN} active />
                   <p className="text-[10px] leading-relaxed text-zinc-500">
-                    {t("np.customNote", { r: `${(clampSide(cw) / clampSide(ch)).toFixed(2)}:1` })}
+                    {t("np.customNote", { r: `${(cwN / chN).toFixed(2)}:1` })}
                   </p>
                 </div>
               </div>

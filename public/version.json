@@ -1,7 +1,50 @@
 {
   "name": "GalaxyCut",
-  "version": "7.1.0",
+  "version": "7.2.0",
   "changelog": [
+    {
+      "version": "7.2.0",
+      "date": "2026-09-28",
+      "items": [
+        "FIX: the submenu of the right-click menu (transitions!) opens UPWARD on hover — all options visible at once, no more dragging sideways to see them",
+        "Preview: MAGNETIC move — get close to the center (or an edge) and the clip snaps to it, lighting up the center guide lines; a Magnet button in the playback bar toggles it off for 100% free movement (your choice is saved)",
+        "FIX: moving things in the preview is smooth now (the drag updates once per frame instead of flooding the app)",
+        "Preview: click an element to select THAT element — when two overlap, the one on top wins; drag it and it's the one that moves",
+        "Preview: clicking anywhere outside the video exits move mode and leaves the clip where you dropped it",
+        "Media guarantee: playback only starts when EVERY clip's media is 100% loaded — press play during loading and it starts by itself the moment the last byte arrives; the browser is now forced to buffer the whole file (that 'loading' flash while scrubbing is gone too)",
+        "FIX: custom format fields can be fully cleared now — no more ghost '0' that refused to be deleted",
+        "The logo next to the GalaxyCut name (website AND app) is now the real round logo from the repository — galaxy orbit, planet and all",
+        "Repository banner is now in English",
+        "CapCut mentions removed from the app, README and repo description — GalaxyCut speaks for itself",
+        "Older GitHub releases (v6, v7.0) rewritten in English, matching the new ones"
+      ],
+      "items_pt": [
+        "CORRIGIDO: o submenu do menu de botão direito (transições!) abre PRA CIMA no hover — todas as opções visíveis de uma vez, sem ter que arrastar pro lado pra vê-las",
+        "Prévia: modo magnético — chegue perto do centro (ou de uma borda) e o clipe gruda, acendendo as linhas de centralização; o botão Ímã na barra do player desliga pra movimento 100% livre (sua escolha fica salva)",
+        "CORRIGIDO: mover coisas na prévia agora é liso (o arraste atualiza 1× por quadro em vez de inundar o app)",
+        "Prévia: clique num elemento pra selecionar ELE — com 2 sobrepostos, o de cima ganha; arrastar move o que você clicou",
+        "Prévia: clicar em qualquer lugar fora do vídeo sai do modo de mexer e deixa o clipe onde você soltou",
+        "Garantia de mídia: a reprodução só começa quando a mídia de TODOS os clipes está 100% carregada — deu play durante o carregamento? Começa sozinha no instante em que o último byte chega; o navegador agora é OBRIGADO a bufar o arquivo inteiro (o piscar de 'carregando' ao navecar também acabou)",
+        "CORRIGIDO: os campos de formato personalizado agora apagam tudo — sem o '0' fantasma que não deixava apagar",
+        "A logo do lado do nome GalaxyCut (site E app) agora é a logo redondinha de verdade do repositório — com a órbita da galáxia e o planeta",
+        "O banner do repositório agora está em inglês",
+        "Menções ao CapCut removidas do app, do README e da descrição do repo — o GalaxyCut se apresenta sozinho",
+        "As releases antigas do GitHub (v6, v7.0) reescritas em inglês, igual às novas"
+      ],
+      "items_es": [
+        "CORREGIDO: el submenú del menú de clic derecho (¡transiciones!) se abre HACIA ARRIBA al pasar el mouse — todas las opciones visibles de una vez, sin arrastrar hacia el lado para verlas",
+        "Preview: movimiento magnético — acércate al centro (o a un borde) y el clip se pega, encendiendo las líneas de centrado; el botón Imán en la barra del reproductor lo apaga para un movimiento 100% libre (tu elección se guarda)",
+        "CORREGIDO: mover cosas en la preview ahora es fluido (el arrastre actualiza 1× por cuadro en vez de inundar la app)",
+        "Preview: haz clic en un elemento para seleccionar ESE elemento — con 2 superpuestos, gana el de arriba; arrastrar mueve el que tocaste",
+        "Preview: hacer clic en cualquier lugar fuera del vídeo sale del modo de mover y deja el clip donde lo soltaste",
+        "Garantía de medios: la reproducción solo empieza cuando el archivo de TODOS los clips está 100% cargado — ¿diste play durante la carga? Empieza solo en el instante en que llega el último byte; el navegador ahora está OBLIGADO a almacenar el archivo entero (el parpadeo de 'cargando' al navegar también se acabó)",
+        "CORREGIDO: los campos de formato personalizado ahora se borran del todo — sin el '0' fantasma que no se dejaba borrar",
+        "El logo al lado del nombre GalaxyCut (web Y app) ahora es el logo redondo de verdad del repositorio — con la órbita de la galaxia y el planeta",
+        "El banner del repositorio ahora está en inglés",
+        "Menciones a CapCut eliminadas de la app, el README y la descripción del repo — GalaxyCut se presenta solo",
+        "Los releases antiguos de GitHub (v6, v7.0) reescritos en inglés, igual que los nuevos"
+      ]
+    },
     {
       "version": "7.1.0",
       "date": "2026-09-28",
@@ -192,5 +235,5 @@
       ]
     }
   ],
-  "date": "2026-09-27T21:33:48.097Z"
+  "date": "2026-09-27T22:51:36.646Z"
 }

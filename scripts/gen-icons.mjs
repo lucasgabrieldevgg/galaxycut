@@ -28,11 +28,11 @@ for (const s of SHOTS) {
           <div style="width:360px;height:360px">${svg}</div>
           <div style="color:#e7ecf3;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
             <div style="font-size:104px;font-weight:800;letter-spacing:-3px;line-height:1">Galaxy<span style="color:#22C55E">Cut</span></div>
-            <div style="font-size:30px;color:#98a5b8;margin-top:18px;font-weight:500">editor de vídeo grátis, no navegador</div>
+            <div style="font-size:30px;color:#98a5b8;margin-top:18px;font-weight:500">free video editor, right in your browser</div>
             <div style="margin-top:26px;display:flex;gap:10px">
-              <span style="font-size:22px;color:#22C55E;border:1.5px solid rgba(34,197,94,.45);border-radius:999px;padding:6px 18px">timeline estilo CapCut</span>
-              <span style="font-size:22px;color:#a78bfa;border:1.5px solid rgba(167,139,250,.45);border-radius:999px;padding:6px 18px">legendas karaokê</span>
-              <span style="font-size:22px;color:#38bdf8;border:1.5px solid rgba(56,189,248,.45);border-radius:999px;padding:6px 18px">sem marca d'água</span>
+              <span style="font-size:22px;color:#22C55E;border:1.5px solid rgba(34,197,94,.45);border-radius:999px;padding:6px 18px">pro-grade timeline</span>
+              <span style="font-size:22px;color:#a78bfa;border:1.5px solid rgba(167,139,250,.45);border-radius:999px;padding:6px 18px">karaoke captions</span>
+              <span style="font-size:22px;color:#38bdf8;border:1.5px solid rgba(56,189,248,.45);border-radius:999px;padding:6px 18px">no watermark</span>
             </div>
           </div>
         </div></body></html>`

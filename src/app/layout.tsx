@@ -14,27 +14,27 @@ const geistMono = Geist_Mono({
 });
 
 const DESCRIPTION =
-  "Editor de vídeo grátis que roda 100% no navegador: timeline com faixas, legendas automáticas karaokê, detector de silêncio, gravação de voz, busca de músicas e efeitos livres. Sem marca d'água.";
+  "Free video editor that runs 100% in your browser: multi-track timeline, automatic karaoke captions, silence detector, voice recording, free music & SFX search. No watermark.";
 
 export const metadata: Metadata = {
-  title: "GalaxyCut — Editor de vídeo grátis no navegador",
+  title: "GalaxyCut — Free video editor in your browser",
   description: DESCRIPTION,
   applicationName: "GalaxyCut",
-  keywords: ["editor de vídeo", "editor de vídeo online", "shorts", "legendas automáticas", "capcut grátis", "galaxycut"],
+  keywords: ["video editor", "free video editor", "online video editor", "shorts", "automatic captions", "galaxycut"],
   icons: {
     icon: [{ url: "favicon.svg", type: "image/svg+xml" }, { url: "icon-192.png", sizes: "192x192", type: "image/png" }],
     apple: [{ url: "icon-192.png" }],
   },
   manifest: undefined,
   openGraph: {
-    title: "GalaxyCut — Editor de vídeo grátis no navegador",
+    title: "GalaxyCut — Free video editor in your browser",
     description: DESCRIPTION,
     type: "website",
     siteName: "GalaxyCut",
   },
   twitter: {
     card: "summary_large_image",
-    title: "GalaxyCut — Editor de vídeo grátis no navegador",
+    title: "GalaxyCut — Free video editor in your browser",
     description: DESCRIPTION,
   },
 };

@@ -32,6 +32,8 @@ export interface AppSettings {
   accent: string;
   /** o onboarding inicial já foi feito? (false = mostra a tela de boas-vindas) */
   onboarded: boolean;
+  /** mover na prévia com guias magnéticas (centro/bordas)? ligado por padrão */
+  magnetMove: boolean;
   set: (patch: Partial<AppSettings>) => void;
 }
 
@@ -58,6 +60,7 @@ function load(): Partial<AppSettings> {
       autosaveMin: parsed.autosaveMin ?? 2,
       accent: parsed.accent ?? "galaxy",
       onboarded: parsed.onboarded ?? false,
+      magnetMove: parsed.magnetMove ?? true,
     };
   } catch {
     return {};
@@ -81,6 +84,7 @@ function persist(s: AppSettings) {
         autosaveMin: s.autosaveMin,
         accent: s.accent,
         onboarded: s.onboarded,
+        magnetMove: s.magnetMove,
       })
     );
   } catch {
@@ -103,6 +107,7 @@ export const useSettings = create<AppSettings>((set, get) => ({
   autosaveMin: 2,
   accent: "galaxy",
   onboarded: false,
+  magnetMove: true,
   ...boot,
   set: (patch) => {
     set(patch as AppSettings);

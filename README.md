@@ -4,7 +4,7 @@
   <img src="docs/banner.png" alt="GalaxyCut — free video editor, right in your browser" width="720" />
 </p>
 
-**A free video editor that runs 100% in your browser** (and as a desktop app too). CapCut-style multi-track timeline, automatic karaoke captions with local Whisper, silence detector, voice recording, free music & SFX search — and **no watermark**.
+**A free video editor that runs 100% in your browser** (and as a desktop app too). Pro-style multi-track timeline, automatic karaoke captions with local Whisper, silence detector, voice recording, free music & SFX search — and **no watermark**.
 
 - Web: **https://galaxycut.vercel.app**
 - Releases (Linux AppImage + Windows installer): **https://github.com/lucasgabrieldevgg/galaxycut/releases**
@@ -21,10 +21,10 @@
 
 - **Multi-track timeline** — video, audio and text; free dragging, cut at the playhead, trim edges, magnetic snapping, transitions and fades.
 - **Multi-project library** — home screen with all your edits: create, rename, duplicate, delete. On the desktop app each edit lives in its own folder on disk, with configurable autosave (1–10 min) — crash-proof, and even Ctrl+Z survives a restart.
-- **Visual editing, CapCut-style** — drag clips around the preview, scale from the corner handles, rotate with the top handle. Every control also works with numbers: steppers that auto-accelerate when held, always in sync with the sliders.
+- **Visual editing, right on the preview** — drag clips around the preview, scale from the corner handles, rotate with the top handle, with magnetic center guides while you move. Every control also works with numbers: steppers that auto-accelerate when held, always in sync with the sliders.
 - **Silence detector** — finds the parts where nobody is talking and you choose: delete, silence, hide the scene, or **delete audio only** (video keeps playing, all silent audio is removed). Applies to every clip that uses the file.
 - **Extract audio** — pulls a clip's audio out as its own WAV file, reusable anywhere.
-- **Karaoke captions** — word-by-word transcription (local Whisper) with 8 CapCut-style presets; the spoken word pops on screen. Runs in multiple languages (Portuguese, English, Spanish, French, German, Italian, Japanese, Korean, Russian and more).
+- **Karaoke captions** — word-by-word transcription (local Whisper) with 8 ready-made presets; the spoken word pops on screen. Runs in multiple languages (Portuguese, English, Spanish, French, German, Italian, Japanese, Korean, Russian and more).
 - **Audio enhancement** — one-click studio chain (noise cut + compressor + limiter).
 - **Voice recording** — narration straight from the editor, with an OBS-style decibel meter.
 - **Free stock search** — photos, videos, music and SFX from open banks (Openverse, Freesound, Wikimedia Commons, Internet Archive, Jamendo; Pexels and Pixabay with optional keys). Search in your language — translation is automatic. Plus **emoji stickers** you can drop straight onto the timeline.

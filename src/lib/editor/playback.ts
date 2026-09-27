@@ -33,6 +33,8 @@ class PlaybackEngine {
   private last = 0;
   private dirty = true;
   private disposed = false;
+  /** deu play com mídia ainda carregando? segura e toca sozinho quando 100% chegar */
+  private pendingPlay = false;
   // deslize suave da seta (modo "Suave")
   private glideRaf = 0;
   private glideTarget: number | null = null;
@@ -41,6 +43,9 @@ class PlaybackEngine {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.startLoop();
+    // hook de depuração/testes: window.__gcEngine (sem ele, o motor é
+    // inacessível do console — todo smoke test de mídia passa por aqui)
+    if (typeof window !== "undefined") (window as unknown as { __gcEngine?: PlaybackEngine }).__gcEngine = this;
     // re-render quando qualquer estado relevante muda
     useProject.subscribe(() => {
       this.dirty = true;
@@ -84,6 +89,12 @@ class PlaybackEngine {
         }
       }
       const cur = usePlayback.getState();
+      // o usuário deu play mas a mídia não tinha carregado inteira: quando tudo
+      // chega em 100%, a reprodução começa SOZINHA (nunca mais vídeo engasgando)
+      if (this.pendingPlay && !cur.playing && this.allMediaReady()) {
+        this.pendingPlay = false;
+        this.play();
+      }
       if (cur.playing || this.dirty) {
         this.syncMedia(cur.playhead, cur.playing);
         this.updateAudio(cur.playhead);
@@ -138,11 +149,15 @@ class PlaybackEngine {
     return v;
   }
 
-  /** v7.1: a mídia CARREGA INTEIRA assim que entra na timeline — nada de
-   *  “carregando” no meio da reprodução. Espera o buffer cobrir o arquivo
-   *  (ou 25s de teto) e mantém a tela atualizando a % enquanto isso. */
+  /** v7.2: a mídia CARREGA INTEIRA assim que entra na timeline — e o navegador
+   *  é FORÇADO a isso: quando o buffer para de andar, pulamos pro maior
+   *  pedaço ainda não carregado (o seek obriga o player a ler aquela região).
+   *  Arquivos locais (blob) terminam em instantes; o teto de 90s cobre os
+   *  casos extremos. Enquanto isso a tela mostra a % andando. */
   private prewarmEl(el: HTMLMediaElement) {
     const startedAt = performance.now();
+    let lastBuffered = -1;
+    let stalls = 0;
     const poll = () => {
       this.dirty = true; // repinta a prévia (a % do placeholder anda)
       const dur = isFinite(el.duration) ? el.duration : 0;
@@ -153,14 +168,72 @@ class PlaybackEngine {
         buffered = 0;
       }
       const done = (el.readyState >= 4 && dur > 0 && buffered >= dur * 0.985) || (dur > 0 && buffered >= dur - 0.15);
-      const timedOut = performance.now() - startedAt > 25_000;
+      const timedOut = performance.now() - startedAt > 90_000;
       if (!done && !timedOut && el.error === null) {
+        if (dur > 0 && el.readyState >= 1) {
+          if (buffered > lastBuffered + 0.01) {
+            stalls = 0; // andou
+          } else if (++stalls >= 6) {
+            // buffer parado: pula pro meio do maior buraco não carregado
+            stalls = 0;
+            let hole = -1;
+            try {
+              for (let i = 0; i < el.buffered.length; i++) {
+                const end = el.buffered.end(i);
+                const next = i + 1 < el.buffered.length ? el.buffered.start(i + 1) : dur;
+                if (next - end > 0.5) {
+                  hole = (end + next) / 2;
+                  break;
+                }
+              }
+            } catch {
+              /* noop */
+            }
+            if (hole < 0) hole = Math.min(dur - 0.1, buffered + 1);
+            try {
+              el.currentTime = Math.max(0, Math.min(dur - 0.05, hole));
+            } catch {
+              /* ainda não seekable */
+            }
+          }
+          lastBuffered = buffered;
+        }
         setTimeout(poll, 220);
       } else {
         this.dirty = true;
       }
     };
     setTimeout(poll, 240);
+  }
+
+  /** v7.2: TODA a mídia do projeto (vídeo/áudio/imagem dos clipes) tá 100%
+   *  carregada? O play só deixa assistir com tudo pronto — nada de
+   *  "carregando" no meio da reprodução. */
+  allMediaReady(): boolean {
+    const { clips, media } = useProject.getState();
+    for (const c of clips) {
+      if (c.kind === "text" || c.videoHidden) continue;
+      if (!c.mediaId) continue;
+      const m = media.find((x) => x.id === c.mediaId);
+      if (!m || m.missing || m.decodeError || !registry.hasBlob(c.mediaId)) continue; // desses a gente não espera
+      const el = this.elements.get(this.bindings.get(c.id) ?? elKeyOf(c.kind, c.mediaId));
+      if (!el) return false; // nem criou ainda
+      if (el instanceof HTMLImageElement) {
+        if (!el.complete || !el.naturalWidth) return false;
+        continue;
+      }
+      if (!(el instanceof HTMLMediaElement)) continue;
+      const dur = isFinite(el.duration) ? el.duration : 0;
+      if (dur <= 0) return false; // metadado nem chegou
+      let buf = 0;
+      try {
+        buf = el.buffered.length ? el.buffered.end(el.buffered.length - 1) : 0;
+      } catch {
+        buf = 0;
+      }
+      if (buf < Math.min(dur - 0.15, dur * 0.985)) return false;
+    }
+    return true;
   }
 
   /** Arquivo que o navegador não decodifica → aviso ÚNICO e claro pro dono. */
@@ -248,7 +321,18 @@ class PlaybackEngine {
     if (m.decodeError) return "error";
     const el = this.elements.get(this.bindings.get(clipId) ?? "");
     if (!el) return "loading";
-    if (el instanceof HTMLVideoElement) return el.readyState >= 2 ? "ok" : "loading";
+    if (el instanceof HTMLVideoElement) {
+      if (el.readyState >= 2) return "ok";
+      // buffer quase inteiro? o decode tá chegando (era o piscar de
+      // "carregando" a cada seek no navegador) — conta como pronto
+      const dur = isFinite(el.duration) ? el.duration : 0;
+      try {
+        if (dur > 0 && el.buffered.length && el.buffered.end(el.buffered.length - 1) >= dur * 0.97) return "ok";
+      } catch {
+        /* noop */
+      }
+      return "loading";
+    }
     if (el instanceof HTMLImageElement) return el.complete && el.naturalWidth > 0 ? "ok" : "loading";
     return "ok";
   }
@@ -449,6 +533,15 @@ class PlaybackEngine {
     const pb = usePlayback.getState();
     if (pb.duration <= 0) return;
     audioEngine.ensureContext();
+    // v7.2: a pessoa só VÊ o vídeo com a mídia carregada INTEIRA. Enquanto
+    // não tá tudo em 100%, o play segura (a tela mostra a % carregando) e
+    // dispara sozinho quando o último byte chega.
+    if (!this.allMediaReady()) {
+      this.pendingPlay = true;
+      this.dirty = true;
+      return;
+    }
+    this.pendingPlay = false;
     const from = pb.playhead >= pb.duration - 0.01 ? 0 : pb.playhead;
     usePlayback.getState().setPlayhead(from);
     usePlayback.getState().setPlaying(true);
@@ -456,6 +549,7 @@ class PlaybackEngine {
   }
 
   pause() {
+    this.pendingPlay = false; // cancelou a espera: não começa sozinho depois
     usePlayback.getState().setPlaying(false);
     for (const el of this.elements.values()) {
       if (el instanceof HTMLMediaElement && !el.paused) el.pause();

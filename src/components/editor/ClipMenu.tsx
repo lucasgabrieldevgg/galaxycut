@@ -3,14 +3,18 @@
 // (clique rápido era interpretado como clique fora). Este aqui abre no evento
 // contextmenu e fecha APENAS em: clique esquerdo fora, Esc, rolagem ou item.
 // v7.1: o menu NUNCA mais passa da borda da tela — abre pra cima quando não
-// cabe embaixo, e o submenu também vira pra cima/lado conforme o espaço.
+// cabe embaixo.
+// v7.2: o SUBMENU agora é um PORTAL irmão (antes ele nascia dentro do menu,
+// que tem rolagem — e era CORTADO, obrigando a arrastar pra ver). Portal
+// ancorado no item, abrindo PRA CIMA quando não cabe embaixo — igual ao menu
+// principal. Hover abre, sem clique, sem arrastar.
 "use client";
 
 import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const MENU_W = 240; // largura máxima do menu (pro clamp lateral)
-const SUB_W = 200; // largura estimada do submenu
+const SUB_W = 210; // largura estimada do submenu (antes de medir)
 
 export interface MenuItem {
   type?: "item" | "sep" | "submenu" | "info";
@@ -36,27 +40,55 @@ export function FloatMenu({
 }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [subOpen, setSubOpen] = useState<number>(-1);
+  /** retângulo da linha que abriu o submenu (âncora do portal) */
+  const [subAnchor, setSubAnchor] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const subRef = useRef<HTMLDivElement>(null);
-  /** ajuste do submenu: vira pra esquerda/cima e rola quando não cabe */
-  const [subAdj, setSubAdj] = useState<{ flipX: boolean; flipY: boolean; maxH: number }>({ flipX: false, flipY: false, maxH: 400 });
+  /** posicionamento do submenu: pra cima/pra baixo + flipX, medido após pintar */
+  const [subAdj, setSubAdj] = useState<{ flipX: boolean; openUp: boolean; maxH: number; width: number }>({
+    flipX: false, openUp: false, maxH: 400, width: SUB_W,
+  });
   /** o menu em si abre pra cima quando não cabe embaixo do ponto */
   const [openUp, setOpenUp] = useState(false);
   const [maxMenuH, setMaxMenuH] = useState<number>(9999);
   const openedAt = useRef(0);
+  const subCloseTimer = useRef<number>(0);
 
   // fecha e limpa
   const close = () => {
+    window.clearTimeout(subCloseTimer.current);
     setPos(null);
     setSubOpen(-1);
+    setSubAnchor(null);
+  };
+
+  // abre (ou troca) o submenu ancorado numa linha — hover mostra na hora
+  const openSub = (i: number, row: HTMLElement | null) => {
+    window.clearTimeout(subCloseTimer.current);
+    if (!row) {
+      setSubOpen(-1);
+      setSubAnchor(null);
+      return;
+    }
+    const r = row.getBoundingClientRect();
+    setSubAnchor({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+    setSubOpen(i);
+  };
+  const scheduleSubClose = () => {
+    window.clearTimeout(subCloseTimer.current);
+    subCloseTimer.current = window.setTimeout(() => {
+      setSubOpen(-1);
+      setSubAnchor(null);
+    }, 160);
   };
 
   useEffect(() => {
     if (!pos) return;
     const onDown = (e: PointerEvent) => {
-      const menu = menuRef.current;
-      if (menu?.contains(e.target as Node)) return; // clique dentro do menu
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target)) return; // clique dentro do menu
+      if (subRef.current?.contains(target)) return; // clique dentro do submenu (portal)
       // clique de abrir (botão direito) logo após abrir não conta como "fora"
       if (e.button === 2 && performance.now() - openedAt.current < 400) return;
       close();
@@ -64,16 +96,24 @@ export function FloatMenu({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
     };
-    const onGo = () => close(); // qualquer rolagem/redimensionamento fecha
+    // rolagem FORA do menu/submenu fecha; rolagem DENTRO deixa (o submenu
+    // pode ter rolagem própria quando a tela é muito baixa)
+    const onGo = (e: WheelEvent) => {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || subRef.current?.contains(target)) return;
+      close();
+    };
+    const onResize = () => close();
     window.addEventListener("pointerdown", onDown, true);
     window.addEventListener("keydown", onKey);
     window.addEventListener("wheel", onGo, { passive: true, capture: true });
-    window.addEventListener("resize", onGo);
+    window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("pointerdown", onDown, true);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("wheel", onGo, { capture: true } as EventListenerOptions);
-      window.removeEventListener("resize", onGo);
+      window.removeEventListener("resize", onResize);
+      window.clearTimeout(subCloseTimer.current);
     };
   }, [pos]);
 
@@ -84,6 +124,7 @@ export function FloatMenu({
       e.stopPropagation();
       openedAt.current = performance.now();
       setSubOpen(-1);
+      setSubAnchor(null);
       setPos({ x: e.clientX, y: e.clientY });
     };
     // captura: pega antes de qualquer outro handler de contextmenu
@@ -103,6 +144,7 @@ export function FloatMenu({
       e.stopPropagation();
       openedAt.current = performance.now();
       setSubOpen(-1);
+      setSubAnchor(null);
       const r = hostRef.current.getBoundingClientRect();
       setPos({ x: r.left, y: r.bottom + 2 });
     };
@@ -129,36 +171,57 @@ export function FloatMenu({
       setMaxMenuH(Math.min(h + 4, roomAbove));
     } else if (h > roomBelow && h > roomAbove) {
       // não cabe em nenhum lado → o maior espaço vence, com rolagem interna
-       
       setOpenUp(roomAbove > roomBelow);
       setMaxMenuH(Math.max(180, Math.max(roomAbove, roomBelow)));
     } else {
-       
       setOpenUp(false);
       setMaxMenuH(Math.max(180, roomBelow));
     }
   }, [pos, items.length]);
 
-  // submenu aberto perto da borda? mede DEPOIS de pintar e ajusta:
-  // vira pra ESQUERDA quando não cabe à direita, pra CIMA quando não cabe
-  // abaixo do item — fim do bug da "lista que some lá pra baixo"
+  // SUBMENU (portal): mede DEPOIS de pintar e posiciona pra ver TUDO sem
+  // arrastar — pra cima quando não cabe embaixo (igual ao menu principal),
+  // pra esquerda quando não cabe à direita. Sem cortes: ele não mora mais
+  // dentro do container com rolagem do menu.
   useLayoutEffect(() => {
-    if (subOpen < 0 || !subRef.current || !menuRef.current) {
-      return;
-    }
+    if (subOpen < 0 || !subAnchor || !subRef.current) return;
     const sub = subRef.current.getBoundingClientRect();
-    const menu = menuRef.current.getBoundingClientRect();
-    const flipX = sub.right > window.innerWidth - 8 || menu.right + SUB_W > window.innerWidth - 8;
-    const below = window.innerHeight - Math.max(8, sub.top) - 12;
-    const above = sub.top - menu.top + menu.height; // espaço medindo a partir do topo do submenu p/ cima
-    const flipY = sub.height > below && above > below;
-    const maxH = Math.max(160, flipY ? above : below);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- medição pós-pintura (só muda se mudou)
-    setSubAdj((prev) => {
-      if (prev.flipX === flipX && prev.flipY === flipY && prev.maxH === maxH) return prev;
-      return { flipX, flipY, maxH };
-    });
-  }, [subOpen, pos]);
+    const w = sub.width || SUB_W;
+    // lateral: à direita da âncora; se estourar, vira pra esquerda
+    let x = subAnchor.right - 4;
+    if (x + w > window.innerWidth - 8) x = Math.max(8, subAnchor.left - w + 4);
+    // vertical: cabe embaixo da âncora? senão abre PRA CIMA (tudo visível);
+    // se não couber em nenhum lado, o maior espaço vence com rolagem interna
+    const roomBelow = window.innerHeight - subAnchor.top - 8;
+    const roomAbove = subAnchor.bottom - 8;
+    const subH = sub.height;
+    let openUp: boolean;
+    let maxH: number;
+    if (subH <= roomBelow) {
+      openUp = false;
+      maxH = roomBelow;
+    } else if (subH <= roomAbove) {
+      openUp = true;
+      maxH = roomAbove;
+    } else if (roomAbove >= roomBelow) {
+      openUp = true;
+      maxH = roomAbove;
+    } else {
+      openUp = false;
+      maxH = roomBelow;
+    }
+    subRef.current.style.left = `${Math.round(x)}px`;
+    if (openUp) {
+      subRef.current.style.bottom = `${Math.round(window.innerHeight - subAnchor.bottom - 4)}px`;
+      subRef.current.style.top = "auto";
+    } else {
+      subRef.current.style.top = `${Math.round(subAnchor.top - 2)}px`;
+      subRef.current.style.bottom = "auto";
+    }
+    subRef.current.style.maxHeight = `${Math.round(Math.max(160, maxH))}px`;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- só registra p/ re-render estável
+    setSubAdj((prev) => (prev.flipX === (x !== subAnchor.right - 4) && prev.openUp === openUp ? prev : { ...prev, flipX: x !== subAnchor.right - 4, openUp }));
+  }, [subOpen, subAnchor]);
 
   return (
     <div ref={hostRef} className="contents">
@@ -185,66 +248,81 @@ export function FloatMenu({
             ) : it.type === "submenu" ? (
               <div
                 key={i}
-                className="relative"
-                onMouseEnter={() => setSubOpen(i)}
+                onMouseEnter={(e) => openSub(i, e.currentTarget)}
+                onMouseLeave={scheduleSubClose}
               >
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[#1c2430]"
+                  className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[#1c2430] ${
+                    subOpen === i ? "bg-[#1c2430]" : ""
+                  }`}
                 >
                   {it.icon}
                   <span className="flex-1">{it.label}</span>
                   <span className="text-zinc-600">›</span>
                 </button>
-                {subOpen === i && it.children?.length ? (
-                  <div
-                    ref={subRef}
-                    className={`absolute z-[91] min-w-[170px] overflow-y-auto rounded-lg border border-[#232d3d] bg-[#121722] p-1 shadow-[0_12px_36px_rgba(0,0,0,0.55)] timeline-scroll ${
-                      subAdj.flipX ? "right-[calc(100%-4px)]" : "left-[calc(100%-4px)]"
-                    } ${subAdj.flipY ? "bottom-0" : "top-0"}`}
-                    style={{ maxHeight: subAdj.maxH }}
-                  >
-                    {it.children.map((c, j) =>
-                      c.type === "sep" ? (
-                        <div key={j} className="my-1 h-px bg-[#232d3d]" />
-                      ) : (
-                        <button
-                          key={j}
-                          type="button"
-                          title={c.title}
-                          onClick={() => {
-                            close();
-                            c.onClick?.();
-                          }}
-                          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[#1c2430] ${
-                            c.danger ? "text-red-400" : ""
-                          }`}
-                        >
-                          {c.icon}
-                          <span className="flex-1 whitespace-nowrap">{c.label}</span>
-                        </button>
-                      )
-                    )}
-                  </div>
-                ) : null}
               </div>
             ) : (
-              <button
+              <div
                 key={i}
+                onMouseEnter={() => {
+                  // hover numa linha comum fecha o submenu aberto
+                  window.clearTimeout(subCloseTimer.current);
+                  setSubOpen(-1);
+                  setSubAnchor(null);
+                }}
+              >
+                <button
+                  type="button"
+                  title={it.title}
+                  disabled={it.disabled}
+                  onClick={() => {
+                    close();
+                    it.onClick?.();
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition hover:bg-[#1c2430] disabled:pointer-events-none disabled:opacity-40 ${
+                    it.danger ? "text-red-400" : ""
+                  }`}
+                >
+                  {it.icon}
+                  <span className="flex-1">{it.label}</span>
+                  {it.kbd && <kbd className="rounded bg-[#1c2430] px-1 text-[9px] text-zinc-500">{it.kbd}</kbd>}
+                </button>
+              </div>
+            )
+          )}
+        </div>,
+        document.body
+      )}
+      {/* SUBMENU em portal irmão: nunca é cortado pelo menu (fim do arrastar
+          pra ver as transições) — abre pra cima quando não cabe embaixo */}
+      {subOpen >= 0 && subAnchor && pos && createPortal(
+        <div
+          ref={subRef}
+          className="fixed z-[92] min-w-[170px] overflow-y-auto rounded-lg border border-[#232d3d] bg-[#121722] p-1 text-zinc-200 shadow-[0_12px_36px_rgba(0,0,0,0.55)] timeline-scroll"
+          style={{ left: -9999, top: -9999 }} // posicionado pelo layoutEffect após medir
+          onMouseEnter={() => window.clearTimeout(subCloseTimer.current)}
+          onMouseLeave={scheduleSubClose}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {items[subOpen]?.children?.map((c, j) =>
+            c.type === "sep" ? (
+              <div key={j} className="my-1 h-px bg-[#232d3d]" />
+            ) : (
+              <button
+                key={j}
                 type="button"
-                title={it.title}
-                disabled={it.disabled}
+                title={c.title}
                 onClick={() => {
                   close();
-                  it.onClick?.();
+                  c.onClick?.();
                 }}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition hover:bg-[#1c2430] disabled:pointer-events-none disabled:opacity-40 ${
-                  it.danger ? "text-red-400" : ""
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[#1c2430] ${
+                  c.danger ? "text-red-400" : ""
                 }`}
               >
-                {it.icon}
-                <span className="flex-1">{it.label}</span>
-                {it.kbd && <kbd className="rounded bg-[#1c2430] px-1 text-[9px] text-zinc-500">{it.kbd}</kbd>}
+                {c.icon}
+                <span className="flex-1 whitespace-nowrap">{c.label}</span>
               </button>
             )
           )}
