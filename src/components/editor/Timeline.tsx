@@ -166,7 +166,9 @@ export function Timeline() {
   const contentRef = useRef<HTMLDivElement>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
-  zoomRef.current = zoom;
+  useEffect(() => {
+    zoomRef.current = zoom; // leitura em eventos (arraste estável), atualizado após o commit
+  }, [zoom]);
   const splitKey = useComboLabel("split");
   const delKey = useComboLabel("delete");
   // quantos clipes de áudio sem som a vassoura encontraria agora
@@ -259,7 +261,9 @@ export function Timeline() {
 
   // ---------- arraste de clipe (estado vivo: sobrevive a re-renders) ----------
   const trackAtYRef = useRef(trackAtY);
-  trackAtYRef.current = trackAtY;
+  useEffect(() => {
+    trackAtYRef.current = trackAtY;
+  });
   const onDownStable = useCallback((e: React.PointerEvent, clip: Clip, mode: "move" | "left" | "right") => {
     startClipDrag(e, clip, mode, zoomRef.current, trackAtYRef.current, setSnapX);
   }, []);

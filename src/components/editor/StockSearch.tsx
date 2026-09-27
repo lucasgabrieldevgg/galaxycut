@@ -113,7 +113,7 @@ export function StockSearch() {
   // trocar filtro/gênero/aba re-busca automaticamente (se já buscou algo)
   useEffect(() => {
     if (searchedRef.current && query.trim()) void search();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [type, dur, genre]);
 
   async function addStock(item: StockItem) {

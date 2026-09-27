@@ -78,7 +78,7 @@ export function MediaPanel() {
     };
     window.addEventListener("galaxiacut:delmedia", del);
     return () => window.removeEventListener("galaxiacut:delmedia", del);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [selMedia]);
 
   async function handleFiles(files: FileList | File[]) {

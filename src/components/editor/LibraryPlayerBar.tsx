@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, RotateCcw, RotateCw, X, Loader2, Music2, Video as VideoIcon } from "lucide-react";
-import { useLibPlayer } from "@/lib/editor/libPlayer";
+import { useLibPlayer, LibItem } from "@/lib/editor/libPlayer";
 
 function fmt(t: number): string {
   if (!isFinite(t) || t < 0) t = 0;
@@ -19,29 +19,34 @@ export function LibraryPlayerBar() {
   const src = useLibPlayer((s) => s.src);
   const loading = useLibPlayer((s) => s.loading);
   const close = useLibPlayer((s) => s.close);
+  if (!item) return null;
+  // key = item+src: trocar de mídia REMONTA o player (estado limpo, do zero)
+  return <PlayerCore key={`${item.id}|${src ?? ""}`} item={item} src={src} loading={loading} onClose={close} />;
+}
+
+function PlayerCore({
+  item,
+  src,
+  loading,
+  onClose,
+}: {
+  item: LibItem;
+  src: string | null;
+  loading: boolean;
+  onClose: () => void;
+}) {
   const mediaRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [dur, setDur] = useState(0);
 
-  // trocou de mídia? carrega a nova
+  // montou com src? toca
   useEffect(() => {
     const el = mediaRef.current;
     if (!el || !src) return;
     el.src = src;
-    el.currentTime = 0;
     void el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
-  }, [src, item?.id]);
-
-  useEffect(() => {
-    if (!item) {
-      setPlaying(false);
-      setTime(0);
-      setDur(0);
-    }
-  }, [item]);
-
-  if (!item) return null;
+  }, [src]);
 
   const el = mediaRef.current;
   const toggle = () => {
@@ -147,7 +152,7 @@ export function LibraryPlayerBar() {
         </div>
       </div>
 
-      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-zinc-500 hover:text-zinc-200" onClick={close} aria-label="Fechar player">
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-zinc-500 hover:text-zinc-200" onClick={onClose} aria-label="Fechar player">
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>

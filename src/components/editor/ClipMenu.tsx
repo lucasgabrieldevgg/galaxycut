@@ -5,8 +5,10 @@
 // Nenhum pointerup do próprio clique de abertura pode fechá-lo.
 "use client";
 
-import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+const MENU_W = 240; // largura máxima do menu (pro clamp lateral)
 
 export interface MenuItem {
   type?: "item" | "sep" | "submenu" | "info";
@@ -72,26 +74,23 @@ export function FloatMenu({ items, children }: { items: MenuItem[]; children: Re
     return () => window.removeEventListener("contextmenu", onCtx, true);
   }, []);
 
-  // mantém o menu dentro da tela
-  useLayoutEffect(() => {
-    if (!pos || !menuRef.current) return;
-    const el = menuRef.current;
-    const r = el.getBoundingClientRect();
-    let { x, y } = pos;
-    if (x + r.width > window.innerWidth - 8) x = Math.max(8, window.innerWidth - r.width - 8);
-    if (y + r.height > window.innerHeight - 8) y = Math.max(8, window.innerHeight - r.height - 8);
-    if (x !== pos.x || y !== pos.y) setPos({ x, y });
-  }, [pos]);
+  // clampa o menu dentro da tela — calculado na renderização (sem setState em effect)
+  const clamped = pos
+    ? {
+        x: Math.min(pos.x, Math.max(8, window.innerWidth - MENU_W - 12)),
+        y: Math.min(pos.y, Math.max(8, window.innerHeight - 8)),
+      }
+    : null;
 
   return (
     <div ref={hostRef} className="contents">
       {children}
-      {pos &&
+      {clamped &&
         createPortal(
           <div
             ref={menuRef}
             className="fixed z-[90] min-w-[218px] rounded-lg border border-[#232d3d] bg-[#121722] p-1 text-zinc-200 shadow-[0_12px_36px_rgba(0,0,0,0.55)]"
-            style={{ left: pos.x, top: pos.y }}
+            style={{ left: clamped.x, top: clamped.y }}
             onContextMenu={(e) => e.preventDefault()}
           >
             {items.map((it, i) =>

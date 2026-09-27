@@ -62,19 +62,20 @@ export function RecordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       dead = true;
       cleanup();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [open]);
 
   function cleanup() {
     try {
-      recRef.current?.state === "recording" && recRef.current.stop();
+      if (recRef.current?.state === "recording") recRef.current.stop();
     } catch {
       /* noop */
     }
     recRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-    void ctxRef.current?.close().catch(() => undefined);
+    const ctx = ctxRef.current;
+    if (ctx) void ctx.close().catch(() => undefined);
     ctxRef.current = null;
     setAnalyser(null);
   }
