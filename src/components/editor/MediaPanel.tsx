@@ -27,15 +27,16 @@ import { StockSearch } from "./StockSearch";
 import { LibraryPlayerBar } from "./LibraryPlayerBar";
 import { RecordDialog } from "./RecordDialog";
 import { FloatMenu, MenuItem } from "./ClipMenu";
+import { useT, t as tr } from "@/lib/editor/i18n";
 
 const MEDIA_DND_TYPE = "application/x-galaxiacut-media";
 
 /** filtros da aba Mídia (achar vídeo/áudio/imagem fácil) */
-const KIND_FILTERS: { id: "all" | "video" | "audio" | "image"; label: string }[] = [
-  { id: "all", label: "Tudo" },
-  { id: "video", label: "Vídeos" },
-  { id: "audio", label: "Áudios" },
-  { id: "image", label: "Imagens" },
+const KIND_FILTERS: { id: "all" | "video" | "audio" | "image"; key: string }[] = [
+  { id: "all", key: "mp.all" },
+  { id: "video", key: "mp.videos" },
+  { id: "audio", key: "mp.audios" },
+  { id: "image", key: "mp.images" },
 ];
 
 function fmtDur(d: number) {
@@ -46,6 +47,7 @@ function fmtDur(d: number) {
 }
 
 export function MediaPanel() {
+  const t = useT();
   const media = useProject((s) => s.media);
   const addMedia = useProject((s) => s.addMedia);
   const removeMedia = useProject((s) => s.removeMedia);
@@ -87,7 +89,7 @@ export function MediaPanel() {
       (f) => /^(video|audio|image)\//.test(f.type) || /\.(mp4|webm|mov|mkv|m4v|avi|png|jpe?g|webp|gif|avif|bmp|mp3|wav|ogg|m4a|aac|flac|opus)$/i.test(f.name)
     );
     if (!arr.length) {
-      toast.info("Nenhum arquivo de vídeo, áudio ou imagem nessa pasta");
+      toast.info(t("mp.noFiles"));
       return;
     }
     setImporting(arr.length);
@@ -100,7 +102,7 @@ export function MediaPanel() {
         ok++;
       } catch (e) {
         fail++;
-        toast.error(`Não consegui importar "${f.name}"`, { description: String((e as Error).message ?? e) });
+        toast.error(t("mp.relinkFail") + `: ${f.name}`, { description: String((e as Error).message ?? e) });
       } finally {
         setImporting((n) => Math.max(0, n - 1));
       }
@@ -108,8 +110,8 @@ export function MediaPanel() {
     if (ok > 0) {
       toast.success(
         fail > 0
-          ? `${ok} de ${arr.length} arquivo(s) importado(s) — ${fail} falhou(aram)`
-          : `${ok} arquivo(s) importado(s) — arraste pra timeline ou clique no +`
+          ? t("mp.importedPartial", { ok, n: arr.length, fail })
+          : t("mp.importedN", { n: ok })
       );
     }
   }
@@ -118,16 +120,16 @@ export function MediaPanel() {
     try {
       const meta = await registry.relink(id, file);
       if (!meta) {
-        toast.error("Falha ao revincular: mídia não encontrada");
+        toast.error(t("mp.relinkFail"));
         return;
       }
       useProject.setState((s) => ({
         media: s.media.map((m) => (m.id === id ? { ...m, ...meta, missing: false, decodeError: false } : m)),
       }));
       relinkMedia(id);
-      toast.success("Mídia revinculada!");
+      toast.success(t("mp.relinked"));
     } catch (e) {
-      toast.error("Falha ao revincular", { description: String((e as Error).message ?? e) });
+      toast.error(t("mp.relinkFail"), { description: String((e as Error).message ?? e) });
     }
   }
 
@@ -139,13 +141,13 @@ export function MediaPanel() {
         <div className="shrink-0 border-b border-[#1c2430] px-2 pt-2">
           <TabsList className="grid h-8 w-full grid-cols-3 bg-[#151b26]">
             <TabsTrigger value="media" className="h-7 gap-1 text-[11px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-zinc-100">
-              <Film className="h-3 w-3" /> Mídia
+              <Film className="h-3 w-3" /> {t("mp.media")}
             </TabsTrigger>
             <TabsTrigger value="text" className="h-7 gap-1 text-[11px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-zinc-100">
-              <Type className="h-3 w-3" /> Texto
+              <Type className="h-3 w-3" /> {t("mp.text")}
             </TabsTrigger>
             <TabsTrigger value="stock" className="h-7 gap-1 text-[11px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-zinc-100">
-              <Search className="h-3 w-3" /> Busca
+              <Search className="h-3 w-3" /> {t("mp.search")}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -161,27 +163,27 @@ export function MediaPanel() {
                   e.preventDefault();
                   if (e.dataTransfer.files.length) void handleFiles(e.dataTransfer.files);
                 }}
-                className="flex w-full flex-col items-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-3 py-3.5 text-zinc-500 transition hover:border-[#22C55E]/60 hover:text-[#22C55E]"
+                className="flex w-full flex-col items-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-3 py-3.5 text-zinc-500 transition hover:border[var(--gc-accent-60)] hover:text-[var(--gc-accent)]"
               >
                 {importing > 0 ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
-                <span className="text-xs font-medium">Importar arquivos</span>
-                <span className="text-[10px] text-zinc-600">clique ou arraste pra cá</span>
+                <span className="text-xs font-medium">{t("mp.importFiles")}</span>
+                <span className="text-[10px] text-zinc-600">{t("mp.clickOrDrag")}</span>
               </button>
               <button
                 onClick={() => folderRef.current?.click()}
-                title="Importar uma pasta inteira"
-                className="flex w-[74px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-1 py-3.5 text-zinc-500 transition hover:border-[#22C55E]/60 hover:text-[#22C55E]"
+                title={t("mp.importFolderHint")}
+                className="flex w-[74px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-1 py-3.5 text-zinc-500 transition hover:border[var(--gc-accent-60)] hover:text-[var(--gc-accent)]"
               >
                 <FolderOpen className="h-5 w-5" />
-                <span className="text-[10px] font-medium leading-tight">Importar<br />pasta</span>
+                <span className="text-[10px] font-medium leading-tight">{t("mp.importFolder").split(" ")[0]}<br />{t("mp.importFolder").split(" ").slice(1).join(" ")}</span>
               </button>
               <button
                 onClick={() => setRecordOpen(true)}
-                title="Gravar voz pelo microfone e adicionar na timeline"
+                title={t("mp.recordHint")}
                 className="flex w-[74px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-1 py-3.5 text-zinc-500 transition hover:border-red-400/60 hover:text-red-400"
               >
                 <Mic className="h-5 w-5" />
-                <span className="text-[10px] font-medium leading-tight">Gravar<br />voz</span>
+                <span className="text-[10px] font-medium leading-tight">{t("mp.record").split(" ")[0]}<br />{t("mp.record").split(" ").slice(1).join(" ")}</span>
               </button>
               <input
                 ref={fileRef}
@@ -220,11 +222,11 @@ export function MediaPanel() {
                       onClick={() => setKindFilter(f.id)}
                       className={`rounded-full border px-2.5 py-0.5 text-[10px] transition ${
                         kindFilter === f.id
-                          ? "border-[#22C55E] bg-[#22C55E]/15 text-[#22C55E]"
+                          ? "border-[var(--gc-accent)] bg[var(--gc-accent-15)] text-[var(--gc-accent)]"
                           : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                       }`}
                     >
-                      {f.label} <span className="opacity-60">{n}</span>
+                      {t(f.key)} <span className="opacity-60">{n}</span>
                     </button>
                   );
                 })}
@@ -232,10 +234,7 @@ export function MediaPanel() {
             )}
             <ScrollArea className="min-h-0 flex-1 px-2.5 pb-3">
               {media.length === 0 ? (
-                <p className="px-2 py-6 text-center text-[11px] leading-relaxed text-zinc-600">
-                  Sua mídia aparece aqui.<br />Tudo fica no seu navegador — nada sobe pra nuvem.<br />
-                  <span className="text-zinc-500">Depois <b className="text-zinc-400">arraste</b> daqui pra a timeline.</span>
-                </p>
+                <p className="px-2 py-6 text-center text-[11px] leading-relaxed text-zinc-600">{t("mp.empty")}</p>
               ) : kindFilter === "all" || media.some((m) => m.kind === kindFilter) ? (
                 <div className="space-y-1.5">
                   {media
@@ -250,15 +249,13 @@ export function MediaPanel() {
                         onRelink={(f) => void relink(m.id, f)}
                         onAdd={() => {
                           const c = addClipFromMedia(m.id);
-                          if (c) toast.success(`Adicionado na timeline em ${fmtDur(c.start)}`);
+                          if (c) toast.success(t("mp.addedAt", { t: fmtDur(c.start) }));
                         }}
                       />
                     ))}
                 </div>
               ) : (
-                <p className="px-2 py-6 text-center text-[11px] text-zinc-600">
-                  Nada deste tipo ainda — importa aí em cima
-                </p>
+                <p className="px-2 py-6 text-center text-[11px] text-zinc-600">{t("mp.noneOfKind")}</p>
               )}
             </ScrollArea>
           </div>
@@ -270,11 +267,11 @@ export function MediaPanel() {
             <Button
               onClick={() => {
                 addTextClip(playhead);
-                toast.success("Texto adicionado — edite no painel da direita");
+                toast.success(t("mp.textAdded"));
               }}
-              className="h-9 w-full shrink-0 gap-1.5 bg-[#22C55E] text-sm font-semibold text-black hover:bg-[#1ed467]"
+              className="h-9 w-full shrink-0 gap-1.5 bg-[var(--gc-accent)] text-sm font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
             >
-              <Type className="h-4 w-4" /> Adicionar texto
+              <Type className="h-4 w-4" /> {t("mp.addText")}
             </Button>
             <Button
               variant="outline"
@@ -282,34 +279,22 @@ export function MediaPanel() {
                 job.setMinimized(false);
                 job.setOpen(true);
               }}
-              className="h-9 w-full shrink-0 gap-1.5 border-[#2a3546] bg-transparent text-sm text-zinc-200 hover:border-[#22C55E]/50 hover:text-[#22C55E]"
+              className="h-9 w-full shrink-0 gap-1.5 border-[#2a3546] bg-transparent text-sm text-zinc-200 hover:border[var(--gc-accent-50)] hover:text-[var(--gc-accent)]"
             >
-              <Sparkles className="h-4 w-4 text-[#22C55E]" /> Legendas automáticas
+              <Sparkles className="h-4 w-4 text-[var(--gc-accent)]" /> {t("mp.autoSubs")}
             </Button>
             <p className="rounded-md border border-[#2a3546] bg-[#0e1320] p-2.5 text-[10px] leading-relaxed text-zinc-500">
-              {isDesktopBuild() ? (
-                <>
-                  A transcrição roda <b className="text-zinc-400">no seu próprio PC</b> (Whisper local, em 2º plano —
-                  nada trava, nada sai da sua máquina). As palavras <b className="text-[#FACC15]">pulsam</b> conforme
-                  são faladas, e dá pra cancelar no meio.
-                </>
-              ) : (
-                <>
-                  No navegador as legendas automáticas ficam <b className="text-zinc-400">só no app baixado</b> (a IA
-                  congela a página aqui) — as <b className="text-zinc-400">manuais</b> continuam normais. No app:
-                  Whisper local em 2º plano, sem travar nada.
-                </>
-              )}
+              {isDesktopBuild() ? t("mp.subsNoteApp") : t("mp.subsNoteWeb")}
             </p>
             <div className="mt-1 min-h-0 flex-1">
-              <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Estilos de legenda</p>
+              <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{t("mp.captionStyles")}</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {CAPTION_PRESETS.map((p) => (
                   <button
                     key={p.id}
                     onClick={() => {
                       addTextClip(playhead, p.props);
-                      toast.success(`Estilo "${p.name}" adicionado`);
+                      toast.success(t("mp.styleAdded", { name: p.name }));
                     }}
                     className="flex flex-col items-center gap-1 rounded-lg border border-[#232d3d] bg-[#121722] px-2 py-2.5 transition hover:border-[#3a4759]"
                     title={`Adicionar texto com estilo ${p.name}`}
@@ -349,17 +334,13 @@ export function MediaPanel() {
       <AlertDialog open={!!confirmRemove} onOpenChange={(v) => !v && setConfirmRemove(null)}>
         <AlertDialogContent className="border-[#232d3d] bg-[#121722] text-zinc-200">
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover “{confirmRemove?.name}”?</AlertDialogTitle>
+            <AlertDialogTitle>{t("mp.removeTitle", { name: confirmRemove?.name ?? "" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              Essa mídia está em{" "}
-              <b className="text-zinc-300">
-                {useProject.getState().clips.filter((c) => c.mediaId === confirmRemove?.id).length} clipe(s)
-              </b>{" "}
-              da timeline. Remover a mídia apaga esses clipes também (dá pra desfazer com Ctrl+Z).
+              {t("mp.removeHint", { n: useProject.getState().clips.filter((c) => c.mediaId === confirmRemove?.id).length })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">{t("misc.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 text-white hover:bg-red-500"
               onClick={() => {
@@ -370,7 +351,7 @@ export function MediaPanel() {
                 setConfirmRemove(null);
               }}
             >
-              Remover tudo
+              {t("mp.removeAll")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -402,10 +383,10 @@ function MediaRow({
   const url = registry.getUrl(m.id);
 
   const items: MenuItem[] = [
-    { label: "Adicionar na timeline", icon: <PlusCircle className="h-3.5 w-3.5 text-[#22C55E]" />, onClick: onAdd },
+    { label: tr("mp.addToTimeline"), icon: <PlusCircle className="h-3.5 w-3.5 text-[var(--gc-accent)]" />, onClick: onAdd },
     ...(m.kind !== "image" && url
       ? [{
-          label: "Ouvir/assistir (player embaixo)",
+          label: tr("mp.listen"),
           icon: <PlayIcon className="h-3.5 w-3.5" />,
           onClick: () =>
             openPlayer({ id: m.id, title: m.name, url: url!, kind: m.kind === "audio" ? "audio" : "video", thumb: m.thumbnail }),
@@ -413,7 +394,7 @@ function MediaRow({
       : []),
     ...(m.creator ? [{ type: "info" as const, label: `Autor: ${m.creator}${licStyle ? ` · ${licStyle.title}` : ""}` }] : []),
     { type: "sep" as const },
-    { label: "Remover da mídia", icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: onRemove },
+    { label: tr("mp.removeMedia"), icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: onRemove },
   ];
 
   return (
@@ -430,12 +411,12 @@ function MediaRow({
         onDragEnd={() => gcDrag.end()}
         className={`group flex cursor-grab items-center gap-2 rounded-lg border p-1.5 transition active:cursor-grabbing ${
           sel
-            ? "border-[#22C55E] bg-[#22C55E]/10"
+            ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)]"
             : m.missing
               ? "border-red-500/40 bg-red-500/5"
               : "border-[#232d3d] bg-[#121722] hover:border-[#3a4759]"
         }`}
-        title="Clique pra selecionar (Delete apaga) • arraste pra a timeline • + adiciona no fim • botão direito: mais opções"
+        title={tr("mp.mediaHint")}
       >
         <div className="relative h-11 w-14 shrink-0 overflow-hidden rounded bg-[#0a0d14]">
           {m.thumbnail ? (
@@ -453,7 +434,7 @@ function MediaRow({
           <p className="truncate text-[11px] font-medium text-zinc-300">{m.name}</p>
           <div className="flex items-center gap-1.5">
             <p className="text-[9px] text-zinc-500">
-              {m.kind === "image" ? "imagem" : m.kind === "video" ? "vídeo" : "áudio"}
+              {tr(m.kind === "image" ? "mp.image" : m.kind === "video" ? "mp.video" : "mp.audio")}
               {m.kind !== "image" && ` · ${fmtDur(m.duration)}`}
             </p>
             {licStyle && (
@@ -461,10 +442,10 @@ function MediaRow({
                 {licStyle.label}
               </span>
             )}
-            {m.missing && <span className="text-[9px] text-red-400">ausente — reimporte</span>}
+            {m.missing && <span className="text-[9px] text-red-400">{tr("mp.missing")}</span>}
             {m.decodeError && !m.missing && (
-              <span className="text-[9px] text-amber-400" title="O formato deste arquivo não abre no navegador — converta pra MP4 (H.264) ou WebM e reimporte">
-                não abre neste navegador
+              <span className="text-[9px] text-amber-400" title={tr("mp.decodeErrorHint")}>
+                {tr("mp.decodeError")}
               </span>
             )}
           </div>
@@ -480,7 +461,7 @@ function MediaRow({
                 if (f) onRelink(f);
               }}
             />
-            Reimportar
+            {tr("mp.reimport")}
           </label>
         ) : (
           <>
@@ -488,13 +469,13 @@ function MediaRow({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-zinc-400 opacity-0 transition group-hover:opacity-100 hover:bg-[#22C55E]/10 hover:text-[#22C55E]"
+                className="h-6 w-6 text-zinc-400 opacity-0 transition group-hover:opacity-100 hover:bg[var(--gc-accent-10)] hover:text-[var(--gc-accent)]"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (url) openPlayer({ id: m.id, title: m.name, url, kind: m.kind === "audio" ? "audio" : "video", thumb: m.thumbnail });
                 }}
-                aria-label="Ouvir ou assistir (player embaixo)"
-                title="Ouvir/assistir — o player fica embaixo, sem atrapalhar"
+                aria-label={tr("mp.listen")}
+                title={tr("mp.listenHint")}
               >
                 <PlayIcon className="h-3.5 w-3.5" />
               </Button>
@@ -502,12 +483,12 @@ function MediaRow({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-[#22C55E] hover:bg-[#22C55E]/10"
+              className="h-6 w-6 text-[var(--gc-accent)] hover:bg[var(--gc-accent-10)]"
               onClick={(e) => {
                 e.stopPropagation();
                 onAdd();
               }}
-              aria-label="Adicionar na timeline"
+              aria-label={tr("mp.addToTimeline")}
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
@@ -519,7 +500,7 @@ function MediaRow({
                 e.stopPropagation();
                 onRemove();
               }}
-              aria-label="Remover mídia"
+              aria-label={tr("mp.removeMedia")}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>

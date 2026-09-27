@@ -121,7 +121,7 @@ export function DbMeter({
             style={{
               width: "0%",
               background: `linear-gradient(to right,
-                #22C55E 0%, #22C55E ${dbToPct(-18)}%,
+                var(--gc-accent) 0%, var(--gc-accent) ${dbToPct(-18)}%,
                 #EAB308 ${dbToPct(-18)}%, #EAB308 ${dbToPct(-6)}%,
                 #EF4444 ${dbToPct(-6)}%, #EF4444 100%)`,
             }}
@@ -130,7 +130,7 @@ export function DbMeter({
           <div ref={peakRef} className="absolute inset-y-0 w-[2px] bg-white/90 shadow-[0_0_4px_rgba(255,255,255,0.8)]" style={{ left: "0%" }} />
         </div>
         {/* leitura numérica */}
-        <span ref={numRef} className="w-12 shrink-0 text-right font-mono text-[10px] tabular-nums text-[#22C55E]">
+        <span ref={numRef} className="w-12 shrink-0 text-right font-mono text-[10px] tabular-nums text-[var(--gc-accent)]">
           −∞ dB
         </span>
       </div>

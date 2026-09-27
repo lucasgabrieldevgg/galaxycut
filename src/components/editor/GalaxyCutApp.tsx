@@ -1,5 +1,5 @@
-// GalaxyCut — casca do app: home (edições) ↔ editor. Decide qual tela mostrar,
-// carrega o projeto escolhido (disco > navegador no app) e devolve pra home.
+// GalaxyCut — casca do app: onboarding (1ª vez) → home (edições) ↔ editor.
+// Carrega o projeto escolhido (disco > navegador no app) e devolve pra home.
 "use client";
 
 import { useEffect, useState } from "react";
@@ -11,16 +11,19 @@ import { engine } from "@/lib/editor/playback";
 import * as projects from "@/lib/editor/projects";
 import { saveToDisk, loadDiskProject, listDiskProjects } from "@/lib/editor/diskProjects";
 import { desktop } from "@/lib/editor/desktop";
+import { useSettings } from "@/lib/editor/settings";
+import { t as tr, useLang } from "@/lib/editor/i18n";
 import { HomeScreen } from "./HomeScreen";
 import { UpdateDialog } from "./UpdateDialog";
 import { NewProjectDialog } from "./NewProjectDialog";
+import { OnboardingScreen } from "./OnboardingScreen";
 
 const EditorShell = dynamic(() => import("./EditorShell").then((m) => m.EditorShell), {
   ssr: false,
   loading: () => (
     <div className="flex h-screen w-full items-center justify-center bg-[#080b11]">
       <div className="flex flex-col items-center gap-3">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#22C55E] border-t-transparent" />
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--gc-accent)] border-t-transparent" />
         <p className="text-sm text-zinc-500">Abrindo o editor…</p>
       </div>
     </div>
@@ -30,6 +33,18 @@ const EditorShell = dynamic(() => import("./EditorShell").then((m) => m.EditorSh
 export function GalaxyCutApp() {
   const [route, setRoute] = useState<"home" | "editor">("home");
   const [newOpen, setNewOpen] = useState(false);
+  const onboarded = useSettings((s) => s.onboarded);
+  // 1ª vez: nasce direto na configuração inicial (sem effect — sem piscar a home)
+  const [onboarding, setOnboarding] = useState(() => !useSettings.getState().onboarded);
+  // idioma mudou? os textos estáticos do dynamic loading acompanham
+  useLang((s) => s.lang);
+
+  // "ver de novo" nas configurações: reabre a configuração inicial
+  useEffect(() => {
+    const reopen = () => setOnboarding(true);
+    window.addEventListener("galaxycut:onboarding", reopen);
+    return () => window.removeEventListener("galaxycut:onboarding", reopen);
+  }, []);
 
   // ---- desktop: recupera as edições salvas em DISCO pra dentro da home ----
   useEffect(() => {
@@ -55,9 +70,7 @@ export function GalaxyCutApp() {
         }
       }
       if (merged) {
-        toast.success(`${merged} edição(ões) recuperada(s) do disco 💾`, {
-          description: "Salvas na pasta GalaxyCut/Projetos — sobrevivem a qualquer fechamento.",
-        });
+        toast.success(tr("app.recovered", { n: merged }), { description: tr("app.recoveredDesc") });
       }
     })();
   }, []);
@@ -84,7 +97,7 @@ export function GalaxyCutApp() {
       }
     }
     if (!snap) {
-      toast.error("Essa edição não abriu — pode ter sido apagada em outra janela");
+      toast.error(tr("app.openFail"));
       return;
     }
     setActiveProject(id);
@@ -97,17 +110,11 @@ export function GalaxyCutApp() {
     const before = snap.media.filter((m) => m.missing).length;
     const after = hydrated.filter((m) => m.missing).length;
     if (fromDiskAt > 0 && after < before) {
-      toast.success("Edição restaurada do disco", {
-        description: "Arquivos, clipes e até o Ctrl+Z vieram da pasta de saves do app.",
-      });
+      toast.success(tr("app.diskRestored"), { description: tr("app.diskRestoredDesc") });
     } else if (after < before) {
-      toast.success("Mídias recuperadas do navegador", {
-        description: "Os arquivos importados ficam salvos aí — recarregar a página não perde nada.",
-      });
+      toast.success(tr("app.mediaRestored"), { description: tr("app.mediaRestoredDesc") });
     } else if (after > 0) {
-      toast.info("Edição restaurada", {
-        description: `${after} mídia(s) não estão neste dispositivo — reimporte na aba Mídia.`,
-      });
+      toast.info(tr("app.mediaMissingToast"), { description: tr("app.mediaMissingToastDesc", { n: after }) });
     }
   }
 
@@ -130,6 +137,8 @@ export function GalaxyCutApp() {
     setActiveProject(null);
     setRoute("home");
   }
+
+  if (onboarding) return <OnboardingScreen onDone={() => setOnboarding(false)} />;
 
   return route === "home" ? (
     <>

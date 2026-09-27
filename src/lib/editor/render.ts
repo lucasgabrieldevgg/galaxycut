@@ -5,6 +5,8 @@ import { Clip, Track, ProjectMeta, TextProps, TransitionType, clipEnd, fadeEnvel
 import { registry } from "./media";
 import { estimateWords } from "./subtitles";
 import { useSettings } from "./settings";
+import { accentById } from "./theme";
+import { t } from "./i18n";
 
 export type MediaStatus = "ok" | "loading" | "missing" | "error";
 
@@ -323,6 +325,7 @@ function drawTextTransition(
 }
 
 function drawPlaceholder(ctx: CanvasRenderingContext2D, W: number, H: number, c: Clip, status: MediaStatus, progress: number | null) {
+  const accent = accentById(useSettings.getState().accent).hex;
   ctx.save();
   ctx.fillStyle = status === "loading" ? "#0d1117" : "#111827";
   ctx.fillRect(0, 0, W, H);
@@ -334,16 +337,16 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D, W: number, H: number, c:
   const pct = loading && progress != null && progress > 0.001 ? Math.round(Math.min(0.99, progress) * 100) : null;
   const label =
     status === "error"
-      ? "este arquivo não abre neste navegador"
+      ? t("render.noDecode")
       : loading
         ? pct != null
-          ? `carregando a mídia… ${pct}%`
-          : "carregando a mídia…"
+          ? t("render.loadingPct", { pct })
+          : t("render.loading")
         : status === "missing"
-          ? "mídia ausente — reimporte na aba Mídia"
+          ? t("render.missing")
           : c.mediaId
-            ? "mídia não carregada"
-            : "sem mídia";
+            ? t("render.notLoaded")
+            : t("render.noMedia");
   ctx.fillText(label, W / 2, H / 2);
   if (loading) {
     // barrinha de progresso (a % que falta pra carregar inteiro, na própria tela)
@@ -354,13 +357,13 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D, W: number, H: number, c:
     roundedBar(ctx, bx, by, bw, Math.max(3, H / 220));
     ctx.fill();
     if (pct != null) {
-      ctx.fillStyle = "#22C55E";
-      roundedBar(ctx, bx, by, (bw * Math.min(0.99, progress!)) , Math.max(3, H / 220));
+      ctx.fillStyle = accent;
+      roundedBar(ctx, bx, by, (bw * Math.min(0.99, progress!)), Math.max(3, H / 220));
       ctx.fill();
     }
     ctx.fillStyle = "#52525b";
     ctx.font = `${Math.round(H / 44)}px Arial, sans-serif`;
-    ctx.fillText(pct != null ? `${pct}% carregado — o vídeo aparece sozinho` : "(arquivos grandes demoram um pouco na 1ª vez)", W / 2, by + H / 40);
+    ctx.fillText(pct != null ? t("render.loadingHint", { pct }) : t("render.slowHint"), W / 2, by + H / 40);
   }
   ctx.restore();
 }

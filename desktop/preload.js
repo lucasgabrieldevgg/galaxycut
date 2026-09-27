@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld("galaxyDesktop", {
   saveExport: (arrayBuffer, ext) => ipcRenderer.invoke("save-export", arrayBuffer, ext),
   /** pergunta ao processo principal se tem versão nova no GitHub */
   checkUpdates: () => ipcRenderer.invoke("check-updates"),
+  /** v7.1: baixa a atualização (se ainda não baixou) */
+  downloadUpdate: () => ipcRenderer.invoke("update:download"),
+  /** v7.1: instala a atualização baixada — o app reinicia sozinho */
+  installUpdate: () => ipcRenderer.invoke("update:install"),
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
   showInFolder: (p) => ipcRenderer.invoke("show-in-folder", p),
   /** o main avisa quando achar atualização (boot + a cada 6h) */
@@ -17,6 +21,18 @@ contextBridge.exposeInMainWorld("galaxyDesktop", {
     const handler = (_ev, info) => cb(info);
     ipcRenderer.on("update-available", handler);
     return () => ipcRenderer.removeListener("update-available", handler);
+  },
+  /** progresso do download da atualização (0..1) */
+  onUpdateProgress: (cb) => {
+    const handler = (_ev, info) => cb(info);
+    ipcRenderer.on("update-progress", handler);
+    return () => ipcRenderer.removeListener("update-progress", handler);
+  },
+  /** a atualização terminou de baixar — pode instalar */
+  onUpdateReady: (cb) => {
+    const handler = (_ev, info) => cb(info);
+    ipcRenderer.on("update-ready", handler);
+    return () => ipcRenderer.removeListener("update-ready", handler);
   },
   // ---- projetos em disco (pasta dedicada por edição + autosave) ----
   /** cria/retorna a pasta do projeto + ids de mídia já salvos nela */

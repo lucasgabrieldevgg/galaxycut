@@ -16,8 +16,10 @@ import { Clip, FONTS, TextProps, TRANSITIONS, TransitionType, clipEnd } from "@/
 import { AlignLeft, AlignCenter, AlignRight, Bold, Italic, RotateCcw, Wand2, ArrowRightFromLine, Paintbrush, Pin } from "lucide-react";
 import { engine } from "@/lib/editor/playback";
 import { toast } from "sonner";
+import { useT } from "@/lib/editor/i18n";
 
 export function Inspector() {
+  const t = useT();
   const clip = useProject((s) => s.clips.find((c) => c.id === s.selectedId) ?? null);
   const duration = usePlayback((s) => s.duration);
   const project = useProject((s) => s.project);
@@ -27,20 +29,18 @@ export function Inspector() {
     <div className="flex h-full flex-col bg-[#0c1017]">
       <div className="flex h-9 shrink-0 items-center border-b border-[#1c2430] bg-[#10151d] px-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-          {clip ? "Propriedades" : "Projeto"}
+          {clip ? t("ins.props") : t("ins.project")}
         </h2>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3 timeline-scroll">
         {!clip ? (
           <div className="space-y-3">
-            <InfoRow label="Formato">{project.width}×{project.height}</InfoRow>
-            <InfoRow label="FPS">{project.fps}</InfoRow>
-            <InfoRow label="Duração">{clipCount > 0 ? `${(Math.round(duration * 10) / 10).toFixed(1)}s` : "—"}</InfoRow>
-            <InfoRow label="Clipes">{clipCount}</InfoRow>
+            <InfoRow label={t("ins.format")}>{project.width}×{project.height}</InfoRow>
+            <InfoRow label={t("ins.fps")}>{project.fps}</InfoRow>
+            <InfoRow label={t("ins.duration")}>{clipCount > 0 ? `${(Math.round(duration * 10) / 10).toFixed(1)}s` : "—"}</InfoRow>
+            <InfoRow label={t("ins.clips")}>{clipCount}</InfoRow>
             <p className="rounded-lg border border-[#232d3d] bg-[#121722] p-3 text-[11px] leading-relaxed text-zinc-500">
-              Selecione um clipe na timeline para editar posição, filtros, velocidade, volume, transição e
-              animações. <b className="text-zinc-400">Espaço</b> toca/pausa, <b className="text-zinc-400">S</b> corta
-              no ponto da setinha, <b className="text-zinc-400">botão direito</b> abre o menu do clipe.
+              {t("ins.hint")}
             </p>
           </div>
         ) : (
@@ -66,7 +66,7 @@ function Section({ title, children, onReset }: { title: string; children: ReactN
       <div className="mb-1.5 flex items-center justify-between">
         <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{title}</h3>
         {onReset && (
-          <button onClick={onReset} className="flex items-center gap-1 text-[10px] text-zinc-500 transition hover:text-[#22C55E]" title="Restaurar padrão">
+          <button onClick={onReset} className="flex items-center gap-1 text-[10px] text-zinc-500 transition hover:text-[var(--gc-accent)]" title="Restaurar padrão">
             <RotateCcw className="h-3 w-3" /> resetar
           </button>
         )}
@@ -82,6 +82,7 @@ function NumStepper({
 }: {
   value: number; min: number; max: number; step: number; onChange: (v: number) => void; fmt?: (v: number) => string;
 }) {
+  const t = useT();
   const [text, setText] = useState<string | null>(null); // null = mostra o valor real
   const clamp = (v: number) => Math.max(min, Math.min(max, v));
 
@@ -146,8 +147,8 @@ function NumStepper({
             key={dir}
             type="button"
             aria-label={dir === 1 ? "aumentar" : "diminuir"}
-            title="Clique = 1 passo · segure = acelera"
-            className={`flex h-[13px] w-4 items-center justify-center text-zinc-500 transition select-none hover:bg-[#22C55E]/15 hover:text-[#22C55E] ${
+            title={t("ins.stepperHint")}
+            className={`flex h-[13px] w-4 items-center justify-center text-zinc-500 transition select-none hover:bg[var(--gc-accent-15)] hover:text-[var(--gc-accent)] ${
               dir === -1 ? "border-t border-[#2a3546]" : ""
             }`}
             onPointerDown={(e) => {
@@ -200,7 +201,7 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
           useProject.getState().pushHistory();
           onChange(v);
         }}
-        className="data-[state=checked]:bg-[#22C55E]"
+        className="data-[state=checked]:bg-[var(--gc-accent)]"
       />
     </div>
   );
@@ -231,6 +232,7 @@ function ColorRow({ label, value, onChange, allowNone }: { label: string; value:
 
 // ---------- posição das legendas (global compartilhada + trava individual) ----------
 function CaptionPosRows({ clip, update }: { clip: Clip; update: (patch: Partial<Clip>, history?: boolean) => void }) {
+  const t = useT();
   const captionPos = useSettings((s) => s.captionPos);
   const setSettings = useSettings((s) => s.set);
   const locked = !!clip.posLock;
@@ -261,23 +263,23 @@ function CaptionPosRows({ clip, update }: { clip: Clip; update: (patch: Partial<
           className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9px] transition ${
             locked ? "border-amber-500/50 bg-amber-500/10 text-amber-300" : "border-[#2a3546] text-zinc-400 hover:text-amber-300"
           }`}
-          title={locked ? "Esta legenda tem posição própria (não segue as outras)" : "Todas as legendas seguem a mesma posição"}
+          title={locked ? t("ins.posOwnHint") : t("ins.posAllHint")}
         >
-          <Pin className="h-3 w-3" /> {locked ? "Posição própria" : "Todas juntas"}
+          <Pin className="h-3 w-3" /> {locked ? t("ins.posOwn") : t("ins.posAll")}
         </button>
       </div>
-      <SliderRow label="Posição X" value={cur.x} min={-1} max={1} step={0.01} onChange={(v) => setPos(v, cur.y)} fmt={(v) => v.toFixed(2)} />
-      <SliderRow label="Posição Y" value={cur.y} min={-1} max={1} step={0.01} onChange={(v) => setPos(cur.x, v)} fmt={(v) => v.toFixed(2)} />
+      <SliderRow label={t("ins.positionX")} value={cur.x} min={-1} max={1} step={0.01} onChange={(v) => setPos(v, cur.y)} fmt={(v) => v.toFixed(2)} />
+      <SliderRow label={t("ins.positionY")} value={cur.y} min={-1} max={1} step={0.01} onChange={(v) => setPos(cur.x, v)} fmt={(v) => v.toFixed(2)} />
       <p className="mt-1 text-[9px] leading-relaxed text-zinc-600">
         {locked
-          ? "Travada: mexer aqui só afeta esta legenda."
-          : "Sem trava: mexer aqui (ou arrastar no preview) move TODAS as legendas destravadas juntas."}
+          ? t("ins.lockedHint")
+          : t("ins.posAllHint")}
       </p>
       {locked && (
         <button
           type="button"
           onClick={() => setSettings({ captionPos: { x: clip.x, y: clip.y } })}
-          className="mt-1.5 text-[9px] text-[#22C55E] hover:underline"
+          className="mt-1.5 text-[9px] text-[var(--gc-accent)] hover:underline"
         >
           Usar esta posição como padrão de todas
         </button>
@@ -287,6 +289,7 @@ function CaptionPosRows({ clip, update }: { clip: Clip; update: (patch: Partial<
 }
 
 function ClipInspector({ clip }: { clip: Clip }) {
+  const t = useT();
   const update = (patch: Partial<Clip>, history = true) => {
     useProject.getState().updateClip(clip.id, patch, { history });
     engine.markDirty();
@@ -305,7 +308,7 @@ function ClipInspector({ clip }: { clip: Clip }) {
     const st = useProject.getState();
     const others = st.clips.filter((c) => c.kind === "text" && c.id !== clip.id && c.text);
     if (!others.length) {
-      toast.info("Não tem outras legendas pra atualizar");
+      toast.info(t("ins.noOtherCaps"));
       return;
     }
     st.pushHistory();
@@ -333,13 +336,13 @@ function ClipInspector({ clip }: { clip: Clip }) {
     <div>
       {/* ---------- TEXTO ---------- */}
       {clip.kind === "text" && clip.text && (
-        <Section title="Texto">
+        <Section title={t("ins.text")}>
           <Textarea
             value={clip.text.content}
             onChange={(e) => update({ text: { ...clip.text!, content: e.target.value } }, false)}
             onFocus={() => useProject.getState().pushHistory()}
             className="min-h-[70px] border-[#2a3546] bg-[#121722] text-xs text-zinc-200"
-            placeholder="Digite a fala ou título…"
+            placeholder={t("ins.contentPh")}
           />
           {/* seletor de fonte COM preview de como ela é */}
           <Select
@@ -361,12 +364,12 @@ function ClipInspector({ clip }: { clip: Clip }) {
             </SelectContent>
           </Select>
           <div className="flex items-center gap-1.5">
-            <ToggleGroup type="multiple" className="gap-1" aria-label="Estilo e alinhamento">
+            <ToggleGroup type="multiple" className="gap-1" aria-label={t("ins.styleAlign")}>
               <ToggleGroupItem
                 value="bold"
                 data-state={clip.text.bold ? "on" : "off"}
                 onClick={() => update({ text: { ...clip.text!, bold: !clip.text!.bold } })}
-                className="h-7 w-7 border border-[#2a3546] p-0 text-zinc-400 data-[state=on]:border-[#22C55E] data-[state=on]:text-[#22C55E]"
+                className="h-7 w-7 border border-[#2a3546] p-0 text-zinc-400 data-[state=on]:border-[var(--gc-accent)] data-[state=on]:text-[var(--gc-accent)]"
                 title="Negrito"
               >
                 <Bold className="h-3 w-3" />
@@ -375,20 +378,20 @@ function ClipInspector({ clip }: { clip: Clip }) {
                 value="italic"
                 data-state={clip.text.italic ? "on" : "off"}
                 onClick={() => update({ text: { ...clip.text!, italic: !clip.text!.italic } })}
-                className="h-7 w-7 border border-[#2a3546] p-0 text-zinc-400 data-[state=on]:border-[#22C55E] data-[state=on]:text-[#22C55E]"
+                className="h-7 w-7 border border-[#2a3546] p-0 text-zinc-400 data-[state=on]:border-[var(--gc-accent)] data-[state=on]:text-[var(--gc-accent)]"
                 title="Itálico"
               >
                 <Italic className="h-3 w-3" />
               </ToggleGroupItem>
             </ToggleGroup>
             <div className="ml-auto">
-              <ToggleGroup type="single" value={clip.text.align} className="gap-1" aria-label="Alinhamento">
+              <ToggleGroup type="single" value={clip.text.align} className="gap-1" aria-label={t("ins.align")}>
                 {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([v, Icon]) => (
                   <ToggleGroupItem
                     key={v}
                     value={v}
                     onClick={() => update({ text: { ...clip.text!, align: v as TextProps["align"] } })}
-                    className="h-7 w-7 border border-[#2a3546] p-0 text-zinc-400 data-[state=on]:border-[#22C55E] data-[state=on]:text-[#22C55E]"
+                    className="h-7 w-7 border border-[#2a3546] p-0 text-zinc-400 data-[state=on]:border-[var(--gc-accent)] data-[state=on]:text-[var(--gc-accent)]"
                   >
                     <Icon className="h-3 w-3" />
                   </ToggleGroupItem>
@@ -396,7 +399,7 @@ function ClipInspector({ clip }: { clip: Clip }) {
               </ToggleGroup>
             </div>
           </div>
-          <SliderRow label="Tamanho" value={clip.text.size} min={20} max={220} step={2} onChange={(v) => update({ text: { ...clip.text!, size: v } }, false)} fmt={(v) => `${v}px`} />
+          <SliderRow label={t("ins.size")} value={clip.text.size} min={20} max={220} step={2} onChange={(v) => update({ text: { ...clip.text!, size: v } }, false)} fmt={(v) => `${v}px`} />
           {/* posição: legendas seguem a global (todas juntas) salvo trava própria */}
           {clip.isCaption ? (
             <CaptionPosRows clip={clip} update={update} />
@@ -406,17 +409,17 @@ function ClipInspector({ clip }: { clip: Clip }) {
               <SliderRow label="Posição Y" value={clip.y} min={-1} max={1} step={0.01} onChange={(v) => update({ y: v }, false)} fmt={(v) => v.toFixed(2)} />
             </>
           )}
-          <SliderRow label="Contorno" value={clip.text.strokeW} min={0} max={24} step={1} onChange={(v) => update({ text: { ...clip.text!, strokeW: v } }, false)} fmt={(v) => `${v}px`} />
-          <ColorRow label="Cor do texto" value={clip.text.color} onChange={(v) => update({ text: { ...clip.text!, color: v } }, false)} />
-          <ColorRow label="Cor do contorno" value={clip.text.strokeColor} onChange={(v) => update({ text: { ...clip.text!, strokeColor: v } }, false)} />
-          <ColorRow label="Caixa de fundo" value={clip.text.bg} onChange={(v) => update({ text: { ...clip.text!, bg: v } }, false)} allowNone />
-          <ToggleRow label="Sombra" checked={clip.text.shadow} onChange={(v) => update({ text: { ...clip.text!, shadow: v } })} />
+          <SliderRow label={t("ins.stroke")} value={clip.text.strokeW} min={0} max={24} step={1} onChange={(v) => update({ text: { ...clip.text!, strokeW: v } }, false)} fmt={(v) => `${v}px`} />
+          <ColorRow label={t("ins.textColor")} value={clip.text.color} onChange={(v) => update({ text: { ...clip.text!, color: v } }, false)} />
+          <ColorRow label={t("ins.strokeColor")} value={clip.text.strokeColor} onChange={(v) => update({ text: { ...clip.text!, strokeColor: v } }, false)} />
+          <ColorRow label={t("ins.bgBox")} value={clip.text.bg} onChange={(v) => update({ text: { ...clip.text!, bg: v } }, false)} allowNone />
+          <ToggleRow label={t("ins.shadow")} checked={clip.text.shadow} onChange={(v) => update({ text: { ...clip.text!, shadow: v } })} />
           <Button
             variant="outline"
             size="sm"
             onClick={applyStyleToAllCaptions}
-            className="w-full gap-1.5 border-[#2a3546] bg-transparent text-[11px] text-zinc-300 hover:border-[#22C55E]/50 hover:text-[#22C55E]"
-            title="Copia o estilo deste texto para todas as outras legendas"
+            className="w-full gap-1.5 border-[#2a3546] bg-transparent text-[11px] text-zinc-300 hover:border[var(--gc-accent-50)] hover:text-[var(--gc-accent)]"
+            title={t("ins.copyStyle")}
           >
             <Paintbrush className="h-3.5 w-3.5" /> Aplicar este estilo a todas as legendas
           </Button>
@@ -425,15 +428,15 @@ function ClipInspector({ clip }: { clip: Clip }) {
 
       {/* ---------- KARAOKÊ ---------- */}
       {clip.kind === "text" && clip.text && (
-        <Section title="Karaokê (palavra falada)">
+        <Section title={t("ins.karaokeTitle")}>
           <ToggleRow
-            label="Destacar palavra atual"
+            label={t("ins.highlight")}
             checked={clip.text.highlight}
             onChange={(v) => update({ text: { ...clip.text!, highlight: v } })}
           />
           {clip.text.highlight && (
             <>
-              <ColorRow label="Cor de destaque" value={clip.text.highlightColor} onChange={(v) => update({ text: { ...clip.text!, highlightColor: v } }, false)} />
+              <ColorRow label={t("ins.highlightColor")} value={clip.text.highlightColor} onChange={(v) => update({ text: { ...clip.text!, highlightColor: v } }, false)} />
               <div>
                 <Label className="text-[11px] text-zinc-400">Arco-íris (separado por vírgula)</Label>
                 <Input
@@ -443,7 +446,7 @@ function ClipInspector({ clip }: { clip: Clip }) {
                   className="mt-1 h-7 border-[#2a3546] bg-[#121722] text-[11px] text-zinc-200"
                 />
               </div>
-              <SliderRow label="Pulo da palavra" value={clip.text.highlightScale} min={1} max={1.6} step={0.02} onChange={(v) => update({ text: { ...clip.text!, highlightScale: v } }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
+              <SliderRow label={t("ins.wordPop")} value={clip.text.highlightScale} min={1} max={1.6} step={0.02} onChange={(v) => update({ text: { ...clip.text!, highlightScale: v } }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
               <div>
                 <Label className="mb-1 block text-[11px] text-zinc-400">Animação</Label>
                 <div className="grid grid-cols-4 gap-1">
@@ -453,7 +456,7 @@ function ClipInspector({ clip }: { clip: Clip }) {
                       onClick={() => update({ text: { ...clip.text!, highlightAnim: a } })}
                       className={`rounded-md border px-1 py-1.5 text-[10px] transition ${
                         clip.text!.highlightAnim === a
-                          ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]"
+                          ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]"
                           : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                       }`}
                     >
@@ -474,7 +477,7 @@ function ClipInspector({ clip }: { clip: Clip }) {
 
       {/* ---------- TRANSIÇÃO (só visual: vídeo/imagem/texto — áudio usa FADE) ---------- */}
       {clip.kind !== "audio" && (
-      <Section title="Transição na entrada">
+      <Section title={t("ins.transition")}>
         <div className="grid grid-cols-5 gap-1">
           {TRANSITIONS.map((t) => (
             <button
@@ -516,7 +519,7 @@ function ClipInspector({ clip }: { clip: Clip }) {
       {/* ---------- TRANSFORMAR ---------- */}
       {(clip.kind === "video" || clip.kind === "image") && (
         <Section
-          title="Transformar"
+          title={t("ins.transform")}
           onReset={() => update({ x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 })}
         >
           <SliderRow label="Posição X" value={clip.x} min={-1} max={1} step={0.01} onChange={(v) => update({ x: v }, false)} />
@@ -530,27 +533,27 @@ function ClipInspector({ clip }: { clip: Clip }) {
       {/* ---------- FILTROS ---------- */}
       {(clip.kind === "video" || clip.kind === "image") && (
         <Section
-          title="Filtros"
+          title={t("ins.filters")}
           onReset={() => update({ brightness: 1, contrast: 1, saturation: 1, blur: 0, hue: 0, sepia: 0, grayscale: 0 })}
         >
-          <SliderRow label="Brilho" value={clip.brightness} min={0.2} max={2} step={0.02} onChange={(v) => update({ brightness: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
-          <SliderRow label="Contraste" value={clip.contrast} min={0.2} max={2} step={0.02} onChange={(v) => update({ contrast: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
-          <SliderRow label="Saturação" value={clip.saturation} min={0} max={2} step={0.02} onChange={(v) => update({ saturation: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
-          <SliderRow label="Borrão" value={clip.blur} min={0} max={24} step={0.5} onChange={(v) => update({ blur: v }, false)} fmt={(v) => `${v}px`} />
-          <SliderRow label="Matiz" value={clip.hue} min={-180} max={180} step={1} onChange={(v) => update({ hue: v }, false)} fmt={(v) => `${v}°`} />
-          <SliderRow label="Sépia" value={clip.sepia} min={0} max={1} step={0.02} onChange={(v) => update({ sepia: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
-          <SliderRow label="Preto e branco" value={clip.grayscale} min={0} max={1} step={0.02} onChange={(v) => update({ grayscale: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
+          <SliderRow label={t("ins.brightness")} value={clip.brightness} min={0.2} max={2} step={0.02} onChange={(v) => update({ brightness: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
+          <SliderRow label={t("ins.contrast")} value={clip.contrast} min={0.2} max={2} step={0.02} onChange={(v) => update({ contrast: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
+          <SliderRow label={t("ins.saturation")} value={clip.saturation} min={0} max={2} step={0.02} onChange={(v) => update({ saturation: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
+          <SliderRow label={t("ins.blur")} value={clip.blur} min={0} max={24} step={0.5} onChange={(v) => update({ blur: v }, false)} fmt={(v) => `${v}px`} />
+          <SliderRow label={t("ins.hue")} value={clip.hue} min={-180} max={180} step={1} onChange={(v) => update({ hue: v }, false)} fmt={(v) => `${v}°`} />
+          <SliderRow label={t("ins.sepia")} value={clip.sepia} min={0} max={1} step={0.02} onChange={(v) => update({ sepia: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
+          <SliderRow label={t("ins.grayscale")} value={clip.grayscale} min={0} max={1} step={0.02} onChange={(v) => update({ grayscale: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
         </Section>
       )}
 
       {/* ---------- ÁUDIO ---------- */}
       {(isAV || (clip.kind === "video")) && (
-        <Section title="Áudio">
-          <SliderRow label="Volume" value={clip.volume} min={0} max={2} step={0.02} onChange={(v) => update({ volume: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
-          <ToggleRow label="Mudo" checked={clip.muted} onChange={(v) => update({ muted: v })} />
-          <div className="flex items-center justify-between rounded-lg border border-[#22C55E]/30 bg-[#22C55E]/5 px-2.5 py-2">
+        <Section title={t("ins.audio")}>
+          <SliderRow label={t("ins.volume")} value={clip.volume} min={0} max={2} step={0.02} onChange={(v) => update({ volume: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
+          <ToggleRow label={t("ins.mute")} checked={clip.muted} onChange={(v) => update({ muted: v })} />
+          <div className="flex items-center justify-between rounded-lg border border[var(--gc-accent-30)] bg[var(--gc-accent-5)] px-2.5 py-2">
             <div className="flex items-center gap-1.5">
-              <Wand2 className="h-3.5 w-3.5 text-[#22C55E]" />
+              <Wand2 className="h-3.5 w-3.5 text-[var(--gc-accent)]" />
               <div>
                 <p className="text-[11px] font-medium text-zinc-200">Melhorar áudio</p>
                 <p className="text-[9px] text-zinc-500">corta ruído grave + comprime + limita (voz firme, sem estourar)</p>
@@ -559,7 +562,7 @@ function ClipInspector({ clip }: { clip: Clip }) {
             <Switch
               checked={clip.enhance}
               onCheckedChange={(v) => update({ enhance: v })}
-              className="data-[state=checked]:bg-[#22C55E]"
+              className="data-[state=checked]:bg-[var(--gc-accent)]"
             />
           </div>
           <p className="text-[9px] leading-relaxed text-zinc-600">
@@ -571,10 +574,10 @@ function ClipInspector({ clip }: { clip: Clip }) {
       )}
 
       {/* ---------- TEMPO ---------- */}
-      <Section title="Tempo">
+      <Section title={t("ins.time")}>
         {isAV && (
           <SliderRow
-            label="Velocidade"
+            label={t("ins.speed")}
             value={clip.speed}
             min={0.25}
             max={4}
@@ -583,8 +586,8 @@ function ClipInspector({ clip }: { clip: Clip }) {
             fmt={(v) => `${v.toFixed(2)}×`}
           />
         )}
-        <SliderRow label="Fade de entrada" value={clip.fadeIn} min={0} max={3} step={0.05} onChange={(v) => update({ fadeIn: v }, false)} fmt={(v) => `${v.toFixed(2)}s`} />
-        <SliderRow label="Fade de saída" value={clip.fadeOut} min={0} max={3} step={0.05} onChange={(v) => update({ fadeOut: v }, false)} fmt={(v) => `${v.toFixed(2)}s`} />
+        <SliderRow label={t("ins.fadeIn")} value={clip.fadeIn} min={0} max={3} step={0.05} onChange={(v) => update({ fadeIn: v }, false)} fmt={(v) => `${v.toFixed(2)}s`} />
+        <SliderRow label={t("ins.fadeOut")} value={clip.fadeOut} min={0} max={3} step={0.05} onChange={(v) => update({ fadeOut: v }, false)} fmt={(v) => `${v.toFixed(2)}s`} />
         <div className="flex items-center justify-between pt-1">
           <Label className="text-[11px] text-zinc-400">Duração</Label>
           <Input

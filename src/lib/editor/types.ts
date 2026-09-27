@@ -82,6 +82,9 @@ export interface Clip {
   audioDetached?: boolean;
   /** vídeo: true = não desenha o quadro (só o áudio toca) — usado pelo detector de silêncio */
   videoHidden?: boolean;
+  /** detector de silêncio: true = ESTE pedaço é um trecho sem som (a seleção
+   *  pós-detecção marca só esses — Delete apaga o silêncio, não a faixa toda) */
+  silenceMark?: boolean;
   scale: number;
   rotation: number; // graus
   opacity: number; // 0..1

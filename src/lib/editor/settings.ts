@@ -2,6 +2,7 @@
 "use client";
 
 import { create } from "zustand";
+import { applyAccent } from "./theme";
 
 export type PlayheadMode = "free" | "smooth" | "frames" | "magnet";
 
@@ -27,6 +28,10 @@ export interface AppSettings {
   autoUpdateCheck: boolean;
   /** autosave em DISCO (app de desktop): intervalo em minutos (0 = desligado) */
   autosaveMin: number;
+  /** cor do app (accent) — escolhida no onboarding e nas configurações */
+  accent: string;
+  /** o onboarding inicial já foi feito? (false = mostra a tela de boas-vindas) */
+  onboarded: boolean;
   set: (patch: Partial<AppSettings>) => void;
 }
 
@@ -51,6 +56,8 @@ function load(): Partial<AppSettings> {
       keys: { pexels: "", pixabay: "", ...(parsed.keys ?? {}) },
       autoUpdateCheck: parsed.autoUpdateCheck ?? true,
       autosaveMin: parsed.autosaveMin ?? 2,
+      accent: parsed.accent ?? "galaxy",
+      onboarded: parsed.onboarded ?? false,
     };
   } catch {
     return {};
@@ -72,6 +79,8 @@ function persist(s: AppSettings) {
         keys: s.keys,
         autoUpdateCheck: s.autoUpdateCheck,
         autosaveMin: s.autosaveMin,
+        accent: s.accent,
+        onboarded: s.onboarded,
       })
     );
   } catch {
@@ -92,9 +101,18 @@ export const useSettings = create<AppSettings>((set, get) => ({
   keys: { pexels: "", pixabay: "" },
   autoUpdateCheck: true,
   autosaveMin: 2,
+  accent: "galaxy",
+  onboarded: false,
   ...boot,
   set: (patch) => {
     set(patch as AppSettings);
     persist(get());
+    // a cor do app aplica na hora (as vars CSS mudam e tudo acompanha)
+    if (patch.accent !== undefined) applyAccent(patch.accent);
   },
 }));
+
+// aplica a cor salva já no boot (antes de qualquer tela pintar de verde fixo)
+if (typeof window !== "undefined") {
+  applyAccent(useSettings.getState().accent);
+}

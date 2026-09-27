@@ -1,5 +1,6 @@
-// GalaxyCut — botão de feedback do editor: escreve aqui e vira uma ISSUE
-// pré-preenchida no GitHub do projeto (o dono recebe a notificação e lê tudo).
+// GalaxyCut — botão de feedback do editor: escreve aqui e ENVIA DIRETO
+// (vira uma issue automática no GitHub via /api/feedback — um clique só).
+// Se o envio não der, mostra os caminhos manuais (abrir issue / copiar).
 "use client";
 
 import { useState } from "react";
@@ -8,41 +9,75 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useT } from "@/lib/editor/i18n";
+import { useT, useLang } from "@/lib/editor/i18n";
 import { APP_VERSION } from "@/lib/editor/version";
 import { desktop, isDesktopBuild } from "@/lib/editor/desktop";
 import { toast } from "sonner";
-import { MessageSquareHeart, Github, Copy, Check } from "lucide-react";
+import { MessageSquareHeart, Github, Copy, Check, Send, Loader2, ExternalLink } from "lucide-react";
 
 const REPO = "lucasgabrieldevgg/galaxycut";
+const FEEDBACK_URL = "https://galaxycut.vercel.app/api/feedback";
 
 export function FeedbackDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const t = useT();
+  const lang = useLang((s) => s.lang);
   const [text, setText] = useState("");
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
+  // opção manual aparece quando o envio direto falhou (ou o dono preferir)
+  const [showManual, setShowManual] = useState(false);
 
-  const body = [
-    text.trim() || "…",
-    "",
-    "---",
-    `GalaxyCut v${APP_VERSION} · ${isDesktopBuild() ? `app (${desktop?.platform ?? "?"})` : "web"}`,
-  ].join("\n");
+  const platform = isDesktopBuild() ? `app (${desktop?.platform ?? "?"})` : "web";
 
-  function openIssue() {
-    const url =
+  const issueUrl = () => {
+    const body = [text.trim() || "…", "", "---", `GalaxyCut v${APP_VERSION} · ${platform}`].join("\n");
+    return (
       `https://github.com/${REPO}/issues/new?title=` +
       encodeURIComponent("[Feedback] ") +
       "&body=" +
-      encodeURIComponent(body);
+      encodeURIComponent(body)
+    );
+  };
+
+  function openIssue() {
+    const url = issueUrl();
     if (desktop) desktop.openExternal(url);
     else window.open(url, "_blank", "noreferrer");
     onOpenChange(false);
-    toast.success("Abrindo o GitHub — cola o texto e envia 💚");
+  }
+
+  /** envio DIRETO: um clique e chega (vira issue automática com label "feedback") */
+  async function send() {
+    if (!text.trim()) return;
+    setSending(true);
+    try {
+      const r = await fetch(FEEDBACK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, version: APP_VERSION, platform, lang }),
+      });
+      const data = (await r.json().catch(() => ({ ok: false }))) as { ok?: boolean; url?: string | null };
+      if (r.ok && data.ok) {
+        toast.success(t("fb.sent"), { description: t("fb.sentDesc") });
+        setText("");
+        onOpenChange(false);
+        if (data.url && desktop) desktop.openExternal(data.url);
+        return;
+      }
+      // falhou (sem token no servidor? sem internet?) → mostra os jeitos manuais
+      setShowManual(true);
+      toast.error(t("fb.fail"), { description: t("fb.failDesc") });
+    } catch {
+      setShowManual(true);
+      toast.error(t("fb.fail"), { description: t("fb.failDesc") });
+    } finally {
+      setSending(false);
+    }
   }
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(body);
+      await navigator.clipboard.writeText([text.trim() || "…", "", "---", `GalaxyCut v${APP_VERSION} · ${platform}`].join("\n"));
       setCopied(true);
       toast.success(t("fb.copied"));
       setTimeout(() => setCopied(false), 2000);
@@ -56,7 +91,7 @@ export function FeedbackDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       <DialogContent className="max-w-md border-[#232d3d] bg-[#121722] text-zinc-200">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MessageSquareHeart className="h-4 w-4 text-[#22C55E]" /> {t("fb.title")}
+            <MessageSquareHeart className="h-4 w-4 text-[var(--gc-accent)]" /> {t("fb.title")}
           </DialogTitle>
           <DialogDescription className="text-zinc-500">{t("fb.hint")}</DialogDescription>
         </DialogHeader>
@@ -70,19 +105,31 @@ export function FeedbackDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             maxLength={4000}
             className="border-[#2a3546] bg-[#0e1320] text-sm text-zinc-200 placeholder:text-zinc-600"
           />
-          <p className="text-[10px] text-zinc-600">
-            v{APP_VERSION} · {isDesktopBuild() ? "app de desktop" : "navegador"} — anexado automaticamente pra facilitar o diagnóstico.
-          </p>
+          <p className="text-[10px] text-zinc-600">{t("fb.meta", { v: APP_VERSION, platform })}</p>
         </div>
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => void copy()} className="gap-1.5 border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">
-            {copied ? <Check className="h-4 w-4 text-[#22C55E]" /> : <Copy className="h-4 w-4" />} {t("fb.copy")}
+            {copied ? <Check className="h-4 w-4 text-[var(--gc-accent)]" /> : <Copy className="h-4 w-4" />} {t("fb.copy")}
           </Button>
-          <Button onClick={openIssue} className="gap-1.5 bg-[#22C55E] font-semibold text-black hover:bg-[#1ed467]">
-            <Github className="h-4 w-4" /> {t("fb.send")}
+          <Button
+            onClick={() => void send()}
+            disabled={sending || !text.trim()}
+            className="gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
+          >
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{" "}
+            {sending ? t("fb.sending") : t("fb.send")}
           </Button>
         </DialogFooter>
+
+        {/* envio direto indisponível? os jeitos manuais aparecem aqui embaixo */}
+        {showManual && (
+          <div className="space-y-2 rounded-lg border border-[#2a3546] bg-[#0e1320] p-3">
+            <Button variant="outline" onClick={openIssue} className="w-full gap-1.5 border-[#2a3546] bg-transparent text-zinc-200 hover:bg-[#1c2430]">
+              <Github className="h-4 w-4" /> {t("fb.openIssue")} <ExternalLink className="h-3 w-3 text-zinc-500" />
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

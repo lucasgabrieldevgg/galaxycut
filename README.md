@@ -87,7 +87,14 @@ scripts/                 build helpers (version sync, icon generator)
 
 ## Feedback
 
-Found a bug or have an idea? Use the feedback button inside the editor (top bar) — it opens a pre-filled issue here on GitHub. Every single one gets read.
+Found a bug or have an idea? Use the feedback button inside the editor (top bar). It tries to send **directly** (one click — no account needed): the `/api/feedback` serverless function turns it into a `feedback`-labeled issue in this repo. If one-click sending isn't configured, the dialog falls back to opening a pre-filled issue.
+
+To enable one-click sending, the project owner sets a GitHub token as a Vercel env var (never exposed to the browser):
+
+1. Create a fine-grained PAT with **Issues: Read and write** permission for this repo (GitHub → Settings → Developer settings).
+2. Add it to the Vercel project: `vercel env add GITHUB_FEEDBACK_TOKEN production` (paste the token) and redeploy.
+
+That's it — the token lives only on the server side.
 
 ## License
 

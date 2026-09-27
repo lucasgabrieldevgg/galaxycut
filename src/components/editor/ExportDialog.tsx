@@ -20,15 +20,15 @@ import { toast } from "sonner";
 import { Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen, Star, ChevronDown, ChevronUp, Image as ImageIcon, Music4, FileVideo } from "lucide-react";
 
 /** qualidade = MENOR lado da saída. 1080 é o padrão; o resto aparece em "mais opções". */
-const RESOLUTIONS: { id: number; label: string; hint: string }[] = [
-  { id: 4320, label: "8K", hint: "4320p · monstro" },
-  { id: 2160, label: "4K", hint: "2160p · ultra" },
-  { id: 1440, label: "2K", hint: "1440p · qHD" },
-  { id: 1080, label: "1080p", hint: "padrão full" },
-  { id: 720, label: "720p", hint: "leve" },
-  { id: 480, label: "480p", hint: "bem leve" },
-  { id: 360, label: "360p", hint: "miniatura" },
-  { id: 240, label: "240p", hint: "preview rápido" },
+const RESOLUTIONS: { id: number; label: string; hintKey: string }[] = [
+  { id: 4320, label: "8K", hintKey: "ex.hint4320" },
+  { id: 2160, label: "4K", hintKey: "ex.hint2160" },
+  { id: 1440, label: "2K", hintKey: "ex.hint1440" },
+  { id: 1080, label: "1080p", hintKey: "ex.hint1080" },
+  { id: 720, label: "720p", hintKey: "ex.hint720" },
+  { id: 480, label: "480p", hintKey: "ex.hint480" },
+ { id: 360, label: "360p", hintKey: "ex.hint360" },
+  { id: 240, label: "240p", hintKey: "ex.hint240" },
 ];
 const FPS_OPTIONS = [24, 25, 30, 50, 60];
 
@@ -59,7 +59,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
   async function run() {
     if (duration <= 0) {
-      toast.error("Timeline vazia — adicione mídia antes de exportar");
+      toast.error(t("ex.emptyTimeline"));
       return;
     }
     setBusy(true);
@@ -92,16 +92,16 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       setResult({ blob: out.blob, name, path });
       toast.success(
         isDesktopBuild()
-          ? `Salvo em ${path}`
+          ? t("ex.savedAt", { path: String(path) })
           : t("ex.done"),
         {
           description: isDesktopBuild()
-            ? "Pasta Vídeos/GalaxyCut — o arquivo já abriu no gerenciador."
+            ? t("ex.savedAtDesc")
             : `${stage} · ${W}×${H} · ${isVideo ? `${fps}fps · ` : ""}${quality}`,
         }
       );
     } catch (e) {
-      toast.error("Falha na exportação", { description: String((e as Error).message ?? e) });
+      toast.error(t("ex.fail"), { description: String((e as Error).message ?? e) });
     } finally {
       setBusy(false);
     }
@@ -110,11 +110,11 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   function downloadSrt() {
     const srt = buildSrt(project, clips);
     if (!srt.trim()) {
-      toast.info("Nenhuma legenda de texto na timeline para exportar");
+      toast.info(t("ex.srtEmpty"));
       return;
     }
     downloadBlob(new Blob([srt], { type: "text/plain;charset=utf-8" }), `${sanitizeName(project.name)}.srt`);
-    toast.success("Arquivo .srt baixado");
+    toast.success(t("ex.srtDone"));
   }
 
   const resBtn = (id: number, label: string, hint: string) => (
@@ -123,7 +123,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       onClick={() => setShortSide(id)}
       disabled={busy}
       className={`rounded-md border px-2 py-2 text-xs transition ${
-        shortSide === id ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+        shortSide === id ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
       }`}
     >
       <span className="block font-semibold">
@@ -138,11 +138,9 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       <DialogContent className="max-h-[92vh] max-w-md overflow-y-auto border-[#232d3d] bg-[#121722] text-zinc-200">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MonitorPlay className="h-4 w-4 text-[#22C55E]" /> {t("ex.title")}
+            <MonitorPlay className="h-4 w-4 text-[var(--gc-accent)]" /> {t("ex.title")}
           </DialogTitle>
-          <DialogDescription className="text-zinc-500">
-            Padrão 1080p em 30fps — sem marca d&apos;água. Toque em “{t("ex.more")}” pra revelar de 240p a 8K, outros fps e formatos.
-          </DialogDescription>
+          <DialogDescription className="text-zinc-500">{t("ex.desc", { more: t("ex.more") })}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-1">
@@ -157,7 +155,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   disabled={busy}
                   title={f.hint}
                   className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-xs transition ${
-                    format === f.id ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                    format === f.id ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                   }`}
                 >
                   <FileVideo className="h-3.5 w-3.5" /> {f.label}
@@ -168,7 +166,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 disabled={busy}
                 title={t("ex.gifNote")}
                 className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-xs transition ${
-                  format === "gif" ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                  format === "gif" ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                 }`}
               >
                 <ImageIcon className="h-3.5 w-3.5" /> GIF
@@ -178,7 +176,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 disabled={busy}
                 title={t("ex.wavNote")}
                 className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-xs transition ${
-                  format === "wav" ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                  format === "wav" ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                 }`}
               >
                 <Music4 className="h-3.5 w-3.5" /> WAV
@@ -188,14 +186,14 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 disabled={busy}
                 title={t("ex.pngNote")}
                 className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-xs transition ${
-                  format === "png" ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                  format === "png" ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                 }`}
               >
                 <ImageIcon className="h-3.5 w-3.5" /> PNG
               </button>
             </div>
             <p className="mt-1 text-[10px] text-zinc-600">
-              {format === "gif" ? t("ex.gifNote") : format === "wav" ? t("ex.wavNote") : format === "png" ? t("ex.pngNote") : `Saída final: ${W}×${H} (${project.width >= project.height ? "horizontal" : project.width === project.height ? "quadrado" : "vertical"})`}
+              {format === "gif" ? t("ex.gifNote") : format === "wav" ? t("ex.wavNote") : format === "png" ? t("ex.pngNote") : t("ex.outputSize", { w: W, h: H, orient: project.width >= project.height ? t("ex.horizontal") : project.width === project.height ? t("ex.square") : t("ex.vertical") })}
             </p>
           </div>
 
@@ -205,12 +203,12 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.resolution")}</p>
               <div className="grid grid-cols-4 gap-1.5">
                 {showMore
-                  ? RESOLUTIONS.map((r) => resBtn(r.id, r.label, r.hint))
-                  : [720, 1080].map((id) => resBtn(id, id === 1080 ? "1080p" : "720p", id === 1080 ? "padrão full" : "mais leve"))}
+                  ? RESOLUTIONS.map((r) => resBtn(r.id, r.label, t(r.hintKey)))
+                  : [720, 1080].map((id) => resBtn(id, id === 1080 ? "1080p" : "720p", t(id === 1080 ? "ex.hint1080" : "ex.hint720b")))}
               </div>
               {shortSide >= 2160 && (
                 <p className="mt-1 text-[10px] text-amber-400/80">
-                  ⚠️ {shortSide === 4320 ? "8K" : "4K"} grava em tempo real e pede um PC bom — exportar assim pode levar bastante tempo.
+                  {t("ex.hugeWarn", { k: shortSide === 4320 ? "8K" : "4K" })}
                 </p>
               )}
             </div>
@@ -227,10 +225,10 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                     onClick={() => setFps(f)}
                     disabled={busy}
                     className={`rounded-md border px-2 py-1.5 text-xs transition ${
-                      fps === f ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                      fps === f ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                     }`}
                   >
-                    {f} fps {f === 30 && <span className="text-[8px] opacity-70">(padrão)</span>}
+                    {f} fps {f === 30 && <span className="text-[8px] opacity-70">({t("ex.default")})</span>}
                   </button>
                 ))}
               </div>
@@ -248,15 +246,15 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                     onClick={() => setQuality(q)}
                     disabled={busy}
                     className={`rounded-md border px-2 py-1.5 text-xs capitalize transition ${
-                      quality === q ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                      quality === q ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                     }`}
                   >
-                    {q === "media" ? "média" : q}
+                    {q === "media" ? t("ex.qmid") : q === "alta" ? t("ex.qhigh") : t("ex.qlow")}
                   </button>
                 ))}
               </div>
               <p className="mt-1 text-[10px] text-zinc-600">
-                {t("ex.quality")}: {(bitrate / 1_000_000).toFixed(1)} Mbps — escala com a resolução escolhida.
+                {t("ex.qualityNote", { q: quality === "alta" ? t("ex.qhigh") : quality === "media" ? t("ex.qmid") : t("ex.qlow"), mbps: (bitrate / 1_000_000).toFixed(1) })}
               </p>
             </div>
           )}
@@ -266,7 +264,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <button
               type="button"
               onClick={() => setShowMore((v) => !v)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-[#232d3d] bg-[#0e1320] px-2 py-1.5 text-[11px] text-zinc-400 transition hover:border-[#22C55E]/40 hover:text-[#22C55E]"
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-[#232d3d] bg-[#0e1320] px-2 py-1.5 text-[11px] text-zinc-400 transition hover:border[var(--gc-accent-40)] hover:text-[var(--gc-accent)]"
             >
               {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               {showMore ? t("ex.less") : t("ex.more")}
@@ -274,39 +272,37 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           )}
 
           {busy && (
-            <div className="space-y-2 rounded-lg border border-[#22C55E]/30 bg-[#22C55E]/5 p-3">
+            <div className="space-y-2 rounded-lg border border[var(--gc-accent-30)] bg[var(--gc-accent-5)] p-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-zinc-300">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#22C55E]" />{" "}
-                  {format === "gif" ? "Desenhando o GIF quadro a quadro…" : format === "wav" ? "Mixando o áudio…" : t("ex.recording")}
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--gc-accent)]" />{" "}
+                  {format === "gif" ? t("ex.gifStage") : format === "wav" ? t("ex.wavStage") : t("ex.recording")}
                 </span>
-                <span className="font-mono text-[#22C55E]">{Math.round(progress * 100)}%</span>
+                <span className="font-mono text-[var(--gc-accent)]">{Math.round(progress * 100)}%</span>
               </div>
               <Progress value={progress * 100} className="h-1.5 bg-[#0a0d14]" />
               <p className="text-[10px] text-zinc-500">
-                {isVideo
-                  ? "A exportação roda em tempo real (um short de 30s leva ~30s). Dá pra deixar a janela aberta fazendo outra coisa."
-                  : "Render offline — mais rápido que tempo real."}
+                {isVideo ? t("ex.rtNote") : t("ex.offlineNote")}
               </p>
             </div>
           )}
 
           {result && (
-            <div className="space-y-2 rounded-lg border border-[#22C55E]/40 bg-[#22C55E]/10 p-3">
+            <div className="space-y-2 rounded-lg border border[var(--gc-accent-40)] bg[var(--gc-accent-10)] p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-2 text-xs text-zinc-200">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[#22C55E]" /> <span className="truncate">{result.path ? result.name : `Pronto: ${result.name}`}</span>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--gc-accent)]" /> <span className="truncate">{result.path ? result.name : t("ex.ready", { name: result.name })}</span>
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 shrink-0 gap-1 border-[#22C55E]/40 bg-transparent text-[#22C55E] hover:bg-[#22C55E]/10"
+                  className="h-7 shrink-0 gap-1 border[var(--gc-accent-40)] bg-transparent text-[var(--gc-accent)] hover:bg[var(--gc-accent-10)]"
                   onClick={() => {
                     void deliverExport(result.blob, result.name);
                   }}
                 >
                   {result.path ? <FolderOpen className="h-3 w-3" /> : <Download className="h-3 w-3" />}
-                  {result.path ? "Salvar outra cópia" : "Baixar de novo"}
+                  {result.path ? t("ex.anotherCopy") : t("ex.downloadAgain")}
                 </Button>
               </div>
               {/* um empurrãozinho de estrela depois de exportar (não inconveniente) */}
@@ -323,7 +319,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
           {!supported && (
             <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] text-amber-300">
-              Seu navegador não suporta gravação de vídeo. Use Chrome ou Edge atualizado.
+              {t("ex.unsupported")}
             </p>
           )}
         </div>
@@ -332,7 +328,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           <Button variant="outline" onClick={downloadSrt} disabled={busy} className="gap-1.5 border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">
             <FileText className="h-4 w-4" /> {t("ex.srt")}
           </Button>
-          <Button onClick={() => void run()} disabled={busy || (isVideo && !supported)} className="gap-1.5 bg-[#22C55E] font-semibold text-black hover:bg-[#1ed467]">
+          <Button onClick={() => void run()} disabled={busy || (isVideo && !supported)} className="gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             {busy ? t("ex.exporting") : t("ex.exportBtn")}
           </Button>

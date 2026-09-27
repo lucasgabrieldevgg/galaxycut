@@ -10,6 +10,7 @@ import { useProject, usePlayback } from "@/lib/editor/store";
 import { registry } from "@/lib/editor/media";
 import { decodeAudioOf, encodeWav } from "@/lib/editor/wav";
 import { DbMeter } from "./DbMeter";
+import { useT } from "@/lib/editor/i18n";
 
 type Phase = "asking" | "ready" | "recording" | "saving" | "denied";
 
@@ -19,6 +20,7 @@ function fmtRec(ms: number): string {
 }
 
 export function RecordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const t = useT();
   const [phase, setPhase] = useState<Phase>("asking");
   const [elapsed, setElapsed] = useState(0);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
@@ -119,7 +121,7 @@ export function RecordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     });
     try {
       const raw = await done;
-      if (raw.size < 200) throw new Error("Gravação vazia — falou pertinho do microfone?");
+      if (raw.size < 200) throw new Error(t("rec.empty"));
       // vira WAV (abre em qualquer lugar, mostra waveform, sobrevive ao F5)
       const buf = await decodeAudioOf(raw);
       const wav = encodeWav(buf);
@@ -134,15 +136,15 @@ export function RecordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         const out = st.dropMediaAt(meta.id, audioTrack.id, at);
         const dur = buf.duration.toFixed(1);
         if (out?.redirected) {
-          toast.success(`Gravação salva (${dur}s) — sem espaço na seta, coloquei em ${out.clip.start.toFixed(1)}s`, { description: "Ela também está na aba Áudio, pronta pra reusar." });
+          toast.success(t("rec.savedMoved", { d: dur, s: out.clip.start.toFixed(1) }), { description: t("rec.savedMovedDesc") });
         } else {
-          toast.success(`Gravação de ${dur}s na timeline`, { description: "Também ficou salva na aba Áudio — reusa em qualquer projeto." });
+          toast.success(t("rec.saved", { d: dur }), { description: t("rec.savedDesc") });
         }
       }
       cleanup();
       onOpenChange(false);
     } catch (e) {
-      toast.error("Não deu pra salvar a gravação", { description: String((e as Error).message ?? e) });
+      toast.error(t("rec.fail"), { description: String((e as Error).message ?? e) });
       setPhase("ready");
     }
   }
@@ -152,26 +154,24 @@ export function RecordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       <DialogContent className="max-w-sm border-[#232d3d] bg-[#121722] text-zinc-200">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Mic className="h-4 w-4 text-[#22C55E]" /> Gravar voz
+            <Mic className="h-4 w-4 text-[var(--gc-accent)]" /> {t("rec.title")}
           </DialogTitle>
-          <DialogDescription className="text-zinc-500">
-            Grava pelo microfone e joga direto na faixa de áudio, na posição da setinha.
-          </DialogDescription>
+          <DialogDescription className="text-zinc-500">{t("rec.desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
           {/* medidor ao vivo (estilo OBS) */}
-          <DbMeter mode={analyser ? "live" : "playhead"} analyser={analyser} className="w-full" label="Volume do microfone" />
+          <DbMeter mode={analyser ? "live" : "playhead"} analyser={analyser} className="w-full" label={t("rec.micLevel")} />
 
           {phase === "asking" && (
             <p className="flex items-center justify-center gap-2 py-3 text-xs text-zinc-500">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Ligando o microfone…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("rec.asking")}
             </p>
           )}
           {phase === "denied" && (
             <p className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-2.5 text-[11px] leading-relaxed text-red-300">
               <MicOff className="mt-0.5 h-4 w-4 shrink-0" />
-              O navegador bloqueou o microfone. Clique no cadeado/ícone de microfone na barra de endereço, permita o acesso e tente de novo.
+              {t("rec.denied")}
             </p>
           )}
 
@@ -183,23 +183,21 @@ export function RecordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 </span>
                 {phase === "ready" && (
                   <Button onClick={startRec} className="h-10 gap-2 rounded-full bg-red-600 px-6 font-semibold text-white hover:bg-red-500">
-                    <Circle className="h-3.5 w-3.5 fill-current" /> Gravar
+                    <Circle className="h-3.5 w-3.5 fill-current" /> {t("rec.record")}
                   </Button>
                 )}
                 {phase === "recording" && (
-                  <Button onClick={() => void stopAndSave()} className="h-10 gap-2 rounded-full bg-[#22C55E] px-6 font-bold text-black hover:bg-[#1ed467]">
-                    <Square className="h-3.5 w-3.5 fill-current" /> Parar e salvar
+                  <Button onClick={() => void stopAndSave()} className="h-10 gap-2 rounded-full bg-[var(--gc-accent)] px-6 font-bold text-black hover:bg-[var(--gc-accent-hover)]">
+                    <Square className="h-3.5 w-3.5 fill-current" /> {t("rec.stop")}
                   </Button>
                 )}
                 {phase === "saving" && (
                   <span className="flex items-center gap-2 text-xs text-zinc-400">
-                    <Loader2 className="h-4 w-4 animate-spin text-[#22C55E]" /> Convertendo em WAV…
+                    <Loader2 className="h-4 w-4 animate-spin text-[var(--gc-accent)]" /> {t("rec.saving")}
                   </span>
                 )}
               </div>
-              <p className="text-center text-[10px] leading-relaxed text-zinc-600">
-                Dica: fala perto do microfone e evita lugares barulhentos — dá pra melhorar o som depois com o botão direito → Melhorar áudio.
-              </p>
+              <p className="text-center text-[10px] leading-relaxed text-zinc-600">{t("rec.tip")}</p>
             </>
           )}
         </div>

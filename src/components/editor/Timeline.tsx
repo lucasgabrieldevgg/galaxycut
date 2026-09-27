@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { registry } from "@/lib/editor/media";
 import { gcDrag } from "@/lib/editor/dnd";
 import { SilenceDialog } from "./SilenceDialog";
+import { useT, t as tr, useLang } from "@/lib/editor/i18n";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -166,6 +167,7 @@ export function Timeline() {
   const snapOn = useSettings((s) => s.snapEnabled);
   const showWaveOnVideo = useSettings((s) => s.showWaveOnVideo);
   const setSettings = useSettings((s) => s.set);
+  const t = useT();
 
   const [zoom, setZoom] = useState(64);
   const [snapX, setSnapX] = useState<number | null>(null); // guia de encaixe (px)
@@ -305,16 +307,16 @@ export function Timeline() {
     const place = (mediaId: string, trackId: string, at: number) => {
       const out = st.dropMediaAt(mediaId, trackId, at);
       if (!out) {
-        toast.error("Não consegui soltar aqui");
+        toast.error(tr("tl.cantDrop"));
         return;
       }
       const trackName = st.tracks.find((x) => x.id === out.clip.trackId)?.name ?? "";
       if (out.redirected) {
-        toast.info(`Espaço ocupado — coloquei no espaço livre mais próximo (${trackName}, ${out.clip.start.toFixed(1)}s)`, {
-          description: "Solte num vão livre: no início, entre dois clipes ou noutra faixa.",
+        toast.info(tr("tl.dropMoved", { track: trackName, s: out.clip.start.toFixed(1) }), {
+          description: tr("tl.dropMovedDesc"),
         });
       } else {
-        toast.success(`Clipe em ${out.clip.start.toFixed(1)}s na faixa ${trackName}`);
+        toast.success(tr("tl.droppedAt", { s: out.clip.start.toFixed(1), track: trackName }));
       }
       // vídeo/imagem de OUTRO formato que o do projeto → pergunta se muda (1× por mídia)
       const meta = st.media.find((m) => m.id === mediaId);
@@ -363,10 +365,10 @@ export function Timeline() {
           }
           ok++;
         } catch (err) {
-          toast.error(`Não consegui importar "${f.name}"`, { description: String((err as Error).message ?? err) });
+          toast.error(tr("tl.importFail", { name: f.name }), { description: String((err as Error).message ?? err) });
         }
       }
-      if (ok > 0) toast.success(`${ok} arquivo(s) importado(s) direto na timeline`);
+      if (ok > 0) toast.success(tr("tl.importedN", { n: ok }));
     }
   }
 
@@ -397,7 +399,7 @@ export function Timeline() {
               engine.markDirty();
             }}
           >
-            <Scissors className="h-3.5 w-3.5 text-[#22C55E]" /> Cortar <kbd className="rounded bg-[#1c2430] px-1 text-[9px] text-zinc-500">{splitKey}</kbd>
+            <Scissors className="h-3.5 w-3.5 text-[var(--gc-accent)]" /> {t("tl.cut")} <kbd className="rounded bg-[#1c2430] px-1 text-[9px] text-zinc-500">{splitKey}</kbd>
           </Button>
           <Button
             variant="ghost"
@@ -406,7 +408,7 @@ export function Timeline() {
             disabled={!selectedId}
             onClick={() => selectedId && useProject.getState().duplicateClip(selectedId)}
           >
-            <Copy className="h-3.5 w-3.5" /> Duplicar
+            <Copy className="h-3.5 w-3.5" /> {t("tl.duplicate")}
           </Button>
           <Button
             variant="ghost"
@@ -417,13 +419,13 @@ export function Timeline() {
               const st = useProject.getState();
               if (st.selectedIds.length > 1) {
                 const n = st.deleteSelected();
-                toast.info(`${n} clipe(s) apagado(s) — os da frente não se mexeram`);
+                toast.info(tr("tl.deletedN", { n }));
               } else if (st.selectedId) {
                 st.deleteClip(st.selectedId);
               }
             }}
           >
-            <Trash2 className="h-3.5 w-3.5" /> Apagar{" "}
+            <Trash2 className="h-3.5 w-3.5" /> {t("tl.delete")}{" "}
             {selectedIds.length > 1 ? `(${selectedIds.length})` : ""}{" "}
             <kbd className="rounded bg-[#1c2430] px-1 text-[9px] text-zinc-500">{delKey}</kbd>
           </Button>
@@ -432,9 +434,9 @@ export function Timeline() {
             size="sm"
             className={`h-7 gap-1 px-2 text-xs text-zinc-300 hover:bg-[#1c2430]`}
             onClick={() => setSilenceOpen(true)}
-            title="Acha os trechos em que ninguém fala e pergunta o que fazer com eles"
+            title={t("tl.silenceHint")}
           >
-            <AudioWaveform className="h-3.5 w-3.5 text-[#22C55E]" /> Detector de silêncio
+            <AudioWaveform className="h-3.5 w-3.5 text-[var(--gc-accent)]" /> {t("tl.silence")}
           </Button>
           {/* vassoura: exclusor de todos os clipes de áudio sem som */}
           <Button
@@ -445,11 +447,11 @@ export function Timeline() {
             onClick={() => {
               const n = useProject.getState().deleteSilentClips();
               engine.markDirty();
-              if (n) toast.success(`Vassoura: ${n} clipe(s) de áudio sem som apagado(s)`, { description: "Os outros clipes não se mexeram (Ctrl+Z desfaz)." });
+              if (n) toast.success(tr("tl.broomDone", { n }), { description: tr("tl.broomDoneDesc") });
             }}
-            title={"Apaga de uma vez todos os clipes de áudio mutados/sem som (pedaços deixados pelo \u201csilenciar o trecho\u201d)"}
+            title={t("tl.broomHint")}
           >
-            <Eraser className="h-3.5 w-3.5 text-amber-400" /> Vassoura{silentCount ? ` (${silentCount})` : ""}
+            <Eraser className="h-3.5 w-3.5 text-amber-400" /> {t("tl.broom")}{silentCount ? ` (${silentCount})` : ""}
           </Button>
           {/* juntar clipes: fecha os espaços (pergunta: todas as faixas ou uma) */}
           <Button
@@ -458,18 +460,18 @@ export function Timeline() {
             disabled={!clips.length}
             className="h-7 gap-1 px-2 text-xs text-zinc-300 hover:bg-[#1c2430]"
             onClick={() => setJoinOpen(true)}
-            title="Encosta os clipes de uma faixa (ou de todas), fechando os espaços vazios"
+            title={t("tl.joinHint")}
           >
-            <Combine className="h-3.5 w-3.5 text-sky-400" /> Juntar
+            <Combine className="h-3.5 w-3.5 text-sky-400" /> {t("tl.join")}
           </Button>
           <div className="mx-1 h-4 w-px bg-[#1c2430]" />
           <Button
             variant="ghost"
             size="sm"
-            className={`h-7 gap-1 px-2 text-xs ${snapOn ? "bg-[#22C55E]/15 text-[#22C55E] hover:bg-[#22C55E]/25" : "text-zinc-400 hover:bg-[#1c2430]"}`}
+            className={`h-7 gap-1 px-2 text-xs ${snapOn ? "bg[var(--gc-accent-15)] text-[var(--gc-accent)] hover:bg[var(--gc-accent-25)]" : "text-zinc-400 hover:bg-[#1c2430]"}`}
             onClick={() => setSettings({ snapEnabled: !snapOn })}
           >
-            <Magnet className="h-3.5 w-3.5" /> Encaixe
+            <Magnet className="h-3.5 w-3.5" /> {t("tl.snap")}
           </Button>
 
           {/* modo de movimento da seta */}
@@ -479,10 +481,10 @@ export function Timeline() {
                 variant="ghost"
                 size="sm"
                 className="h-7 gap-1 px-2 text-xs text-zinc-300 hover:bg-[#1c2430]"
-                title="Como a seta vermelha se move"
+                title={t("tl.playheadMode")}
               >
                 <ArrowUpDown className="h-3.5 w-3.5 text-amber-400" />
-                {PLAYHEAD_MODES.find((m) => m.id === playheadMode)?.label}
+                {tr(`pm.${PLAYHEAD_MODES.find((m) => m.id === playheadMode)?.id ?? "free"}`)}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="border-[#232d3d] bg-[#121722] text-zinc-200">
@@ -490,10 +492,10 @@ export function Timeline() {
                 <DropdownMenuItem
                   key={m.id}
                   onClick={() => setSettings({ playheadMode: m.id as PlayheadMode })}
-                  className={`gap-2 text-xs ${playheadMode === m.id ? "text-[#22C55E]" : ""}`}
+                  className={`gap-2 text-xs ${playheadMode === m.id ? "text-[var(--gc-accent)]" : ""}`}
                 >
-                  <span className="w-28">{m.label}</span>
-                  <span className="w-40 truncate text-[10px] text-zinc-500">{m.hint}</span>
+                  <span className="w-28">{tr(`pm.${m.id}`)}</span>
+                  <span className="w-40 truncate text-[10px] text-zinc-500">{tr(`pm.${m.id}Hint`)}</span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -503,34 +505,34 @@ export function Timeline() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-zinc-300 hover:bg-[#1c2430]">
-                <Plus className="h-3.5 w-3.5" /> Faixa
+                <Plus className="h-3.5 w-3.5" /> {t("tl.track")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="border-[#232d3d] bg-[#121722] text-zinc-200">
               <DropdownMenuItem onClick={() => useProject.getState().addTrack("video")} className="gap-2 text-xs">
-                <Film className="h-3.5 w-3.5 text-emerald-400" /> Faixa de vídeo
+                <Film className="h-3.5 w-3.5 text-emerald-400" /> {t("tl.addVideoTrack")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => useProject.getState().addTrack("audio")} className="gap-2 text-xs">
-                <AudioLines className="h-3.5 w-3.5 text-amber-400" /> Faixa de áudio
+                <AudioLines className="h-3.5 w-3.5 text-amber-400" /> {t("tl.addAudioTrack")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
           <div className="ml-auto flex items-center gap-1.5">
             <div className="mx-0.5 h-4 w-px bg-[#1c2430]" />
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400" onClick={() => setZoom((z) => Math.max(8, z / 1.4))} aria-label="Menos zoom">
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400" onClick={() => setZoom((z) => Math.max(8, z / 1.4))} aria-label={t("tl.zoomOut")}>
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
-            <Slider value={[zoom]} min={8} max={240} step={1} onValueChange={(v) => setZoom(v[0])} className="w-24" aria-label="Zoom da timeline" />
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400" onClick={() => setZoom((z) => Math.min(240, z * 1.4))} aria-label="Mais zoom">
+            <Slider value={[zoom]} min={8} max={240} step={1} onValueChange={(v) => setZoom(v[0])} className="w-24" aria-label={t("tl.zoomIn")} />
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400" onClick={() => setZoom((z) => Math.min(240, z * 1.4))} aria-label={t("tl.zoomIn")}>
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-zinc-400"
-              aria-label="Ajustar timeline à tela"
-              title="Ajustar à tela"
+              aria-label={t("tl.fit")}
+              title={t("tl.fit")}
               onClick={() => {
                 const el = scrollRef.current;
                 if (!el || duration <= 0) return;
@@ -577,7 +579,7 @@ export function Timeline() {
                   let dt = snapTime(timeAtX(e.clientX), "@drop");
                   if (dt > 0 && dt < 26 / zoom) dt = 0; // ímã no início da timeline
                   const out = st.dropMediaAt(mediaId, trackId, dt);
-                  if (out?.redirected) toast.info(`Espaço ocupado — coloquei em ${out.clip.start.toFixed(1)}s`);
+                  if (out?.redirected) toast.info(tr("tl.dropMoved", { track: "", s: out.clip.start.toFixed(1) }));
                   return;
                 }
                 if (e.dataTransfer.files?.length) {
@@ -624,32 +626,32 @@ export function Timeline() {
                 {/* cabeçalho da faixa — com menu de botão direito */}
                 <FloatMenu
                   items={[
-                    { label: track.muted ? "Ativar som da faixa" : "Silenciar faixa", icon: <VolumeX className="h-3.5 w-3.5" />, onClick: () => useProject.getState().toggleTrack(track.id, "muted") },
+                    { label: track.muted ? t("tm.unmute") : t("tm.mute"), icon: <VolumeX className="h-3.5 w-3.5" />, onClick: () => useProject.getState().toggleTrack(track.id, "muted") },
                     ...(track.kind !== "audio"
-                      ? [{ label: track.hidden ? "Reexibir faixa" : "Ocultar faixa", icon: track.hidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />, onClick: () => useProject.getState().toggleTrack(track.id, "hidden") }]
+                      ? [{ label: track.hidden ? t("tm.show") : t("tm.hide"), icon: track.hidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />, onClick: () => useProject.getState().toggleTrack(track.id, "hidden") }]
                       : []),
                     { type: "sep" },
-                    { label: "Adicionar faixa de vídeo", icon: <Film className="h-3.5 w-3.5 text-emerald-400" />, onClick: () => useProject.getState().addTrack("video") },
-                    { label: "Adicionar faixa de áudio", icon: <AudioLines className="h-3.5 w-3.5 text-amber-400" />, onClick: () => useProject.getState().addTrack("audio") },
+                    { label: t("tm.addVideo"), icon: <Film className="h-3.5 w-3.5 text-emerald-400" />, onClick: () => useProject.getState().addTrack("video") },
+                    { label: t("tm.addAudio"), icon: <AudioLines className="h-3.5 w-3.5 text-amber-400" />, onClick: () => useProject.getState().addTrack("audio") },
                     ...(rowClips.length > 1
                       ? [
                           { type: "sep" },
                           {
-                            label: "Fechar espaços desta faixa",
+                            label: t("tm.closeGaps"),
                             icon: <UnfoldHorizontal className="h-3.5 w-3.5 text-sky-400" />,
-                            title: "Empurra todos os clipes da faixa pra trás, colando um no outro (efeito dominó)",
+                            title: t("tm.closeGapsHint"),
                             onClick: () => {
                               useProject.getState().closeTrackGaps(track.id);
                               engine.markDirty();
-                              toast.success("Espaços da faixa fechados — clipes emendados");
+                              toast.success(t("tm.gapsClosed"));
                             },
                           },
                         ]
                       : []),
-                    ...(!rowClips.length && tracks.filter((t) => t.kind === track.kind).length > 1
+                    ...(!rowClips.length && tracks.filter((x) => x.kind === track.kind).length > 1
                       ? [
                           { type: "sep" },
-                          { label: "Remover esta faixa", icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => useProject.getState().removeTrack(track.id) },
+                          { label: t("tm.remove"), icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => useProject.getState().removeTrack(track.id) },
                         ]
                       : []),
                   ] as MenuItem[]}
@@ -657,14 +659,14 @@ export function Timeline() {
                   <div
                     className="sticky left-0 z-40 flex shrink-0 cursor-context-menu items-center gap-1 border-r border-[#1c2430] bg-[#0e1320] px-2"
                     style={{ width: HEADER_W }}
-                    title="Botão direito: opções da faixa"
+                    title={t("tm.options")}
                   >
                     <span className="flex-1 truncate text-[10px] font-medium text-zinc-400">{track.name}</span>
                     {track.kind !== "text" && (
                       <button
                         className={`rounded p-0.5 ${track.muted ? "text-amber-500" : "text-zinc-600 hover:text-zinc-400"}`}
                         onClick={() => useProject.getState().toggleTrack(track.id, "muted")}
-                        title={track.muted ? "Reativar som da faixa" : "Silenciar faixa"}
+                        title={track.muted ? t("tm.unmuteShort") : t("tm.muteShort")}
                       >
                         {track.muted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
                       </button>
@@ -673,7 +675,7 @@ export function Timeline() {
                       <button
                         className={`rounded p-0.5 ${track.hidden ? "text-red-500" : "text-zinc-600 hover:text-zinc-400"}`}
                         onClick={() => useProject.getState().toggleTrack(track.id, "hidden")}
-                        title={track.hidden ? "Reexibir faixa" : "Ocultar faixa"}
+                        title={track.hidden ? t("tm.show") : t("tm.hide")}
                       >
                         {track.hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                       </button>
@@ -683,7 +685,7 @@ export function Timeline() {
 
                 {/* corpo da faixa — aceita soltar mídia/arquivo/pasta */}
                 <div
-                  className={`relative flex-1 transition-colors ${dropHint?.trackId === track.id ? "bg-[#22C55E]/[0.07]" : ""}`}
+                  className={`relative flex-1 transition-colors ${dropHint?.trackId === track.id ? "bg[var(--gc-accent-7)]" : ""}`}
                   data-empty="1"
                   onDragOver={(e) => {
                     if (e.dataTransfer.types.includes("Files") || e.dataTransfer.types.includes(MEDIA_DND_TYPE)) {
@@ -739,8 +741,8 @@ export function Timeline() {
               mostra o vão livre mais próximo onde o clipe vai entrar */}
           {dropHint && (
             <div
-              className={`pointer-events-none absolute bottom-1 z-30 w-[2px] -translate-x-1/2 shadow-[0_0_8px_rgba(34,197,94,0.8)] ${
-                dropHint.occupied ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]" : "bg-[#22C55E]"
+              className={`pointer-events-none absolute bottom-1 z-30 w-[2px] -translate-x-1/2 shadow-[0_0_8px_var(--gc-accent-8)] ${
+                dropHint.occupied ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]" : "bg-[var(--gc-accent)]"
               }`}
               style={{ left: HEADER_W + dropHint.t * zoom, top: rowTop[dropHint.trackId] ?? RULER_H, height: TRACK_H[tracks.find((t) => t.id === dropHint.trackId)?.kind ?? "video"] ?? 56 }}
               aria-hidden
@@ -760,18 +762,21 @@ export function Timeline() {
 
       {clips.length === 0 && (
         <div className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center">
-          <p className="rounded-full border border-[#232d3d] bg-[#121722]/95 px-4 py-2 text-[11px] text-zinc-500">
-            Importe mídia no painel da esquerda e <b className="text-[#22C55E]">arraste pra cá</b> (ou clique no +) 🚀
-          </p>
+          <p
+            className="rounded-full border border-[#232d3d] bg-[#121722]/95 px-4 py-2 text-[11px] text-zinc-500"
+            dangerouslySetInnerHTML={{
+              __html: t("tl.empty").replace("arraste pra cá", "<b class='text-[var(--gc-accent)]'>arraste pra cá</b>").replace(/click on the \+/i, "<b class='text-[var(--gc-accent)]'>click on the +</b>").replace("arrastra aquí", "<b class='text-[var(--gc-accent)]'>arrastra aquí</b>"),
+            }}
+          />
         </div>
       )}
 
       {/* barra flutuante do MODO SELEÇÃO (duplo clique num clipe) */}
       {batchMode && (
-        <div className="absolute left-1/2 top-2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#22C55E]/50 bg-[#121722]/95 px-3 py-1.5 shadow-[0_0_20px_rgba(34,197,94,0.25)] backdrop-blur">
-          <ListChecks className="h-4 w-4 text-[#22C55E]" />
+        <div className="absolute left-1/2 top-2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border[var(--gc-accent-50)] bg-[#121722]/95 px-3 py-1.5 shadow-[0_0_20px_var(--gc-accent-25)] backdrop-blur">
+          <ListChecks className="h-4 w-4 text-[var(--gc-accent)]" />
           <span className="text-[11px] font-medium text-zinc-200">
-            Modo seleção · {selectedIds.length} marcado(s)
+            {t("sel.mode")} · {t("sel.count", { n: selectedIds.length })}
           </span>
           <Button
             size="sm"
@@ -780,11 +785,11 @@ export function Timeline() {
             onClick={() => {
               const st = useProject.getState();
               const n = st.deleteSelected();
-              toast.info(`${n} clipe(s) apagado(s)`);
+              toast.info(t("sel.deletedN", { n }));
               engine.markDirty();
             }}
           >
-            <Trash2 className="h-3 w-3" /> Apagar
+            <Trash2 className="h-3 w-3" /> {t("sel.delete")}
           </Button>
           <Button
             size="sm"
@@ -795,7 +800,7 @@ export function Timeline() {
               useProject.getState().deselectAll();
             }}
           >
-            <X className="h-3 w-3" /> Sair
+            <X className="h-3 w-3" /> {t("sel.exit")}
           </Button>
         </div>
       )}
@@ -807,11 +812,9 @@ export function Timeline() {
         <DialogContent className="max-w-sm border-[#232d3d] bg-[#121722] text-zinc-200">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Combine className="h-4 w-4 text-sky-400" /> Juntar clipes (fechar espaços)
+              <Combine className="h-4 w-4 text-sky-400" /> {t("join.title")}
             </DialogTitle>
-            <DialogDescription className="text-zinc-500">
-              Encosta os clipes, tirando os espaços vazios entre eles. Em qual(is) faixa(s)?
-            </DialogDescription>
+            <DialogDescription className="text-zinc-500">{t("join.hint")}</DialogDescription>
           </DialogHeader>
           <div className="max-h-64 space-y-1.5 overflow-y-auto py-1">
             <button
@@ -820,14 +823,14 @@ export function Timeline() {
                 const n = useProject.getState().closeAllGaps();
                 engine.markDirty();
                 setJoinOpen(false);
-                toast.success(n ? `${n} clipe(s) juntado(s) — todas as faixas emendadas` : "As faixas já estavam emendadas");
+                toast.success(n ? t("join.doneAll", { n }) : t("join.already"));
               }}
-              className="flex w-full items-center gap-2 rounded-lg border border-[#22C55E]/40 bg-[#22C55E]/10 px-3 py-2.5 text-left transition hover:bg-[#22C55E]/20"
+              className="flex w-full items-center gap-2 rounded-lg border border[var(--gc-accent-40)] bg[var(--gc-accent-10)] px-3 py-2.5 text-left transition hover:bg[var(--gc-accent-20)]"
             >
-              <UnfoldHorizontal className="h-4 w-4 text-[#22C55E]" />
+              <UnfoldHorizontal className="h-4 w-4 text-[var(--gc-accent)]" />
               <span>
-                <span className="block text-xs font-semibold text-[#22C55E]">Todas as faixas</span>
-                <span className="block text-[10px] text-zinc-500">dominó geral: cada clipe encosta no anterior</span>
+                <span className="block text-xs font-semibold text-[var(--gc-accent)]">{t("join.all")}</span>
+                <span className="block text-[10px] text-zinc-500">{t("join.allHint")}</span>
               </span>
             </button>
             {tracks.filter((tr) => clips.some((c) => c.trackId === tr.id)).map((tr) => (
@@ -838,14 +841,14 @@ export function Timeline() {
                   useProject.getState().closeTrackGaps(tr.id);
                   engine.markDirty();
                   setJoinOpen(false);
-                  toast.success(`Espaços de "${tr.name}" fechados`);
+                  toast.success(t("join.doneTrack", { name: tr.name }));
                 }}
                 className="flex w-full items-center gap-2 rounded-lg border border-[#2a3546] px-3 py-2 text-left transition hover:border-[#3a4759]"
               >
                 {tr.kind === "video" ? <Film className="h-4 w-4 text-emerald-400" /> : tr.kind === "audio" ? <AudioLines className="h-4 w-4 text-amber-400" /> : <TypeIcon className="h-4 w-4 text-zinc-400" />}
                 <span>
-                  <span className="block text-xs font-medium text-zinc-200">Só a faixa: {tr.name}</span>
-                  <span className="block text-[10px] text-zinc-500">{clips.filter((c) => c.trackId === tr.id).length} clipe(s)</span>
+                  <span className="block text-xs font-medium text-zinc-200">{t("join.track", { name: tr.name })}</span>
+                  <span className="block text-[10px] text-zinc-500">{t("join.nClips", { n: clips.filter((c) => c.trackId === tr.id).length })}</span>
                 </span>
               </button>
             ))}
@@ -858,14 +861,17 @@ export function Timeline() {
         <DialogContent className="max-w-sm border-[#232d3d] bg-[#121722] text-zinc-200">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <MonitorPlay className="h-4 w-4 text-[#22C55E]" /> Formato diferente do projeto
+              <MonitorPlay className="h-4 w-4 text-[var(--gc-accent)]" /> {t("ask.title")}
             </DialogTitle>
             <DialogDescription className="text-zinc-500">
               {askAspect && (
                 <>
-                  “{askAspect.name}” é <b className="text-zinc-300">{askAspect.w}×{askAspect.h}</b> (
-                  {askAspect.w > askAspect.h ? "horizontal" : askAspect.w === askAspect.h ? "quadrado" : "vertical"}).
-                  Quer mudar o formato do projeto pra combinar com ele?
+                  {t("ask.question", {
+                    name: askAspect.name,
+                    w: askAspect.w,
+                    h: askAspect.h,
+                    orient: askAspect.w > askAspect.h ? t("ex.horizontal") : askAspect.w === askAspect.h ? t("ex.square") : t("ex.vertical"),
+                  })}
                 </>
               )}
             </DialogDescription>
@@ -885,23 +891,22 @@ export function Timeline() {
                 });
                 engine.markDirty();
                 setAskAspect(null);
-                toast.success("Formato do projeto atualizado ✨", { description: "Dá pra voltar no menu Projeto (Ctrl+Z também desfaz)." });
+                toast.success(t("ask.changed"), { description: t("ask.changedDesc") });
               }}
-              className="rounded-lg border border-[#22C55E]/50 bg-[#22C55E]/10 px-3 py-2.5 text-xs font-semibold text-[#22C55E] transition hover:bg-[#22C55E]/20"
+              className="rounded-lg border border[var(--gc-accent-50)] bg[var(--gc-accent-10)] px-3 py-2.5 text-xs font-semibold text-[var(--gc-accent)] transition hover:bg[var(--gc-accent-20)]"
             >
-              Mudar pra {askAspect ? `${askAspect.w}×${askAspect.h}` : ""}
+              {t("ask.change", { r: askAspect ? `${askAspect.w}×${askAspect.h}` : "" })}
             </button>
             <button
               type="button"
               onClick={() => setAskAspect(null)}
               className="rounded-lg border border-[#2a3546] px-3 py-2.5 text-xs text-zinc-300 transition hover:bg-[#1c2430]"
             >
-              Manter o atual
+              {t("ask.keep", { r: `${useProject.getState().project.width}×${useProject.getState().project.height}` })}
             </button>
           </div>
           <p className="text-[10px] leading-relaxed text-zinc-600">
-            Mantendo o atual, o vídeo é enquadrado no formato do projeto (com as bordas que sobrarem) — e você
-            pode ajustar a posição e o tamanho dele direto na tela de pré-visualização.
+            {t("ask.keepHint")}
           </p>
         </DialogContent>
       </Dialog>
@@ -959,35 +964,35 @@ function TransitionJunction({
               : "border-[#3a4759] bg-[#121722] text-zinc-500 opacity-70 hover:opacity-100 hover:text-fuchsia-300"
           }`}
           style={{ left: x }}
-          title="Transição entre os clipes"
-          aria-label="Editar transição"
+          title={tr("cm.transitionMenu")}
+          aria-label={tr("cm.transitionMenu")}
         >
           <ArrowRightFromLine className="h-2.5 w-2.5" />
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" className="w-60 border-[#232d3d] bg-[#121722] text-zinc-200" sideOffset={6}>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Transição</p>
-        <p className="mb-2 text-[10px] text-zinc-500">Entre “{(left.kind === "text" ? left.text?.content : "clipe")?.slice(0, 14)}…” e o próximo</p>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{tr("cm.transitionMenu")}</p>
+        <p className="mb-2 text-[10px] text-zinc-500">{tr("cm.transitionMenu")}</p>
         <div className="mb-2 grid grid-cols-2 gap-1">
-          {TRANSITIONS.map((t) => (
+          {TRANSITIONS.map((tt) => (
             <button
-              key={t.type}
-              onClick={() => useProject.getState().setTransition(right.id, t.type === "none" ? undefined : { type: t.type as TransitionType, duration: trans?.duration ?? 0.5 })}
+              key={tt.type}
+              onClick={() => useProject.getState().setTransition(right.id, tt.type === "none" ? undefined : { type: tt.type as TransitionType, duration: trans?.duration ?? 0.5 })}
               className={`flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-[10px] transition ${
-                (trans?.type ?? "none") === t.type
-                  ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]"
+                (trans?.type ?? "none") === tt.type
+                  ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]"
                   : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
               }`}
             >
-              <span className="w-3 text-center">{t.icon}</span> {t.label}
+              <span className="w-3 text-center">{tt.icon}</span> {tr(`trans.${tt.type}`)}
             </button>
           ))}
         </div>
         {trans && trans.type !== "none" && (
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-[10px] text-zinc-500">Duração</span>
-              <span className="font-mono text-[10px] text-[#22C55E]">{trans.duration.toFixed(2)}s</span>
+              <span className="text-[10px] text-zinc-500">{tr("ins.duration")}</span>
+              <span className="font-mono text-[10px] text-[var(--gc-accent)]">{trans.duration.toFixed(2)}s</span>
             </div>
             <Slider
               value={[trans.duration]}
@@ -1035,6 +1040,10 @@ interface ClipBlockProps {
 const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showWave, onDown }: ClipBlockProps) {
   const media = useProject((s) => s.media.find((m) => m.id === clip.mediaId));
   const batchMode = useProject((s) => s.batchMode);
+  // idioma mudou? os itens do menu de botão direito acompanham (memo precisa
+  // de um motivo pra re-renderizar)
+  const lang = useLang((s) => s.lang);
+  void lang;
   const splitKey = useComboLabel("split");
   const delKey = useComboLabel("delete");
   const copyKey = useComboLabel("copy");
@@ -1056,8 +1065,8 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
   // ---- itens do menu de botão direito (menu PRÓPRIO: não pisca) ----
   const items: MenuItem[] = [
     {
-      label: "Cortar na setinha",
-      icon: <Scissors className="h-3.5 w-3.5 text-[#22C55E]" />,
+      label: tr("cm.cutAt"),
+      icon: <Scissors className="h-3.5 w-3.5 text-[var(--gc-accent)]" />,
       kbd: splitKey,
       onClick: () => {
         useProject.getState().select(clip.id);
@@ -1065,9 +1074,9 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
         engine.markDirty();
       },
     },
-    { label: "Copiar", icon: <Copy className="h-3.5 w-3.5" />, kbd: copyKey, onClick: () => useProject.getState().copyClip(clip.id) },
+    { label: tr("cm.copy"), icon: <Copy className="h-3.5 w-3.5" />, kbd: copyKey, onClick: () => useProject.getState().copyClip(clip.id) },
     {
-      label: "Recortar",
+      label: tr("cm.cut"),
       icon: <ScissorsIcon className="h-3.5 w-3.5" />,
       kbd: cutKey,
       onClick: () => {
@@ -1076,7 +1085,7 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
       },
     },
     {
-      label: "Colar aqui",
+      label: tr("cm.pasteHere"),
       icon: <ClipboardPaste className="h-3.5 w-3.5" />,
       kbd: pasteKey,
       onClick: () => {
@@ -1084,40 +1093,40 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
         useProject.getState().pasteAtPlayhead();
       },
     },
-    { label: "Duplicar", icon: <Copy className="h-3.5 w-3.5" />, kbd: dupKey, onClick: () => useProject.getState().duplicateClip(clip.id) },
+    { label: tr("cm.duplicate"), icon: <Copy className="h-3.5 w-3.5" />, kbd: dupKey, onClick: () => useProject.getState().duplicateClip(clip.id) },
   ];
   if (clip.kind === "video" || clip.kind === "audio") {
     items.push({
-      label: clip.muted ? "Ativar som" : "Silenciar",
+      label: clip.muted ? tr("cm.unmute") : tr("cm.mute"),
       icon: clip.muted ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />,
       onClick: () => useProject.getState().updateClip(clip.id, { muted: !clip.muted }),
     });
   }
   if (clip.kind === "video" && clip.videoHidden) {
     items.push({
-      label: "Mostrar cena de novo",
+      label: tr("cm.showScene"),
       icon: <Eye className="h-3.5 w-3.5" />,
       onClick: () => useProject.getState().updateClip(clip.id, { videoHidden: false }),
     });
   }
   if (clip.kind === "video") {
     items.push({
-      label: "Extrair áudio",
+      label: tr("cm.extractAudio"),
       icon: <AudioLinesIcon className="h-3.5 w-3.5 text-amber-400" />,
       onClick: () => {
-        const tid = toast.loading("Extraindo o áudio do vídeo…");
+        const tid = toast.loading(tr("cm.extracting"));
         useProject
           .getState()
           .extractAudio(clip.id)
           .then((audio) => {
             engine.markDirty();
             if (audio) {
-              toast.success("Áudio extraído", {
+              toast.success(tr("cm.extractDone"), {
                 id: tid,
-                description: `Virou arquivo de áudio PRÓPRIO (aba Áudio) em ${audio.start.toFixed(1)}s, com waveform — o vídeo ficou mudo.`,
+                description: tr("cm.extractDoneDesc", { s: audio.start.toFixed(1) }),
               });
             } else {
-              toast.error("Não deu pra extrair o áudio deste clipe", { id: tid });
+              toast.error(tr("cm.extractFail"), { id: tid });
             }
           });
       },
@@ -1125,8 +1134,8 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
   }
   if (clip.kind === "video" || clip.kind === "audio") {
     items.push({
-      label: "Detector de silêncio…",
-      icon: <AudioWaveform className="h-3.5 w-3.5 text-[#22C55E]" />,
+      label: tr("cm.silence"),
+      icon: <AudioWaveform className="h-3.5 w-3.5 text-[var(--gc-accent)]" />,
       onClick: () => {
         useProject.getState().select(clip.id);
         window.dispatchEvent(new CustomEvent("galaxiacut:opensilence"));
@@ -1138,11 +1147,11 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
     // áudio não tem transição VISUAL — o que faz sentido é FADE (abrir/fechar o som)
     items.push({
       type: "submenu",
-      label: "Fade do som",
+      label: tr("cm.fadeMenu"),
       icon: <ArrowRightFromLine className="h-3.5 w-3.5 text-amber-400" />,
       children: [
         ...[0.3, 0.5, 1, 2].map((s) => ({
-          label: `Abrir o som em ${s}s`,
+          label: tr("cm.fadeIn", { s }),
           onClick: () => {
             useProject.getState().updateClip(clip.id, { fadeIn: s });
             engine.markDirty();
@@ -1150,7 +1159,7 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
         })),
         { type: "sep" as const },
         ...[0.3, 0.5, 1, 2].map((s) => ({
-          label: `Fechar o som em ${s}s`,
+          label: tr("cm.fadeOut", { s }),
           onClick: () => {
             useProject.getState().updateClip(clip.id, { fadeOut: s });
             engine.markDirty();
@@ -1158,7 +1167,7 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
         })),
         ...((clip.fadeIn > 0 || clip.fadeOut > 0)
           ? [{
-              label: "Remover fades",
+              label: tr("cm.removeFades"),
               danger: true,
               onClick: () => {
                 useProject.getState().updateClip(clip.id, { fadeIn: 0, fadeOut: 0 });
@@ -1171,38 +1180,38 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
   } else {
     items.push({
       type: "submenu",
-      label: "Transição na entrada",
+      label: tr("cm.transitionMenu"),
       icon: <ArrowRightFromLine className="h-3.5 w-3.5 text-fuchsia-400" />,
-      children: TRANSITIONS.map((t) => ({
-        label: t.label,
+      children: TRANSITIONS.map((tt) => ({
+        label: tr(`trans.${tt.type}`),
         onClick: () =>
-          useProject.getState().setTransition(clip.id, t.type === "none" ? undefined : { type: t.type as TransitionType, duration: clip.transitionIn?.duration ?? 0.5 }),
+          useProject.getState().setTransition(clip.id, tt.type === "none" ? undefined : { type: tt.type as TransitionType, duration: clip.transitionIn?.duration ?? 0.5 }),
       })),
     });
   }
   items.push(
     { type: "sep" },
     {
-      label: "Fechar espaço com o de trás",
+      label: tr("cm.closeGap"),
       icon: <ArrowLeftToLine className="h-3.5 w-3.5 text-sky-400" />,
-      title: "Encosta este clipe no de trás, fechando o espaço vazio",
+      title: tr("cm.closeGapHint"),
       onClick: () => {
         useProject.getState().closeGapBefore(clip.id);
         engine.markDirty();
       },
     },
     {
-      label: "Apagar",
+      label: tr("cm.delete"),
       icon: <Trash2 className="h-3.5 w-3.5" />,
       kbd: delKey,
       danger: true,
       onClick: () => useProject.getState().deleteClip(clip.id),
     },
     {
-      label: "Apagar e fechar espaço",
+      label: tr("cm.deleteClose"),
       icon: <UnfoldHorizontal className="h-3.5 w-3.5" />,
       danger: true,
-      title: "Apaga e puxa os clipes da frente pra junto do de trás",
+      title: tr("cm.deleteCloseHint"),
       onClick: () => {
         useProject.getState().deleteClip(clip.id, true);
         engine.markDirty();
@@ -1217,7 +1226,7 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
           selected
             ? batchMode
               ? "z-20 ring-2 ring-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.4)]"
-              : "z-20 ring-2 ring-[#22C55E] shadow-[0_0_12px_rgba(34,197,94,0.35)]"
+              : "z-20 ring-2 ring-[var(--gc-accent)] shadow-[0_0_12px_var(--gc-accent-35)]"
             : "hover:brightness-125"
         } ${missing ? "border-red-500/60" : ""}`}
         style={{ left, width: w }}
@@ -1228,28 +1237,26 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
           if (!st.batchMode) {
             st.setBatchMode(true);
             st.select(clip.id);
-            toast.info("Modo seleção ativado", {
-              description: "Clique nos clipes pra marcar/desmarcar e apague tudo de uma vez. Esc sai do modo.",
-            });
+            toast.info(tr("tl.batchOn"), { description: tr("tl.batchOnDesc") });
           } else {
             st.toggleSelect(clip.id);
           }
         }}
         role="button"
         tabIndex={0}
-        aria-label={`Clipe ${clip.kind} de ${Math.round(clip.duration * 10) / 10}s`}
+        aria-label={tr("cm.clipLabel", { kind: clip.kind, s: Math.round(clip.duration * 10) / 10 })}
       >
         <ClipContent clip={clip} zoom={zoom} media={media} missing={missing} showWave={showWave} hasTrans={hasTrans} />
         {/* alças de trim */}
         <div
           className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize bg-white/0 transition group-hover:bg-white/25"
           onPointerDown={(e) => onDown(e, clip, "left")}
-          title="Arraste para aparar o começo"
+          title={tr("cm.trimLeft")}
         />
         <div
           className="absolute inset-y-0 right-0 z-10 w-2 cursor-ew-resize bg-white/0 transition group-hover:bg-white/25"
           onPointerDown={(e) => onDown(e, clip, "right")}
-          title="Arraste para aparar o fim"
+          title={tr("cm.trimRight")}
         />
       </div>
     </FloatMenu>
@@ -1295,7 +1302,7 @@ function ClipContent({
           {missing ? "mídia ausente" : clip.kind === "text" ? (clip.text?.content ?? "Texto") : media?.name}
         </span>
         <span className="ml-auto tabular-nums opacity-70">{(Math.round(clip.duration * 10) / 10).toFixed(1)}s</span>
-        {clip.enhance && <Wand2 className="h-2.5 w-2.5 text-[#22C55E]" />}
+        {clip.enhance && <Wand2 className="h-2.5 w-2.5 text-[var(--gc-accent)]" />}
         {clip.muted && <VolumeX className="h-2.5 w-2.5 text-amber-400" />}
         {clip.videoHidden && <EyeOff className="h-2.5 w-2.5 text-sky-400" />}
         {hasTrans && <ArrowRightFromLine className="h-2.5 w-2.5 text-fuchsia-400" />}

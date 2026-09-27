@@ -293,6 +293,36 @@ async function openverseImages(q: string, page: number): Promise<StockItem[]> {
     .filter((x: StockItem) => !!x.url && !!x.thumb);
 }
 
+/** v7.1: busca de STICKERS (figurinhas com fundo transparente) — PNGs do
+ *  Openverse. A query ganha "sticker" e o filtro extension=png prioriza
+ *  arquivos com transparência. 100% sem chave de API. */
+export async function searchStickers(q: string, page = 1): Promise<StockItem[]> {
+  const term = /\bsticker\b/i.test(q) ? q : `${q} sticker`;
+  // page_size 20: anônimo não passa disso na API do Openverse
+  const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&page_size=20&page=${page}&mature=false&extension=png`;
+  const r = await fetchT(url, { timeoutMs: 12000 });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = await r.json();
+  const items = (data.results ?? []) as Record<string, unknown>[];
+  const out = items
+    .map((x): StockItem => ({
+      id: `ovs-${x.id}`,
+      title: String(x.title ?? "Sticker").slice(0, 80),
+      thumb: (x.thumbnail as string) ?? "",
+      url: (x.url as string) ?? "",
+      provider: (x.provider as string) ?? "Openverse",
+      license: normLicense(String(x.license ?? ""), String(x.license_url ?? "")),
+      width: x.width as number | undefined,
+      height: x.height as number | undefined,
+      creator: (x.creator as string) ?? undefined,
+    }))
+    .filter((x) => !!x.url && !!x.thumb);
+  // melhor esforço: prioriza títulos que mencionam sticker/ícone (mais chance
+  // de ser figurinha de verdade e não foto qualquer)
+  out.sort((a, b) => Number(/stick|clip|art|icon|png/i.test(b.title)) - Number(/stick|clip|art|icon|png/i.test(a.title)));
+  return out;
+}
+
 async function openverseAudio(
   q: string,
   page: number,

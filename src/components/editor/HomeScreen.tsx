@@ -1,5 +1,6 @@
 // GalaxyCut — página inicial: suas edições (criar, continuar, renomear, duplicar,
-// excluir), configurações e verificador de atualização. É aqui que tudo começa.
+// excluir), configurações e verificador de atualização (só no app — no navegador
+// o site se atualiza sozinho ao recarregar).
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,10 +13,12 @@ import {
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Settings as SettingsIcon, Film, MoreVertical, Pencil, Copy, Trash2, Github, RefreshCw, Check, X, Zap } from "lucide-react";
+import { enUS, es } from "date-fns/locale";
+import { Plus, Settings as SettingsIcon, Film, MoreVertical, Pencil, Copy, Trash2, Github, Check, X } from "lucide-react";
 import * as projects from "@/lib/editor/projects";
 import { ProjectCard } from "@/lib/editor/projects";
 import { useSettings } from "@/lib/editor/settings";
+import { useLang } from "@/lib/editor/i18n";
 import { checkForUpdate, startAutoCheck } from "@/lib/editor/updater";
 import { APP_VERSION } from "@/lib/editor/version";
 import { desktop, isDesktopBuild } from "@/lib/editor/desktop";
@@ -25,6 +28,7 @@ import { SettingsDialog } from "./SettingsDialog";
 import { UpdateDialog, useUpdatePrompt } from "./UpdateDialog";
 import { FloatMenu, MenuItem } from "./ClipMenu";
 import { Star, MonitorDown } from "lucide-react";
+import { BrandLogo } from "./BrandLogo";
 
 function fmtDur(d: number) {
   if (!d || d <= 0) return "—";
@@ -43,6 +47,7 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
   const autoUpdateCheck = useSettings((s) => s.autoUpdateCheck);
   const showUpdate = useUpdatePrompt((s) => s.show);
   const t = useT();
+  const lang = useLang((s) => s.lang);
   const editRef = useRef<HTMLInputElement>(null);
   const refresh = () => setCards(projects.listProjects());
 
@@ -63,27 +68,24 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
   }, [editingId]);
 
   const sorted = useMemo(() => [...cards].sort((a, b) => b.savedAt - a.savedAt), [cards]);
-  // nada aqui — o foco do rename é garantido pelo callback ref do Input na montagem
+  const dateLocale = lang === "en" ? enUS : lang === "es" ? es : ptBR;
+  const inApp = isDesktopBuild();
 
   async function manualCheck() {
     setChecking(true);
     try {
       const u = await checkForUpdate();
       if (u) showUpdate(u);
-      else toast.success(`Você já tá na última (${APP_VERSION})`);
+      else toast.success(t("home.upToDate", { v: APP_VERSION }));
     } finally {
       setChecking(false);
     }
   }
 
-  useEffect(() => {
-    if (editingId) editRef.current?.focus();
-  }, [editingId]);
-
   function commitRename() {
     if (editingId) {
       projects.renameProject(editingId, editName);
-      toast.success("Edição renomeada");
+      toast.success(t("home.renamed"));
     }
     setEditingId(null);
     refresh();
@@ -96,9 +98,9 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
         className="pointer-events-none fixed inset-0"
         style={{
           background:
-            "radial-gradient(900px 500px at 12% -8%, rgba(34,197,94,0.10), transparent 65%)," +
+            "radial-gradient(900px 500px at 12% -8%, var(--gc-accent-10), transparent 65%)," +
             "radial-gradient(1100px 640px at 96% 4%, rgba(99,102,241,0.12), transparent 65%)," +
-            "radial-gradient(760px 520px at 50% 110%, rgba(34,197,94,0.06), transparent 70%)",
+            "radial-gradient(760px 520px at 50% 110%, var(--gc-accent-6), transparent 70%)",
         }}
         aria-hidden
       />
@@ -106,23 +108,21 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
       {/* topo */}
       <header className="sticky top-0 z-20 border-b border-[#141a24] bg-[#080b11]/85 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#22C55E] to-[#15803D] shadow-[0_0_16px_rgba(34,197,94,0.35)]">
-            <Zap className="h-4.5 w-4.5 text-black" strokeWidth={2.5} />
-          </div>
+          <BrandLogo size={34} />
           <div>
             <p className="text-[15px] font-bold leading-tight tracking-tight text-zinc-100">
-              Galaxy<span className="text-[#22C55E]">Cut</span>
+              Galaxy<span className="text-[var(--gc-accent)]">Cut</span>
             </p>
-            <p className="text-[10px] leading-tight text-zinc-500">editor de vídeo livre, no navegador</p>
+            <p className="text-[10px] leading-tight text-zinc-500">{t("home.subtitle")}</p>
           </div>
-          <span className="ml-1 rounded border border-[#22C55E]/40 px-1.5 py-px font-mono text-[9px] font-semibold text-[#22C55E]">v{APP_VERSION}</span>
+          <span className="ml-1 rounded border border[var(--gc-accent-40)] px-1.5 py-px font-mono text-[9px] font-semibold text-[var(--gc-accent)]">v{APP_VERSION}</span>
           <div className="ml-auto flex items-center gap-1.5">
             <a
               href="https://github.com/lucasgabrieldevgg/galaxycut"
               target="_blank"
               rel="noreferrer"
               className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-[#141a24] hover:text-zinc-200"
-              title="Código-fonte no GitHub"
+              title={t("home.github")}
               aria-label="GitHub do GalaxyCut"
             >
               <Github className="h-4 w-4" />
@@ -132,8 +132,8 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
               size="icon"
               className="h-8 w-8 text-zinc-400 hover:text-zinc-200"
               onClick={() => setSettingsOpen(true)}
-              aria-label="Configurações"
-              title="Configurações"
+              aria-label={t("home.settings")}
+              title={t("home.settings")}
             >
               <SettingsIcon className="h-4 w-4" />
             </Button>
@@ -144,21 +144,19 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
       <main className="relative mx-auto max-w-5xl px-4 pb-20">
         {/* hero */}
         <section className="flex flex-col items-center gap-3 pb-10 pt-14 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100 sm:text-3xl">Suas edições</h1>
-          <p className="max-w-md text-[13px] leading-relaxed text-zinc-500">
-            Tudo fica salvo no seu navegador — os arquivos e o projeto. Crie uma edição nova ou continue de onde parou.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-100 sm:text-3xl">{t("home.yourEdits")}</h1>
+          <p className="max-w-md text-[13px] leading-relaxed text-zinc-500">{t("home.saveNote")}</p>
           <Button
             onClick={onNew}
-            className="mt-2 h-11 gap-2 rounded-xl bg-[#22C55E] px-6 text-[15px] font-bold text-black shadow-[0_0_24px_rgba(34,197,94,0.3)] transition hover:scale-[1.02] hover:bg-[#1ed467]"
+            className="mt-2 h-11 gap-2 rounded-xl bg-[var(--gc-accent)] px-6 text-[15px] font-bold text-black shadow-[0_0_24px_var(--gc-accent-glow)] transition hover:scale-[1.02] hover:bg-[var(--gc-accent-hover)]"
           >
             <Plus className="h-5 w-5" strokeWidth={2.5} /> {t("home.newEdit")}
           </Button>
 
           {/* no navegador: um convite pro app (legendas com IA + saves em disco) */}
-          {!isDesktopBuild() && (
-            <div className="mt-6 flex max-w-md flex-col items-center gap-2 rounded-2xl border border-[#22C55E]/25 bg-[#0c1017]/80 px-5 py-4 text-center sm:flex-row sm:text-left">
-              <MonitorDown className="h-8 w-8 shrink-0 text-[#22C55E]" />
+          {!inApp && (
+            <div className="mt-6 flex max-w-md flex-col items-center gap-2 rounded-2xl border border[var(--gc-accent-25)] bg-[#0c1017]/80 px-5 py-4 text-center sm:flex-row sm:text-left">
+              <MonitorDown className="h-8 w-8 shrink-0 text-[var(--gc-accent)]" />
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-semibold text-zinc-200">{t("home.downloadApp")}</p>
                 <p className="text-[11px] leading-relaxed text-zinc-500">{t("home.downloadAppHint")}</p>
@@ -167,7 +165,7 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
                 href="https://github.com/lucasgabrieldevgg/galaxycut/releases/latest"
                 target="_blank"
                 rel="noreferrer"
-                className="shrink-0 rounded-lg bg-[#22C55E] px-4 py-2 text-[12px] font-bold text-black transition hover:bg-[#1ed467]"
+                className="shrink-0 rounded-lg bg-[var(--gc-accent)] px-4 py-2 text-[12px] font-bold text-black transition hover:bg-[var(--gc-accent-hover)]"
               >
                 {t("home.download")}
               </a>
@@ -181,17 +179,15 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#232d3d] bg-[#121722]">
               <Film className="h-6 w-6 text-zinc-600" />
             </div>
-            <p className="text-sm text-zinc-400">Nenhuma edição ainda</p>
-            <p className="max-w-xs text-[11px] leading-relaxed text-zinc-600">
-              Clique em <b className="text-zinc-500">Nova edição</b>, importe seus vídeos e corte estilo CapCut — sem marca d&apos;água.
-            </p>
+            <p className="text-sm text-zinc-400">{t("home.noEdits")}</p>
+            <p className="max-w-xs text-[11px] leading-relaxed text-zinc-600">{t("home.noEditsHint")}</p>
           </section>
         ) : (
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {sorted.map((c) => (
               <div
                 key={c.id}
-                className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#1c2430] bg-[#0c1017] transition hover:border-[#22C55E]/40 hover:shadow-[0_0_24px_rgba(34,197,94,0.08)]"
+                className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#1c2430] bg-[#0c1017] transition hover:border[var(--gc-accent-40)] hover:shadow-[0_0_24px_var(--gc-accent-10)]"
                 onClick={(e) => {
                   if (editingId === c.id) return; // renomeando: clique no card não abre
                   if (e.detail === 0) return; // ativação por teclado/a11y (Enter) não abre a edição
@@ -215,7 +211,7 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
                 <div className="flex items-center gap-1.5 px-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     {editingId === c.id ? (
-                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1" data-gc-notrigger onClick={(e) => e.stopPropagation()}>
                         <Input
                           ref={(el: HTMLInputElement | null) => {
                             editRef.current = el;
@@ -239,7 +235,7 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
                           className="h-7 border-[#2a3546] bg-[#0e1320] px-2 text-xs text-zinc-200"
                           maxLength={60}
                         />
-                        <button onClick={commitRename} className="rounded p-1 text-[#22C55E] hover:bg-[#22C55E]/10" aria-label="Salvar nome">
+                        <button onClick={commitRename} className="rounded p-1 text-[var(--gc-accent)] hover:bg[var(--gc-accent-10)]" aria-label="Salvar nome">
                           <Check className="h-3.5 w-3.5" />
                         </button>
                         <button onClick={() => setEditingId(null)} className="rounded p-1 text-zinc-500 hover:bg-[#1c2430]" aria-label="Cancelar">
@@ -250,33 +246,36 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
                       <>
                         <p className="truncate text-[13px] font-medium text-zinc-200">{c.name}</p>
                         <p className="mt-0.5 text-[10px] text-zinc-600">
-                          {c.clipCount} clipe{c.clipCount === 1 ? "" : "s"} · editada {formatDistanceToNow(c.savedAt, { addSuffix: true, locale: ptBR })}
+                          {c.clipCount} {t("home.clips")} · {formatDistanceToNow(c.savedAt, { addSuffix: true, locale: dateLocale })}
                         </p>
                       </>
                     )}
                   </div>
+                  {/* 3 pontinhos: RENOMEAR/DUPLICAR/EXCLUIR com um clique (antes só o botão direito abria) */}
                   <FloatMenu
+                    triggerClick
                     items={
                       [
-                        { label: "Renomear", icon: <Pencil className="h-3.5 w-3.5" />, onClick: () => { setEditingId(c.id); setEditName(c.name); } },
+                        { label: t("home.rename"), icon: <Pencil className="h-3.5 w-3.5" />, onClick: () => { setEditingId(c.id); setEditName(c.name); } },
                         {
-                          label: "Duplicar",
+                          label: t("home.duplicate"),
                           icon: <Copy className="h-3.5 w-3.5" />,
                           onClick: () => {
                             const copy = projects.duplicateProject(c.id);
-                            if (copy) toast.success(`Cópia criada: "${copy.name}"`);
+                            if (copy) toast.success(t("home.copiedName", { name: copy.name }));
                             refresh();
                           },
                         },
                         { type: "sep" },
-                        { label: "Excluir", icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => setConfirmDel(c) },
+                        { label: t("home.delete"), icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => setConfirmDel(c) },
                       ] as MenuItem[]
                     }
                   >
                     <button
+                      onClick={(e) => e.stopPropagation()}
                       className="rounded-md p-1.5 text-zinc-600 opacity-0 transition hover:bg-[#1c2430] hover:text-zinc-300 focus:opacity-100 group-hover:opacity-100"
-                      aria-label="Opções da edição"
-                      title="Renomear, duplicar, excluir"
+                      aria-label={t("home.options")}
+                      title={t("home.options")}
                     >
                       <MoreVertical className="h-4 w-4" />
                     </button>
@@ -289,13 +288,19 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
 
         {/* rodapé */}
         <footer className="mt-14 flex flex-col items-center gap-2.5 border-t border-[#141a24] pt-6 text-center">
-          <button
-            onClick={() => void manualCheck()}
-            className="flex items-center gap-1.5 rounded-lg border border-[#232d3d] bg-[#0c1017] px-3 py-1.5 text-[11px] text-zinc-400 transition hover:border-[#22C55E]/40 hover:text-[#22C55E]"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${checking ? "animate-spin" : ""}`} />
-            {checking ? t("home.checking") : t("home.checkUpdates")}
-          </button>
+          {/* procurar atualizações é coisa do APP — no navegador o site se atualiza sozinho */}
+          {inApp && (
+            <button
+              onClick={() => void manualCheck()}
+              className="flex items-center gap-1.5 rounded-lg border border-[#232d3d] bg-[#0c1017] px-3 py-1.5 text-[11px] text-zinc-400 transition hover:border[var(--gc-accent-40)] hover:text-[var(--gc-accent)]"
+            >
+              <svg className={`h-3.5 w-3.5 ${checking ? "animate-spin" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+                <path d="M21 3v5h-5" />
+              </svg>
+              {checking ? t("home.checking") : t("home.checkUpdates")}
+            </button>
+          )}
           {/* um empurrãozinho de estrela — quem gosta, brilha */}
           <a
             href="https://github.com/lucasgabrieldevgg/galaxycut"
@@ -317,25 +322,24 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
       <AlertDialog open={!!confirmDel} onOpenChange={(v) => !v && setConfirmDel(null)}>
         <AlertDialogContent className="border-[#232d3d] bg-[#121722] text-zinc-200">
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir “{confirmDel?.name}”?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Apaga a edição, os clipes e os arquivos dela que não são usados por outra edição. Essa não dá pra desfazer.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t("home.deleteTitle", { name: confirmDel?.name ?? "" })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("home.deleteHint")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">{t("home.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 text-white hover:bg-red-500"
               onClick={() => {
                 if (confirmDel) {
                   projects.deleteProject(confirmDel.id);
-                  toast.success("Edição excluída");
+                  if (desktop) void deleteDiskProject(confirmDel.id);
+                  toast.success(t("home.deleted"));
                 }
                 setConfirmDel(null);
                 refresh();
               }}
             >
-              Excluir
+              {t("home.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

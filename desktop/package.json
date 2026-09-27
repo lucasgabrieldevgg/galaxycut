@@ -1,7 +1,7 @@
 {
   "name": "galaxycut-desktop",
   "productName": "GalaxyCut",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "private": true,
   "description": "GalaxyCut — editor de vídeo grátis (pacote de desktop)",
   "main": "main.js",
@@ -55,5 +55,8 @@
       "shortcutName": "GalaxyCut"
     },
     "publish": null
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

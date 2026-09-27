@@ -11,6 +11,18 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
 
+// v7.1: auto-update de verdade — o app baixa a versão nova sozinho e instala
+// sozinho (é só aceitar). Funciona com os releases do GitHub (latest.yml).
+let autoUpdater = null;
+try {
+  autoUpdater = require("electron-updater").autoUpdater;
+  autoUpdater.autoDownload = true; // baixa em 2º plano assim que acha
+  autoUpdater.autoInstallOnAppQuit = true; // se fechar sem responder, instala na saída
+  autoUpdater.setFeedURL({ provider: "github", owner: "lucasgabrieldevgg", repo: "galaxycut" });
+} catch (e) {
+  log("electron-updater indisponível (dev?):", String(e));
+}
+
 const UPDATE_FEED = "https://github.com/lucasgabrieldevgg/galaxycut/releases/latest/download/latest.json";
 const GITHUB_RELEASES = "https://github.com/lucasgabrieldevgg/galaxycut";
 
@@ -127,7 +139,14 @@ function startServer(root) {
       }
       const ext = path.extname(file).toLowerCase();
       const stream = fs.createReadStream(file);
-      res.writeHead(200, { "Content-Type": MIME[ext] ?? "application/octet-stream", "Cache-Control": "no-cache" });
+      res.writeHead(200, {
+        "Content-Type": MIME[ext] ?? "application/octet-stream",
+        "Cache-Control": "no-cache",
+        // v7.1: cross-origin isolation destrava SharedArrayBuffer → o modelo de
+        // IA (Whisper/WASM) usa TODOS os núcleos do PC — legendas bem mais rápidas
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "credentialless",
+      });
       stream.pipe(res);
       stream.on("error", () => {
         if (!res.headersSent) res.writeHead(404);
@@ -166,6 +185,25 @@ function cmpVersions(a, b) {
 }
 
 async function checkUpdates() {
+  // 1º caminho: electron-updater (baixa e instala sozinho — o fluxo novo)
+  if (autoUpdater) {
+    try {
+      const r = await autoUpdater.checkForUpdates();
+      if (r?.updateInfo?.version && cmpVersions(r.updateInfo.version, APP_VERSION) > 0) {
+        return {
+          hasUpdate: true,
+          version: r.updateInfo.version,
+          notes: [], // o renderer pega do changelog embutido (traduzido)
+          url: GITHUB_RELEASES,
+        };
+      }
+      return { hasUpdate: false };
+    } catch (e) {
+      log("autoUpdater.checkForUpdates:", String(e));
+      // cai pro caminho antigo (latest.json) abaixo
+    }
+  }
+  // 2º caminho (fallback): feed latest.json do release
   const feed = await fetchJson(UPDATE_FEED);
   if (!feed || !feed.version) return { hasUpdate: false };
   const has = cmpVersions(feed.version, APP_VERSION) > 0;
@@ -175,6 +213,33 @@ async function checkUpdates() {
     notes: Array.isArray(feed.notes) ? feed.notes : [],
     url: feed.url || GITHUB_RELEASES,
   };
+}
+
+// ---------- eventos do auto-update (baixa sozinho, instala quando o dono aceita) ----------
+function wireAutoUpdater() {
+  if (!autoUpdater) return;
+  autoUpdater.on("checking-for-update", () => log("autoUpdater: verificando…"));
+  autoUpdater.on("update-available", (info) => {
+    log("autoUpdater: versão nova disponível:", info?.version);
+    // o download começa sozinho (autoDownload)
+  });
+  autoUpdater.on("download-progress", (p) => {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send("update-progress", {
+        pct: Math.max(0, Math.min(1, (p && p.percent) / 100 || 0)),
+        transferred: p && p.transferred,
+        total: p && p.total,
+        bps: p && p.bytesPerSecond,
+      });
+    }
+  });
+  autoUpdater.on("update-downloaded", (info) => {
+    log("autoUpdater: atualização baixada:", info?.version);
+    if (win && !win.isDestroyed()) {
+      win.webContents.send("update-ready", { version: info?.version });
+    }
+  });
+  autoUpdater.on("error", (e) => log("autoUpdater erro:", String(e)));
 }
 
 // ---------- janela ----------
@@ -287,8 +352,10 @@ if (!gotLock) {
 
     buildMenu();
     createWindow();
+    wireAutoUpdater();
 
     // verificador de atualização: 4s após abrir + a cada 6h
+    // (o autoUpdater já BAIXA sozinho; o renderer pergunta se instala)
     const runCheck = async () => {
       const u = await checkUpdates();
       if (u.hasUpdate && win && !win.isDestroyed()) {
@@ -490,6 +557,30 @@ ipcMain.handle("save-export", async (_ev, arrayBuffer, ext) => {
 });
 
 ipcMain.handle("check-updates", () => checkUpdates());
+
+// v7.1: instala a atualização já baixada (reinicia o app sozinho)
+ipcMain.handle("update:install", () => {
+  if (!autoUpdater) return { ok: false };
+  try {
+    autoUpdater.quitAndInstall(false, true);
+    return { ok: true };
+  } catch (e) {
+    log("update:install:", String(e));
+    return { ok: false };
+  }
+});
+
+// força o download (caso o autoDownload não tenha disparado)
+ipcMain.handle("update:download", async () => {
+  if (!autoUpdater) return { ok: false };
+  try {
+    await autoUpdater.downloadUpdate();
+    return { ok: true };
+  } catch (e) {
+    log("update:download:", String(e));
+    return { ok: false };
+  }
+});
 
 ipcMain.handle("show-in-folder", (_ev, p) => {
   if (typeof p === "string" && p.startsWith(exportDir())) shell.showItemInFolder(p);

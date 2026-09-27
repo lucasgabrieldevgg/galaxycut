@@ -1,6 +1,7 @@
 # GalaxyCut — build dos apps de desktop (AppImage Linux + Instalador Windows)
-# e publicação como Release do GitHub com changelog + latest.json pro
-# verificador de atualização do app.
+# e publicação como Release do GitHub com changelog (em inglês) + latest.json
+# pro verificador antigo e latest.yml/latest-linux.yml pro electron-updater
+# (o auto-update de verdade do app v7.1+).
 name: Release Desktop (AppImage + Windows)
 
 on:
@@ -104,30 +105,56 @@ jobs:
           name: windows
           path: dist
 
-      - name: Gera o latest.json + notas do release (changelog INTEGRAL no corpo)
+      - name: Gera latest.json + latest.yml (electron-updater) + notas do release
         env:
           TAG: ${{ github.ref_name }}
         run: |
           node -e "
           const fs = require('fs');
+          const crypto = require('crypto');
           const data = JSON.parse(fs.readFileSync('public/version.json', 'utf8'));
           const entry = (data.changelog || []).find(c => c.version === data.version) || {};
+          const appImage = 'GalaxyCut-' + data.version + '-x86_64.AppImage';
+          const winExe = 'GalaxyCut-Setup-' + data.version + '.exe';
+
+          const sha512 = (f) => crypto.createHash('sha512').update(fs.readFileSync('dist/' + f)).digest('base64');
+          const size = (f) => fs.statSync('dist/' + f).size;
+
+          // ---- latest.json: feed do verificador antigo (v6/v7) ----
           const out = {
             name: 'GalaxyCut ' + data.version,
             version: data.version,
             date: new Date().toISOString(),
-            notes: entry.items || ['Nova versão disponível.'],
-            url: 'https://github.com/lucasgabrieldevgg/galaxycut/releases/tag/${TAG}',
-            files: {
-              linux: 'GalaxyCut-' + data.version + '-x86_64.AppImage',
-              windows: 'GalaxyCut-Setup-' + data.version + '.exe'
-            }
+            notes: entry.items || ['New version available.'],
+            url: 'https://github.com/lucasgabrieldevgg/galaxycut/releases/tag/' + process.env.TAG,
+            files: { linux: appImage, windows: winExe }
           };
           fs.writeFileSync('dist/latest.json', JSON.stringify(out, null, 2));
 
-          // corpo do release: a lista completa de mudanças AQUI (sem apontar arquivo)
+          // ---- latest-linux.yml + latest.yml: feed do electron-updater (v7.1+,
+          //      o auto-update que baixa e instala sozinho) ----
+          const yml = (path, file) => {
+            const h = sha512(file);
+            const s = size(file);
+            const lines = [
+              'version: ' + data.version,
+              'files:',
+              '  - url: ' + file,
+              '    sha512: ' + h,
+              '    size: ' + s,
+              'path: ' + file,
+              'sha512: ' + h,
+              'releaseDate: ' + new Date().toISOString().replace(/\.\d+Z$/, '+00:00'),
+              'releaseNotes: ' + JSON.stringify('GalaxyCut ' + data.version),
+            ];
+            fs.writeFileSync('dist/' + path, lines.join('\n') + '\n');
+          };
+          yml('latest-linux.yml', appImage);
+          yml('latest.yml', winExe);
+
+          // ---- corpo do release: changelog INTEGRAL em inglês ----
           const lines = [];
-          lines.push('## GalaxyCut ' + data.version + ' — o que mudou');
+          lines.push('## GalaxyCut ' + data.version + ' — what changed');
           lines.push('');
           for (const it of out.notes) lines.push('- ' + it);
           lines.push('');
@@ -135,13 +162,17 @@ jobs:
           lines.push('');
           lines.push('### Downloads');
           lines.push('');
-          lines.push('| Plataforma | Arquivo |');
-          lines.push('|---|---|');
-          lines.push('| Linux (AppImage) | \`GalaxyCut-' + data.version + '-x86_64.AppImage\` |');
-          lines.push('| Windows (instalador) | \`GalaxyCut-Setup-' + data.version + '.exe\` |');
-          lines.push('| Web (navegador) | https://galaxycut.vercel.app |');
+          lines.push('| Platform | File | Auto-update |');
+          lines.push('|---|---|---|');
+          lines.push('| Linux (AppImage) | \`' + appImage + '\` | built-in since v7.1 |');
+          lines.push('| Windows (installer) | \`' + winExe + '\` | built-in since v7.1 |');
+          lines.push('| Web (browser) | https://galaxycut.vercel.app | updates itself on reload |');
           lines.push('');
-          lines.push('Deu bom? Deixa uma :star: no repositório — ajuda demais o projeto!');
+          lines.push('v7.1 or newer updates itself: it downloads the new version in the background and installs when you accept.');
+          lines.push('');
+          lines.push('Older versions (v6/v7.0): download the file above and replace the old AppImage.');
+          lines.push('');
+          lines.push('Enjoyed it? Leave a :star: on the repository — it helps a lot!');
           fs.writeFileSync('dist/release-body.md', lines.join('\n'));
           console.log(lines.join('\n'));
           "
@@ -153,4 +184,6 @@ jobs:
             dist/*.AppImage
             dist/*.exe
             dist/latest.json
+            dist/latest-linux.yml
+            dist/latest.yml
           body_path: dist/release-body.md

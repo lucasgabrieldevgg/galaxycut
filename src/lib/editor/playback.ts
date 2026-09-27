@@ -123,6 +123,7 @@ class PlaybackEngine {
       a.preload = "auto";
       a.addEventListener("error", onErr);
       a.addEventListener("seeked", () => (this.dirty = true));
+      this.prewarmEl(a);
       return a;
     }
     const v = document.createElement("video");
@@ -133,7 +134,33 @@ class PlaybackEngine {
     v.addEventListener("error", onErr);
     v.addEventListener("seeked", () => (this.dirty = true));
     v.addEventListener("loadeddata", () => (this.dirty = true));
+    this.prewarmEl(v);
     return v;
+  }
+
+  /** v7.1: a mídia CARREGA INTEIRA assim que entra na timeline — nada de
+   *  “carregando” no meio da reprodução. Espera o buffer cobrir o arquivo
+   *  (ou 25s de teto) e mantém a tela atualizando a % enquanto isso. */
+  private prewarmEl(el: HTMLMediaElement) {
+    const startedAt = performance.now();
+    const poll = () => {
+      this.dirty = true; // repinta a prévia (a % do placeholder anda)
+      const dur = isFinite(el.duration) ? el.duration : 0;
+      let buffered = 0;
+      try {
+        buffered = el.buffered.length ? el.buffered.end(el.buffered.length - 1) : 0;
+      } catch {
+        buffered = 0;
+      }
+      const done = (el.readyState >= 4 && dur > 0 && buffered >= dur * 0.985) || (dur > 0 && buffered >= dur - 0.15);
+      const timedOut = performance.now() - startedAt > 25_000;
+      if (!done && !timedOut && el.error === null) {
+        setTimeout(poll, 220);
+      } else {
+        this.dirty = true;
+      }
+    };
+    setTimeout(poll, 240);
   }
 
   /** Arquivo que o navegador não decodifica → aviso ÚNICO e claro pro dono. */

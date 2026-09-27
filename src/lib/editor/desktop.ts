@@ -33,9 +33,17 @@ export interface DesktopApi {
   /** salva o vídeo exportado na pasta própria (Vídeos/GalaxyCut) e devolve o caminho */
   saveExport(buf: ArrayBuffer, ext: string): Promise<string>;
   checkUpdates(): Promise<{ hasUpdate: boolean; version?: string; notes?: string[]; url?: string }>;
+  /** v7.1: baixa a atualização (se ainda não baixou) */
+  downloadUpdate(): Promise<{ ok: boolean }>;
+  /** v7.1: instala a atualização baixada — o app reinicia sozinho */
+  installUpdate(): Promise<{ ok: boolean }>;
   openExternal(url: string): void;
   showInFolder(path: string): void;
   onUpdateAvailable(cb: (info: { version: string; notes: string[]; url: string }) => void): void;
+  /** progresso do download da atualização (0..1 + bytes) */
+  onUpdateProgress?(cb: (info: { pct: number; transferred?: number; total?: number; bps?: number }) => void): () => void;
+  /** a atualização terminou de baixar — pode instalar */
+  onUpdateReady?(cb: (info: { version?: string }) => void): () => void;
   // ---- projetos em disco ----
   projectPrepare(id: string, name: string): Promise<{ dir: string; savedMediaIds: string[] }>;
   projectSave(payload: DesktopProjectSave): Promise<string>;

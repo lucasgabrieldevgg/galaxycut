@@ -133,7 +133,9 @@ export function findFreeSlot(clips: Clip[], trackId: string, want: number, dur: 
 export type SilenceMode = "both" | "audio" | "scene" | "delaudio";
 
 /** Fatiamento do cortar-silêncio: devolve os pedaços que sobram do clipe
- *  depois de tratar os trechos marcados (excluir / mutar / esconder a cena). */
+ *  depois de tratar os trechos marcados (excluir / mutar / esconder a cena).
+ *  As peças que SOBREVIVEM como “trecho sem som” ganham silenceMark — assim
+ *  a seleção pós-detecção marca SÓ o silêncio (o dono apaga com Delete). */
 function buildSilencePieces(clip: Clip, ranges: { a: number; b: number }[], mode: "both" | "audio" | "scene"): Clip[] {
   const speed = clip.speed || 1;
   const end = clipEnd(clip);
@@ -155,9 +157,9 @@ function buildSilencePieces(clip: Clip, ranges: { a: number; b: number }[], mode
     if (b - a < 0.02) continue;
     if (a - cursor > 0.02) pieces.push(makePiece(cursor, a));
     if (mode === "audio") {
-      pieces.push({ ...makePiece(a, b), muted: true }); // vídeo continua, som cortado
+      pieces.push({ ...makePiece(a, b), muted: true, silenceMark: true }); // vídeo continua, som cortado
     } else if (mode === "scene") {
-      pieces.push({ ...makePiece(a, b), videoHidden: true }); // tela preta, som continua
+      pieces.push({ ...makePiece(a, b), videoHidden: true, silenceMark: true }); // tela preta, som continua
     }
     // mode === "both" → o trecho some inteiro (e NADA se move pra preencher)
     cursor = b;
@@ -530,7 +532,9 @@ export const useProject = create<ProjectState>((set, get) => ({
         const pieces = buildSilencePieces(live, ranges, pieceMode);
         if (!pieces.length) continue;
         clips = [...clips.filter((c) => c.id !== live.id), ...pieces];
-        selIds.push(...pieces.filter((p) => p.kind !== "audio" || !p.muted).map((p) => p.id));
+        // v7.1: a seleção marca SÓ os trechos sem som (Delete apaga os silêncios,
+        // não a faixa inteira como acontecia antes)
+        selIds.push(...pieces.filter((p) => p.silenceMark).map((p) => p.id));
         touched++;
       }
       // "excluir só áudio": a vassoura também leva os áudios sem som do projeto inteiro
@@ -548,7 +552,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   deleteSilentClips: () => {
     const st0 = get();
     // "sem som" = clipe de áudio mutado (pedaço do cortar-silêncio) ou com volume zerado
-    const doomed = st0.clips.filter((c) => c.kind === "audio" && (c.muted || (c.volume ?? 1) <= 0.001));
+    const doomed = st0.clips.filter((c) => c.silenceMark || (c.kind === "audio" && (c.muted || (c.volume ?? 1) <= 0.001)));
     if (!doomed.length) return 0;
     const ids = new Set(doomed.map((c) => c.id));
     st0.pushHistory();
@@ -567,11 +571,13 @@ export const useProject = create<ProjectState>((set, get) => ({
     const pieceMode = mode === "delaudio" ? (clip.kind === "audio" ? "both" : "audio") : mode;
     const pieces = buildSilencePieces(clip, ranges, pieceMode);
     const finalPieces = mode === "delaudio" ? pieces.filter((p) => p.kind !== "audio" || !p.muted) : pieces;
+    // v7.1: só os trechos de silêncio ficam selecionados (pra apagar com Delete)
+    const selIds = finalPieces.filter((p) => p.silenceMark).map((p) => p.id);
     get().pushHistory();
     set((st) => ({
       clips: [...st.clips.filter((c) => c.id !== clipId), ...finalPieces],
-      selectedId: finalPieces[0]?.id ?? null,
-      selectedIds: finalPieces[0] ? [finalPieces[0].id] : [],
+      selectedId: selIds[0] ?? finalPieces[0]?.id ?? null,
+      selectedIds: selIds.length ? selIds : finalPieces[0] ? [finalPieces[0].id] : [],
     }));
   },
   duplicateClip: (id) => {

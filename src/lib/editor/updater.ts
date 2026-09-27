@@ -3,8 +3,9 @@
 // Desktop: pergunta pro processo principal (que checa os releases do GitHub).
 "use client";
 
-import { APP_VERSION, CHANGELOG, ChangelogEntry, cmpVersions } from "./version";
+import { APP_VERSION, CHANGELOG, ChangelogEntry, cmpVersions, notesForEntry } from "./version";
 import { desktop } from "./desktop";
+import { useLang } from "./i18n";
 
 export interface UpdateInfo {
   version: string;
@@ -31,10 +32,16 @@ function skipped(v: string): boolean {
 }
 
 function notesFor(version: string, fallback?: string[]): string[] {
+  const lang = useLang.getState().lang;
   const entry: ChangelogEntry | undefined = CHANGELOG.find((c) => c.version === version);
-  if (entry?.items?.length) return entry.items;
-  if (fallback?.length) return fallback;
-  return [`Nova versão ${version} disponível.`];
+  const fromChangelog = notesForEntry(entry, lang);
+  if (fromChangelog.length) return fromChangelog;
+  if (fallback?.length) {
+    // as notas do main vêm em inglês (corpo do release) — traduz se tiver
+    if (entry && lang !== "en") return fromChangelog;
+    return fallback;
+  }
+  return [`GalaxyCut ${version}`];
 }
 
 /** Devolve a atualização disponível, ou null se você já tá na última. */

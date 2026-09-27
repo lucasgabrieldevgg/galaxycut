@@ -6,11 +6,23 @@ import raw from "./changelog.json";
 export interface ChangelogEntry {
   version: string;
   date: string;
+  /** inglês — é o texto das releases no GitHub */
   items: string[];
+  /** traduções pro app (o idioma do usuário ganha, fallback = items) */
+  items_pt?: string[];
+  items_es?: string[];
 }
 
 export const APP_VERSION: string = raw.version;
 export const CHANGELOG: ChangelogEntry[] = raw.entries;
+
+/** Notas de uma versão NO IDIOMA DO APP (EN padrão; pt/es quando tem tradução). */
+export function notesForEntry(entry: ChangelogEntry | undefined, lang: string): string[] {
+  if (!entry) return [];
+  if (lang === "pt" && entry.items_pt?.length) return entry.items_pt;
+  if (lang === "es" && entry.items_es?.length) return entry.items_es;
+  return entry.items;
+}
 
 /** Compara versões semânticas: devolve >0 se a > b, <0 se a < b, 0 se iguais. */
 export function cmpVersions(a: string, b: string): number {

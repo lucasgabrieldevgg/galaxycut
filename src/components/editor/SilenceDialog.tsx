@@ -1,6 +1,7 @@
-// GaláxiaCut — detector automático de cenas sem áudio (acha onde ninguém fala e oferece excluir)
-// v5: analisa o ARQUIVO e aplica em TODOS os clipes que usam ele (antes só o clipe
-// selecionado era cortado — sobravam pedaços inteiros "pra frente" na timeline)
+// GalaxyCut — detector automático de cenas sem áudio (acha onde ninguém fala e oferece excluir)
+// v5: analisa o ARQUIVO e aplica em TODOS os clipes que usam ele
+// v7.1: depois de aplicar, SÓ os trechos sem som ficam selecionados — Delete
+// apaga o silêncio (antes selecionava a faixa inteira, sem noção).
 "use client";
 
 import { useMemo, useState } from "react";
@@ -16,9 +17,10 @@ import { fmtTime } from "@/lib/editor/types";
 import { detectSilence, SENSITIVITY_PRESETS, SilenceOptions, SilenceSpan } from "@/lib/editor/silence";
 import type { SilenceMode } from "@/lib/editor/store";
 import { toast } from "sonner";
+import { useT } from "@/lib/editor/i18n";
 import { AudioLines, Loader2, Play, Scissors, Trash2, EyeOff, TriangleAlert, VolumeX, CheckSquare, Square, Eraser, AudioLines as AudioLinesOff } from "lucide-react";
 
- type Mode = SilenceMode;
+type Mode = SilenceMode;
 
 export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const clips = useProject((s) => s.clips);
@@ -30,6 +32,7 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   /** trechos no tempo do ARQUIVO (converto pra cada clipe na hora de aplicar) */
   const [spans, setSpans] = useState<(SilenceSpan & { on: boolean })[] | null>(null);
   const [mode, setMode] = useState<Mode>("both");
+  const t = useT();
 
   // fonte: clipe selecionado (vídeo/áudio) ou o primeiro com áudio
   const source = useMemo(() => {
@@ -53,7 +56,7 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     if (!source?.mediaId) return;
     const blob = registry.getBlob(source.mediaId);
     if (!blob) {
-      toast.error("Mídia não encontrada neste navegador", { description: "Reimporte o arquivo na aba Mídia antes de detectar." });
+      toast.error(t("sd.mediaMissing"), { description: t("sd.mediaMissingDesc") });
       return;
     }
     setBusy(true);
@@ -63,13 +66,13 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
       const raw = await detectSilence(blob, opts);
       if (!raw.length) {
         setSpans([]);
-        toast.info("Não achei silêncio nesse arquivo", { description: "Tenta a sensibilidade \"Agressivo\" ou \"Tudo\", ou uma duração menor." });
+        toast.info(t("sd.noneToast"), { description: t("sd.noneToastDesc") });
       } else {
         setSpans(raw.map((s) => ({ ...s, on: true })));
-        toast.success(`${raw.length} trecho(s) sem som achados`, { description: "Confere aí e desmarca o que não quiser cortar." });
+        toast.success(t("sd.found", { n: raw.length }), { description: t("sd.foundDesc") });
       }
     } catch (e) {
-      toast.error("Falha ao analisar o áudio", { description: String((e as Error).message ?? e) });
+      toast.error(t("sd.analyzeFail"), { description: String((e as Error).message ?? e) });
     } finally {
       setBusy(false);
     }
@@ -84,22 +87,23 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
       mode
     );
     engine.markDirty();
-    const verb = mode === "both" ? "excluído(s)" : mode === "audio" ? "silenciado(s)" : "escondido(s)";
+    // nos modos que DEIXAM trechos na timeline (mutar/esconder), eles já vêm
+    // SELECIONADOS — só o silêncio marcado (Delete apaga de uma vez)
+    const leavesPieces = mode === "audio" || mode === "scene" || mode === "delaudio";
     toast.success(
       mode === "delaudio"
-        ? `Áudios sem som excluídos (${checked.length} trecho(s) em ${n} clipe(s)) 🎬`
-        : `${checked.length} trecho(s) ${verb} em ${n} clipe(s) 🎬`,
+        ? t("sd.appliedDelaudio", { n: checked.length, m: n })
+        : mode === "both"
+          ? t("sd.appliedBoth", { n: checked.length, m: n })
+          : mode === "audio"
+            ? t("sd.appliedMuted", { n: checked.length, m: n })
+            : t("sd.appliedHidden", { n: checked.length, m: n }),
       {
-        description:
-          mode === "both"
-            ? "Os clipes da frente NÃO se mexeram — use \"Juntar\" na barra da timeline se quiser emendar."
-            : mode === "audio"
-              ? isVideo
-                ? "O vídeo continua passando, mas sem som nesses trechos. A Vassoura (barra da timeline) apaga os sem som de uma vez."
-                : "O tempo continua, mas esses trechos ficam sem som nenhum. A Vassoura (barra da timeline) apaga os sem som de uma vez."
-              : mode === "delaudio"
-                ? "Os vídeos continuam passando (sem som nos trechos) e TODO clipe de áudio sem som foi apagado."
-                : "A tela ficou preta nesses trechos, mas o áudio continua.",
+        description: leavesPieces
+          ? t("sd.selectedOnly")
+          : mode === "both"
+            ? t("sd.appliedBothDesc")
+            : t("sd.appliedSceneDesc"),
       }
     );
     setSpans(null);
@@ -109,24 +113,24 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const modes: { id: Mode; label: string; hint: string; icon: React.ReactNode }[] = [
     {
       id: "both",
-      label: isVideo ? "Excluir cena + áudio" : "Excluir o trecho",
-      hint: "o trecho some inteiro (cortado)",
+      label: isVideo ? t("sd.modeBoth") : t("sd.modeBothAudio"),
+      hint: t("sd.modeBothHint"),
       icon: <Trash2 className="h-3.5 w-3.5" />,
     },
     {
       id: "delaudio",
-      label: "Excluir só o áudio",
-      hint: "vídeo continua passando; todo áudio sem som é apagado",
+      label: t("sd.modeDelaudio"),
+      hint: t("sd.modeDelaudioHint"),
       icon: <AudioLinesOff className="h-3.5 w-3.5 text-red-400" />,
     },
     {
       id: "audio",
-      label: isVideo ? "Só silenciar o áudio" : "Silenciar o trecho",
-      hint: isVideo ? "vídeo continua, som some no trecho" : "o tempo continua passando, mas sem som",
+      label: isVideo ? t("sd.modeAudio") : t("sd.modeAudioAudio"),
+      hint: isVideo ? t("sd.modeAudioHint") : t("sd.modeAudioHintAudio"),
       icon: <VolumeX className="h-3.5 w-3.5" />,
     },
     ...(isVideo
-      ? [{ id: "scene" as Mode, label: "Só esconder a cena", hint: "tela preta, mas o áudio continua", icon: <EyeOff className="h-3.5 w-3.5" /> }]
+      ? [{ id: "scene" as Mode, label: t("sd.modeScene"), hint: t("sd.modeSceneHint"), icon: <EyeOff className="h-3.5 w-3.5" /> }]
       : []),
   ];
 
@@ -135,39 +139,35 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto border-[#232d3d] bg-[#121722] text-zinc-200">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AudioLines className="h-4 w-4 text-[#22C55E]" /> Detector de cenas sem áudio
+            <AudioLines className="h-4 w-4 text-[var(--gc-accent)]" /> {t("sd.title")}
           </DialogTitle>
-          <DialogDescription className="text-zinc-500">
-            Analiso o áudio <b className="text-zinc-400">aqui no seu navegador</b> (sem IA, sem nuvem), acho os trechos em
-            que ninguém fala e corto pra você decidir o que fazer com cada um.
-          </DialogDescription>
+          <DialogDescription className="text-zinc-500">{t("sd.desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-1">
           <div className="flex items-center justify-between gap-2 rounded-lg border border-[#2a3546] bg-[#0e1320] px-3 py-2.5">
-            <span className="shrink-0 text-xs text-zinc-400">Arquivo analisado</span>
+            <span className="shrink-0 text-xs text-zinc-400">{t("sd.file")}</span>
             <span className="min-w-0 truncate text-xs font-medium text-zinc-200" title={sourceMedia?.name}>
-              {sourceMedia ? sourceMedia.name : "nenhum clipe"}
+              {sourceMedia ? sourceMedia.name : t("sd.noClip")}
             </span>
           </div>
           {sameFileClips.length > 1 && (
-            <p className="flex items-start gap-2 rounded-lg border border-[#22C55E]/30 bg-[#22C55E]/[0.07] p-2.5 text-[11px] leading-relaxed text-[#86efac]">
+            <p className="flex items-start gap-2 rounded-lg border border[var(--gc-accent-30)] bg[var(--gc-accent-7)] p-2.5 text-[11px] leading-relaxed text-[var(--gc-accent-text)]">
               <AudioLines className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              Este arquivo aparece em <b>{sameFileClips.length} clipes</b> da timeline — o corte vale em{" "}
-              <b>todos eles</b> (antes sobravam pedaços inteiros pra frente).
+              {t("sd.multiInfo", { n: sameFileClips.length })}
             </p>
           )}
 
           {!source && (
             <p className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] leading-relaxed text-amber-300">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              Selecione um clipe de vídeo ou áudio na timeline antes de detectar.
+              {t("sd.noClipHint")}
             </p>
           )}
 
           {/* sensibilidade */}
           <div>
-            <p className="mb-1.5 text-xs font-medium text-zinc-300">Sensibilidade</p>
+            <p className="mb-1.5 text-xs font-medium text-zinc-300">{t("sd.sensitivity")}</p>
             <div className="grid grid-cols-2 gap-1.5">
               {SENSITIVITY_PRESETS.map((p) => (
                 <button
@@ -176,12 +176,12 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                   disabled={busy}
                   onClick={() => { setPreset(p.id); setMinDur(p.opts.minDuration); }}
                   className={`rounded-md border px-2 py-1.5 text-center transition ${
-                    preset === p.id ? "border-[#22C55E] bg-[#22C55E]/10" : "border-[#2a3546] hover:border-[#3a4759]"
+                    preset === p.id ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)]" : "border-[#2a3546] hover:border-[#3a4759]"
                   }`}
-                  title={p.hint}
+                  title={t(`sd.preset.${p.id}Hint`)}
                 >
-                  <span className={`block text-[11px] font-semibold ${preset === p.id ? "text-[#22C55E]" : "text-zinc-300"}`}>{p.label}</span>
-                  <span className="block text-[9px] leading-tight text-zinc-500">{p.hint}</span>
+                  <span className={`block text-[11px] font-semibold ${preset === p.id ? "text-[var(--gc-accent)]" : "text-zinc-300"}`}>{t(`sd.preset.${p.id}`)}</span>
+                  <span className="block text-[9px] leading-tight text-zinc-500">{t(`sd.preset.${p.id}Hint`)}</span>
                 </button>
               ))}
             </div>
@@ -190,33 +190,33 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           {/* duração mínima */}
           <div className="rounded-lg border border-[#2a3546] bg-[#0e1320] px-3 py-2.5">
             <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-xs text-zinc-400">Duração mínima do silêncio</span>
-              <span className="font-mono text-[11px] text-[#22C55E]">{minDur.toFixed(2)}s</span>
+              <span className="text-xs text-zinc-400">{t("sd.minDuration")}</span>
+              <span className="font-mono text-[11px] text-[var(--gc-accent)]">{minDur.toFixed(2)}s</span>
             </div>
-            <Slider value={[minDur]} min={0.2} max={2} step={0.05} onValueChange={(v) => setMinDur(v[0])} aria-label="Duração mínima" />
-            <p className="mt-1 text-[10px] text-zinc-600">Pausas menores que isso são ignoradas (respiro natural da fala).</p>
+            <Slider value={[minDur]} min={0.2} max={2} step={0.05} onValueChange={(v) => setMinDur(v[0])} aria-label={t("sd.minDuration")} />
+            <p className="mt-1 text-[10px] text-zinc-600">{t("sd.minDurHint")}</p>
           </div>
 
           <Button
             onClick={() => void detect()}
             disabled={busy || !source}
-            className="w-full gap-1.5 bg-[#22C55E] font-semibold text-black hover:bg-[#1ed467]"
+            className="w-full gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <AudioLines className="h-4 w-4" />}
-            {busy ? "Analisando o áudio…" : spans === null ? "Detectar silêncio" : "Detectar de novo"}
+            {busy ? t("sd.analyzing") : spans === null ? t("sd.detect") : t("sd.detectAgain")}
           </Button>
 
           {/* resultado */}
           {spans !== null && spans.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-zinc-300">{spans.length} trecho(s) sem som</p>
+                <p className="text-xs font-medium text-zinc-300">{t("sd.found", { n: spans.length })}</p>
                 <button
                   type="button"
-                  className="text-[10px] text-[#22C55E] hover:underline"
+                  className="text-[10px] text-[var(--gc-accent)] hover:underline"
                   onClick={() => setSpans((ss) => (ss ? ss.map((s) => ({ ...s, on: ss.every((x) => x.on) ? false : true })) : ss))}
                 >
-                  {spans.every((s) => s.on) ? "Desmarcar tudo" : "Marcar tudo"}
+                  {spans.every((s) => s.on) ? t("sd.uncheckAll") : t("sd.checkAll")}
                 </button>
               </div>
               <div className="max-h-44 space-y-1 overflow-y-auto pr-1">
@@ -226,10 +226,10 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                     type="button"
                     onClick={() => setSpans((ss) => (ss ? ss.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) : ss))}
                     className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left transition ${
-                      s.on ? "border-[#22C55E]/50 bg-[#22C55E]/5" : "border-[#2a3546] opacity-60"
+                      s.on ? "border[var(--gc-accent-50)] bg[var(--gc-accent-5)]" : "border-[#2a3546] opacity-60"
                     }`}
                   >
-                    {s.on ? <CheckSquare className="h-3.5 w-3.5 shrink-0 text-[#22C55E]" /> : <Square className="h-3.5 w-3.5 shrink-0 text-zinc-500" />}
+                    {s.on ? <CheckSquare className="h-3.5 w-3.5 shrink-0 text-[var(--gc-accent)]" /> : <Square className="h-3.5 w-3.5 shrink-0 text-zinc-500" />}
                     <span className="font-mono text-[10px] text-zinc-300">
                       {fmtTime(s.start)} → {fmtTime(s.end)}
                     </span>
@@ -237,18 +237,18 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                     <span
                       role="button"
                       tabIndex={0}
-                      title="Pular pra esse trecho"
-                      aria-label="Ouvir trecho"
+                      title={t("sd.playHint")}
+                      aria-label={t("sd.playHint")}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!source) return;
                         // tempo no arquivo → tempo da timeline (no clipe analisado)
                         const speed = source.speed || 1;
-                        const t = source.start + Math.max(0, (s.start - source.inPoint) / speed) + 0.02;
-                        engine.seek(Math.min(t, usePlayback.getState().duration));
+                        const tt = source.start + Math.max(0, (s.start - source.inPoint) / speed) + 0.02;
+                        engine.seek(Math.min(tt, usePlayback.getState().duration));
                       }}
                       onKeyDown={(e) => { if (e.key === "Enter" && source) engine.seek(source.start + Math.max(0, (s.start - source.inPoint) / (source.speed || 1))); }}
-                      className="rounded p-0.5 text-zinc-500 hover:text-[#22C55E]"
+                      className="rounded p-0.5 text-zinc-500 hover:text-[var(--gc-accent)]"
                     >
                       <Play className="h-3.5 w-3.5" />
                     </span>
@@ -258,7 +258,7 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
               {/* o que fazer com os trechos */}
               <div>
-                <p className="mb-1.5 text-xs font-medium text-zinc-300">O que fazer com os trechos marcados?</p>
+                <p className="mb-1.5 text-xs font-medium text-zinc-300">{t("sd.whatToDo")}</p>
                 <div className="space-y-1.5">
                   {modes.map((m) => (
                     <button
@@ -266,36 +266,30 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                       type="button"
                       onClick={() => setMode(m.id)}
                       className={`flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left transition ${
-                        mode === m.id ? "border-[#22C55E] bg-[#22C55E]/10" : "border-[#2a3546] hover:border-[#3a4759]"
+                        mode === m.id ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)]" : "border-[#2a3546] hover:border-[#3a4759]"
                       }`}
                     >
-                      <span className={mode === m.id ? "text-[#22C55E]" : "text-zinc-500"}>{m.icon}</span>
+                      <span className={mode === m.id ? "text-[var(--gc-accent)]" : "text-zinc-500"}>{m.icon}</span>
                       <span className="flex-1">
-                        <span className={`block text-[11px] font-medium ${mode === m.id ? "text-[#22C55E]" : "text-zinc-300"}`}>{m.label}</span>
+                        <span className={`block text-[11px] font-medium ${mode === m.id ? "text-[var(--gc-accent)]" : "text-zinc-300"}`}>{m.label}</span>
                         <span className="block text-[9px] text-zinc-500">{m.hint}</span>
                       </span>
                     </button>
                   ))}
                 </div>
                 {mode === "both" && (
-                  <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">
-                    ⚠️ Os clipes da frente <b className="text-zinc-400">NÃO se movem</b> pra preencher o buraco (como você
-                    pediu). Se quiser emendar, use o botão <b className="text-zinc-400">Juntar</b> da barra da timeline.
-                  </p>
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">{t("sd.noteBoth")}</p>
                 )}
                 {mode === "delaudio" && (
                   <p className="mt-1.5 flex items-start gap-1.5 text-[10px] leading-relaxed text-zinc-500">
                     <Eraser className="mt-0.5 h-3 w-3 shrink-0 text-red-400" />
-                    Nos <b className="text-zinc-400">vídeos</b> o trecho fica mudo (a cena continua); nos clipes de{" "}
-                    <b className="text-zinc-400">áudio puro</b> o trecho some — e a vassoura ainda leva qualquer outro áudio
-                    sem som que já existia no projeto.
+                    {t("sd.noteDelaudio")}
                   </p>
                 )}
                 {mode === "audio" && (
                   <p className="mt-1.5 flex items-start gap-1.5 text-[10px] leading-relaxed text-zinc-500">
                     <Eraser className="mt-0.5 h-3 w-3 shrink-0 text-amber-400" />
-                    Depois disso a <b className="text-zinc-400">Vassoura</b> (barra da timeline) apaga todos os clipes sem
-                    som de uma vez — e “Fechar espaços desta faixa” emenda o que sobrar.
+                    {t("sd.noteAudio")}
                   </p>
                 )}
               </div>
@@ -304,19 +298,18 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
           {spans !== null && spans.length === 0 && (
             <p className="rounded-lg border border-[#2a3546] bg-[#0e1320] p-3 text-center text-[11px] text-zinc-500">
-              Nenhum trecho mudo achado com essa sensibilidade. Tenta <b className="text-zinc-400">Agressivo</b> ou{" "}
-              <b className="text-zinc-400">Tudo</b>, ou reduzir a duração mínima.
+              {t("sd.none")}
             </p>
           )}
         </div>
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy} className="border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">
-            Cancelar
+            {t("sd.cancel")}
           </Button>
-          <Button onClick={apply} disabled={busy || !checked.length} className="gap-1.5 bg-[#22C55E] font-semibold text-black hover:bg-[#1ed467]">
+          <Button onClick={apply} disabled={busy || !checked.length} className="gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]">
             <Scissors className="h-4 w-4" />
-            Aplicar em {checked.length} trecho(s) · {totalSel.toFixed(1)}s
+            {t("sd.apply", { n: checked.length, s: totalSel.toFixed(1) })}
           </Button>
         </DialogFooter>
       </DialogContent>

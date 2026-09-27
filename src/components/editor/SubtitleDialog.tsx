@@ -1,6 +1,6 @@
 // GalaxyCut — diálogo de legendas automáticas (Whisper no navegador)
-// v4: botão "−" minimiza pro canto enquanto a IA continua — a barrinha
-// flutuante mostra a % e a aba abre de novo com 1 clique.
+// v7.1: painel reformulado — tudo em coluna (nada de arrastar pro lado pra
+// ver o resto), idioma num MENU (com detecção automática + mais idiomas).
 "use client";
 
 import { useMemo, useState } from "react";
@@ -9,16 +9,21 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useProject } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
-import { transcribe, SubSegment, useSubtitleJob, WhisperProgress, WHISPER_MODELS, WhisperModelId, cancelTranscription } from "@/lib/editor/subtitles";
+import { transcribe, SubSegment, useSubtitleJob, WhisperProgress, cancelTranscription, WhisperModelId } from "@/lib/editor/subtitles";
 import { CAPTION_PRESETS, CaptionPreset, makeClip, defaultTextProps } from "@/lib/editor/types";
 import { isDesktopBuild, desktop } from "@/lib/editor/desktop";
+import { useT } from "@/lib/editor/i18n";
 import { toast } from "sonner";
 import { Sparkles, Loader2, CheckCircle2, TriangleAlert, Cpu, Palette, Layers, Minus, Download, XCircle } from "lucide-react";
 
-// idiomas que o Whisper entende (a IA detecta na hora — mais idiomas chegando)
+// idiomas que o Whisper entende — dentro de um menu agora (dá pra listar mais)
 const LANGS = [
+  { v: "auto", label: "🌐 " },
   { v: "pt", label: "Português" },
   { v: "en", label: "English" },
   { v: "es", label: "Español" },
@@ -31,6 +36,17 @@ const LANGS = [
   { v: "id", label: "Indonesia" },
   { v: "hi", label: "हिन्दी" },
   { v: "tr", label: "Türkçe" },
+  { v: "zh", label: "中文" },
+  { v: "ar", label: "العربية" },
+  { v: "pl", label: "Polski" },
+  { v: "nl", label: "Nederlands" },
+  { v: "vi", label: "Tiếng Việt" },
+  { v: "uk", label: "Українська" },
+  { v: "cs", label: "Čeština" },
+  { v: "el", label: "Ελληνικά" },
+  { v: "he", label: "עברית" },
+  { v: "th", label: "ไทย" },
+  { v: "sv", label: "Svenska" },
 ];
 
 export function SubtitleDialog() {
@@ -42,6 +58,7 @@ export function SubtitleDialog() {
   const setSettings = useSettings((s) => s.set);
   const job = useSubtitleJob();
   const [lang, setLang] = useState("pt");
+  const t = useT();
 
   const preset: CaptionPreset = useMemo(
     () => CAPTION_PRESETS.find((p) => p.id === presetId) ?? CAPTION_PRESETS[0],
@@ -55,31 +72,32 @@ export function SubtitleDialog() {
     return clips.find((c) => (c.kind === "video" || c.kind === "audio") && c.mediaId);
   }, [clips, selectedId]);
 
+  const modelLabel = (id: WhisperModelId) =>
+    id === "tiny" ? t("sub.modelFast") : id === "base" ? t("sub.modelBalanced") : t("sub.modelAccurate");
+  const modelHint = (id: WhisperModelId) =>
+    id === "tiny" ? t("sub.modelFastHint") : id === "base" ? t("sub.modelBalancedHint") : t("sub.modelAccurateHint");
+
   async function generate() {
     if (!source?.mediaId) return;
     // no navegador a IA local trava a aba — a função fica só no app baixado
     if (!isDesktopBuild()) {
-      toast.info("Legendas automáticas só no app de desktop", {
-        description: "No navegador o modelo de IA congela a página. Baixe o app (grátis) — lá ele roda em 2º plano sem travar nada.",
-      });
+      toast.info(t("sub.webToast"), { description: t("sub.webToastDesc") });
       return;
     }
     job.start();
     try {
       const segs = await transcribe(source.mediaId!, lang, (p: WhisperProgress) => useSubtitleJob.getState().setProg(p), model, maxWords);
       if (!segs.length) {
-        toast.info("A IA não encontrou fala nesse áudio");
+        toast.info(t("sub.noSpeech"));
       } else {
         applySegments(segs);
-        toast.success(`${segs.length} legendas criadas!`, {
-          description: "Elas entraram na faixa de texto — a palavra falada fica destacada 🎤",
-        });
+        toast.success(t("sub.created", { n: segs.length }), { description: t("sub.createdDesc") });
         job.setOpen(false);
       }
     } catch (e) {
       const msg = String((e as Error).message ?? e);
-      if (msg.includes("cancel")) toast.info("Transcrição cancelada");
-      else toast.error("Falha na transcrição", { description: msg });
+      if (msg.includes("cancel")) toast.info(t("sub.cancelled"));
+      else toast.error(t("sub.fail"), { description: msg });
     } finally {
       job.finish();
     }
@@ -120,11 +138,10 @@ export function SubtitleDialog() {
   const pct = Math.round(job.pct * 100);
   const stageLabel =
     job.stage === "download"
-      ? "Baixando o modelo de IA (só na primeira vez)…"
+      ? t("sub.stageDownload")
       : job.stage === "prepare"
-        ? "Preparando o áudio…"
-        : "Transcrevendo com IA local (sem travar nada)…";
-  const modelInfo = WHISPER_MODELS.find((m) => m.id === model)!;
+        ? t("sub.stagePrepare")
+        : t("sub.stageTranscribe");
   const onWeb = !isDesktopBuild();
 
   return (
@@ -136,89 +153,82 @@ export function SubtitleDialog() {
         job.setOpen(v);
       }}
     >
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto border-[#232d3d] bg-[#121722] text-zinc-200">
+      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto border-[#232d3d] bg-[#121722] text-zinc-200">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 pr-6">
-            <Sparkles className="h-4 w-4 text-[#22C55E]" /> Legendas automáticas com IA
+            <Sparkles className="h-4 w-4 text-[var(--gc-accent)]" /> {t("sub.title")}
             <button
               type="button"
               onClick={() => {
                 if (job.running) job.setMinimized(true);
                 job.setOpen(false);
               }}
-              className="ml-auto flex h-6 w-6 items-center justify-center rounded-md border border-[#2a3546] text-zinc-400 transition hover:border-[#22C55E]/50 hover:text-[#22C55E]"
-              title="Minimizar (a geração continua em 2º plano)"
-              aria-label="Minimizar"
+              className="ml-auto flex h-6 w-6 items-center justify-center rounded-md border border-[#2a3546] text-zinc-400 transition hover:border[var(--gc-accent-50)] hover:text-[var(--gc-accent)]"
+              title={t("sub.minimizeHint")}
+              aria-label={t("sub.minimize")}
             >
               <Minus className="h-3.5 w-3.5" />
             </button>
           </DialogTitle>
-          <DialogDescription className="text-zinc-500">
-            Whisper rodando no seu próprio navegador, com tempo de <b className="text-zinc-400">cada palavra</b> — a
-            legenda vai "cantando" conforme a fala. Nada é enviado pra servidor nenhum.
-          </DialogDescription>
+          <DialogDescription className="text-zinc-500">{t("sub.desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-1">
-          <div className="flex items-center justify-between rounded-lg border border-[#2a3546] bg-[#0e1320] px-3 py-2.5">
-            <span className="text-xs text-zinc-400">Origem do áudio</span>
-            <span className="max-w-[55%] truncate text-xs font-medium text-zinc-200">
-              {source ? `${source.kind === "video" ? "Vídeo" : "Áudio"} • ${Math.round(source.duration)}s na timeline` : "nenhum clipe"}
+          {/* origem + idioma — compactos, tudo empilhado (sem rolar pro lado) */}
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-[#2a3546] bg-[#0e1320] px-3 py-2.5">
+            <span className="shrink-0 text-xs text-zinc-400">{t("sub.source")}</span>
+            <span className="min-w-0 truncate text-xs font-medium text-zinc-200" title={source ? undefined : t("sub.noClip")}>
+              {source ? t("sub.sourceVal", { kind: source.kind === "video" ? t("mp.video") : t("mp.audio"), s: Math.round(source.duration) }) : t("sub.noClip")}
             </span>
           </div>
-          <div className="flex items-center justify-between rounded-lg border border-[#2a3546] bg-[#0e1320] px-3 py-2.5">
-            <span className="text-xs text-zinc-400">Idioma da fala</span>
-            <div className="flex gap-1">
-              {LANGS.map((l) => (
-                <button
-                  key={l.v}
-                  type="button"
-                  disabled={job.running}
-                  onClick={() => setLang(l.v)}
-                  className={`rounded-md border px-2 py-1 text-[11px] transition ${
-                    lang === l.v ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-                  }`}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-[#2a3546] bg-[#0e1320] px-3 py-2.5">
+            <span className="shrink-0 text-xs text-zinc-400">{t("sub.language")}</span>
+            <Select value={lang} onValueChange={setLang} disabled={job.running}>
+              <SelectTrigger className="h-8 w-44 shrink-0 border-[#2a3546] bg-[#121722] text-xs text-zinc-200">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="max-h-72 border-[#232d3d] bg-[#121722] text-zinc-200">
+                {LANGS.map((l) => (
+                  <SelectItem key={l.v} value={l.v} className="text-xs">
+                    {l.v === "auto" ? t("sub.autoDetect") : l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* qualidade da detecção */}
           <div>
             <p className="mb-1.5 flex items-center gap-1.5 text-xs text-zinc-400">
-              <Cpu className="h-3.5 w-3.5" /> Precisão da detecção de palavras
+              <Cpu className="h-3.5 w-3.5" /> {t("sub.accuracy")}
             </p>
             <div className="grid grid-cols-3 gap-1.5">
-              {WHISPER_MODELS.map((m) => (
+              {(["tiny", "base", "small"] as const).map((id) => (
                 <button
-                  key={m.id}
+                  key={id}
                   type="button"
                   disabled={job.running}
-                  onClick={() => setSettings({ whisperModel: m.id as WhisperModelId })}
+                  onClick={() => setSettings({ whisperModel: id })}
                   className={`rounded-md border px-2 py-1.5 text-center transition ${
-                    model === m.id
-                      ? "border-[#22C55E] bg-[#22C55E]/10"
+                    model === id
+                      ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)]"
                       : "border-[#2a3546] hover:border-[#3a4759]"
                   }`}
                 >
-                  <span className={`block text-[11px] font-semibold ${model === m.id ? "text-[#22C55E]" : "text-zinc-300"}`}>{m.label}</span>
-                  <span className="block text-[9px] leading-tight text-zinc-500">{m.hint}</span>
+                  <span className={`block text-[11px] font-semibold ${model === id ? "text-[var(--gc-accent)]" : "text-zinc-300"}`}>{modelLabel(id)}</span>
+                  <span className="block text-[9px] leading-tight text-zinc-500">{modelHint(id)}</span>
                 </button>
               ))}
             </div>
             {model === "small" && (
-              <p className="mt-1 text-[10px] text-amber-400/80">
-                ⚠️ O modelo Preciso baixa ~250 MB e pode levar uns minutos — vale a pena em narração com nomes difíceis.
-              </p>
+              <p className="mt-1 text-[10px] text-amber-400/80">{t("sub.modelAccurateWarn")}</p>
             )}
           </div>
 
           {/* estilo da legenda */}
           <div>
             <p className="mb-1.5 flex items-center gap-1.5 text-xs text-zinc-400">
-              <Palette className="h-3.5 w-3.5" /> Estilo das legendas
+              <Palette className="h-3.5 w-3.5" /> {t("sub.style")}
             </p>
             <div className="grid grid-cols-4 gap-1.5">
               {CAPTION_PRESETS.map((p) => (
@@ -228,7 +238,7 @@ export function SubtitleDialog() {
                   disabled={job.running}
                   onClick={() => setSettings({ captionPreset: p.id })}
                   className={`flex flex-col items-center gap-1 rounded-lg border px-1 py-2 transition ${
-                    presetId === p.id ? "border-[#22C55E] bg-[#22C55E]/10" : "border-[#2a3546] hover:border-[#3a4759]"
+                    presetId === p.id ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)]" : "border-[#2a3546] hover:border-[#3a4759]"
                   }`}
                   title={p.name}
                 >
@@ -243,7 +253,7 @@ export function SubtitleDialog() {
                   >
                     AaBb
                   </span>
-                  <span className={`w-full truncate text-center text-[8.5px] ${presetId === p.id ? "text-[#22C55E]" : "text-zinc-500"}`}>
+                  <span className={`w-full truncate text-center text-[8.5px] ${presetId === p.id ? "text-[var(--gc-accent)]" : "text-zinc-500"}`}>
                     {p.name}
                   </span>
                 </button>
@@ -254,7 +264,7 @@ export function SubtitleDialog() {
           {/* palavras por caixa (anti-inundação) */}
           <div>
             <p className="mb-1.5 flex items-center gap-1.5 text-xs text-zinc-400">
-              <Layers className="h-3.5 w-3.5" /> Palavras por legenda (pra não encher a tela)
+              <Layers className="h-3.5 w-3.5" /> {t("sub.words")}
             </p>
             <div className="grid grid-cols-3 gap-1.5">
               {([2, 3, 4] as const).map((n) => (
@@ -264,11 +274,11 @@ export function SubtitleDialog() {
                   disabled={job.running}
                   onClick={() => setSettings({ captionMaxWords: n })}
                   className={`rounded-md border px-2 py-1.5 text-center transition ${
-                    maxWords === n ? "border-[#22C55E] bg-[#22C55E]/10" : "border-[#2a3546] hover:border-[#3a4759]"
+                    maxWords === n ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)]" : "border-[#2a3546] hover:border-[#3a4759]"
                   }`}
                 >
-                  <span className={`block text-[11px] font-semibold ${maxWords === n ? "text-[#22C55E]" : "text-zinc-300"}`}>{n} palavras</span>
-                  <span className="block text-[9px] text-zinc-500">{n === 2 ? " estilo CapCut" : n === 3 ? " equilíbrio" : " mais contexto"}</span>
+                  <span className={`block text-[11px] font-semibold ${maxWords === n ? "text-[var(--gc-accent)]" : "text-zinc-300"}`}>{n}</span>
+                  <span className="block text-[9px] text-zinc-500">{n === 2 ? t("sub.wordsHint2") : n === 3 ? t("sub.wordsHint3") : t("sub.wordsHint4")}</span>
                 </button>
               ))}
             </div>
@@ -277,44 +287,43 @@ export function SubtitleDialog() {
           {!source && (
             <p className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] leading-relaxed text-amber-300">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              Selecione um clipe de vídeo ou áudio na timeline antes de gerar as legendas.
+              {t("sub.noClipHint")}
             </p>
           )}
 
           {/* no navegador: as legendas automáticas ficam só no app baixado */}
           {onWeb && (
-            <div className="space-y-2 rounded-lg border border-[#22C55E]/40 bg-[#22C55E]/[0.07] p-3">
-              <p className="flex items-start gap-2 text-[11px] leading-relaxed text-[#86efac]">
+            <div className="space-y-2 rounded-lg border border[var(--gc-accent-40)] bg[var(--gc-accent-7)] p-3">
+              <p className="flex items-start gap-2 text-[11px] leading-relaxed text-[var(--gc-accent-text)]">
                 <Download className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  <b>As legendas automáticas rodam só no app de desktop.</b> No navegador o modelo de IA congela a
-                  página inteira — no app ele roda em 2º plano, sem travar nada, e dá pra cancelar no meio.
-                </span>
+                <span>{t("sub.webOnly")}</span>
               </p>
               <Button
-                onClick={() => window.open("https://github.com/lucasgabrieldevgg/galaxycut/releases/latest", "_blank", "noreferrer")}
-                className="w-full gap-1.5 bg-[#22C55E] font-semibold text-black hover:bg-[#1ed467]"
+                onClick={() => {
+                  const url = "https://github.com/lucasgabrieldevgg/galaxycut/releases/latest";
+                  if (desktop) desktop.openExternal(url);
+                  else window.open(url, "_blank", "noreferrer");
+                }}
+                className="w-full gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
               >
-                <Download className="h-4 w-4" /> Baixar o app (grátis, Linux e Windows)
+                <Download className="h-4 w-4" /> {t("sub.webCta")}
               </Button>
-              <p className="text-[10px] text-zinc-500">
-                As legendas MANUAIS (aba Texto) continuam funcionando normalmente no navegador.
-              </p>
+              <p className="text-[10px] text-zinc-500">{t("sub.webNote")}</p>
             </div>
           )}
 
           {job.running && (
-            <div className="space-y-2 rounded-lg border border-[#22C55E]/30 bg-[#22C55E]/5 p-3">
+            <div className="space-y-2 rounded-lg border border[var(--gc-accent-30)] bg[var(--gc-accent-5)] p-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-zinc-300">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#22C55E]" /> {stageLabel}
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--gc-accent)]" /> {stageLabel}
+                  {job.stage === "transcribe" && job.windows ? ` (${job.window ?? 1}/${job.windows})` : ""}
                 </span>
-                <span className="font-mono text-[#22C55E]">{pct}%</span>
+                <span className="font-mono text-[var(--gc-accent)]">{pct}%</span>
               </div>
               <Progress value={pct} className="h-1.5 bg-[#0a0d14]" />
               <p className="text-[10px] text-zinc-500">
-                Modelo {modelInfo.label} ({modelInfo.hint}). Pode levar alguns minutos — dá pra minimizar com{" "}
-                <b className="text-zinc-400">−</b> e continuar editando.
+                {t("sub.runningNote", { model: modelLabel(model), hint: modelHint(model) })}
               </p>
             </div>
           )}
@@ -329,7 +338,7 @@ export function SubtitleDialog() {
             }}
             className="border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]"
           >
-            {job.running ? "Minimizar" : "Cancelar"}
+            {job.running ? t("sub.minimize") : t("sub.cancel")}
           </Button>
           {job.running ? (
             <Button
@@ -339,17 +348,17 @@ export function SubtitleDialog() {
               }}
               className="gap-1.5 border-red-500/40 bg-transparent text-red-400 hover:bg-red-500/10"
             >
-              <XCircle className="h-4 w-4" /> Cancelar transcrição
+              <XCircle className="h-4 w-4" /> {t("sub.cancelTranscribe")}
             </Button>
           ) : (
             <Button
               onClick={() => void generate()}
               disabled={!source || onWeb}
-              title={onWeb ? "Disponível só no app de desktop — baixe aí em cima" : undefined}
-              className="gap-1.5 bg-[#22C55E] font-semibold text-black hover:bg-[#1ed467]"
+              title={onWeb ? t("misc.desktopOnly") : undefined}
+              className="gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
             >
               <CheckCircle2 className="h-4 w-4" />
-              Gerar legendas
+              {t("sub.generate")}
             </Button>
           )}
         </DialogFooter>

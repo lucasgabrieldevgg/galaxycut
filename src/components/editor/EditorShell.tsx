@@ -12,6 +12,7 @@ import { useSettings } from "@/lib/editor/settings";
 import { saveToDisk } from "@/lib/editor/diskProjects";
 import { isDesktopBuild } from "@/lib/editor/desktop";
 import { toast } from "sonner";
+import { useT, t as tr } from "@/lib/editor/i18n";
 import { Loader2, Maximize2 } from "lucide-react";
 import { TopBar } from "./TopBar";
 import { MediaPanel } from "./MediaPanel";
@@ -21,7 +22,8 @@ import { Timeline } from "./Timeline";
 import { ExportDialog } from "./ExportDialog";
 
 export function EditorShell({ onExit }: { onExit: () => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const t = useT();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const isMobile = useIsMobile();
   // o projeto (e as mídias do IndexedDB) já foi carregado pela home antes de chegar aqui
@@ -79,13 +81,13 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
         case "copy":
           if (st.selectedId) {
             st.copyClip(st.selectedId);
-            toast.success("Clipe copiado — cola na setinha");
+            toast.success(t("ed.copied"));
           }
           break;
         case "cut":
           if (st.selectedId) {
             st.cutClip(st.selectedId);
-            toast.success("Clipe recortado");
+            toast.success(t("ed.cut"));
           }
           break;
         case "paste":
@@ -96,7 +98,7 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
           break;
         case "save":
           saveToStorage();
-          toast.success("Projeto salvo neste navegador");
+          toast.success(t("ed.saved"));
           break;
         case "playPause":
           engine.toggle();
@@ -113,7 +115,7 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
         case "delete":
           if (st.selectedIds.length) {
             const n = st.deleteSelected();
-            if (n > 1) toast.info(`${n} clipe(s) apagado(s) — os da frente não se mexeram`);
+            if (n > 1) toast.info(t("ed.deletedN", { n }));
           } else {
             // sem clipe selecionado → apaga a MÍDIA selecionada no painel
             window.dispatchEvent(new CustomEvent("galaxiacut:delmedia"));
@@ -122,7 +124,7 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
         case "selectAll":
           if (st.clips.length) {
             st.selectAll();
-            toast.info(`${st.clips.length} cenas selecionadas — Delete apaga todas`);
+            toast.info(t("ed.allSelected", { n: st.clips.length }));
           }
           break;
         case "deselect":
@@ -207,13 +209,13 @@ function SubtitleMiniBar() {
         job.setMinimized(false);
         job.setOpen(true);
       }}
-      className="fixed left-1/2 top-14 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#22C55E]/40 bg-[#121722]/95 px-4 py-1.5 shadow-[0_0_18px_rgba(34,197,94,0.25)] backdrop-blur transition hover:border-[#22C55E]"
-      title="Abrir o painel de legendas de novo"
+      className="fixed left-1/2 top-14 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border[var(--gc-accent-40)] bg-[#121722]/95 px-4 py-1.5 shadow-[0_0_18px_var(--gc-accent-25)] backdrop-blur transition hover:border-[var(--gc-accent)]"
+      title={tr("sub.miniOpen")}
     >
-      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#22C55E]" />
-      <span className="text-[11px] font-medium text-zinc-200">Legendas… {pct}%</span>
+      <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--gc-accent)]" />
+      <span className="text-[11px] font-medium text-zinc-200">{tr("sub.minimized", { pct })}</span>
       <span className="h-1.5 w-24 overflow-hidden rounded-full bg-[#1c2430]">
-        <span className="block h-full rounded-full bg-[#22C55E] transition-all" style={{ width: `${pct}%` }} />
+        <span className="block h-full rounded-full bg-[var(--gc-accent)] transition-all" style={{ width: `${pct}%` }} />
       </span>
       <Maximize2 className="h-3 w-3 text-zinc-500" />
     </button>
@@ -222,23 +224,24 @@ function SubtitleMiniBar() {
 
 // ---------- layout mobile (empilhado) ----------
 function MobileLayout({ canvasRef, onExport }: { canvasRef: React.RefObject<HTMLCanvasElement | null>; onExport: () => void }) {
+  const t = useT();
   const [panel, setPanel] = useState<"none" | "media" | "inspector">("none");
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-[#1c2430] bg-[#10151d] px-2">
         <button
           onClick={() => setPanel((p) => (p === "media" ? "none" : "media"))}
-          className={`rounded-md px-2.5 py-1 text-[11px] ${panel === "media" ? "bg-[#22C55E]/15 text-[#22C55E]" : "text-zinc-400"}`}
+          className={`rounded-md px-2.5 py-1 text-[11px] ${panel === "media" ? "bg[var(--gc-accent-15)] text-[var(--gc-accent)]" : "text-zinc-400"}`}
         >
           Mídia
         </button>
         <button
           onClick={() => setPanel((p) => (p === "inspector" ? "none" : "inspector"))}
-          className={`rounded-md px-2.5 py-1 text-[11px] ${panel === "inspector" ? "bg-[#22C55E]/15 text-[#22C55E]" : "text-zinc-400"}`}
+          className={`rounded-md px-2.5 py-1 text-[11px] ${panel === "inspector" ? "bg[var(--gc-accent-15)] text-[var(--gc-accent)]" : "text-zinc-400"}`}
         >
           Propriedades
         </button>
-        <span className="ml-auto text-[10px] text-zinc-600">melhor no PC 🖥️</span>
+        <span className="ml-auto text-[10px] text-zinc-600">{t("ed.mobile")}</span>
       </div>
       {panel !== "none" ? (
         <div className="min-h-0 flex-1">
@@ -256,9 +259,9 @@ function MobileLayout({ canvasRef, onExport }: { canvasRef: React.RefObject<HTML
       )}
       <button
         onClick={onExport}
-        className="h-9 w-full shrink-0 bg-[#22C55E] text-sm font-bold text-black md:hidden"
+        className="h-9 w-full shrink-0 bg-[var(--gc-accent)] text-sm font-bold text-black md:hidden"
       >
-        Exportar
+        {t("ed.export")}
       </button>
     </div>
   );

@@ -1,67 +1,51 @@
-// GalaxyCut — aba de busca online: fotos, vídeos, músicas e efeitos de bancos
-// livres (Openverse, Freesound, Wikimedia, Internet Archive, Jamendo, Pexels,
-// Pixabay). Roda DIRETO no navegador (sem servidor) — dá pra publicar em
-// qualquer host estático. Prévia de vídeo no hover + player fixo embaixo.
+// GalaxyCut — aba de busca online: fotos, vídeos, músicas, efeitos e STICKERS
+// de bancos livres (Openverse, Freesound, Wikimedia, Internet Archive, Jamendo,
+// Pexels, Pixabay). v7.1: sticker virou BUSCA DE STICKERS DE VERDADE (PNGs com
+// transparência) com uma sub-aba de emojis organizadinha dentro dele.
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ImageIcon, Music2, Film, Loader2, Search, Plus, AudioLines, Music4, Video, Clock, Copyright, Play, Smile } from "lucide-react";
+import { ImageIcon, Music2, Film, Loader2, Search, Plus, AudioLines, Music4, Video, Clock, Copyright, Play, Smile, Sticker } from "lucide-react";
 import { useProject, usePlayback } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
 import { registry } from "@/lib/editor/media";
 import { licenseLevel, LICENSE_STYLE } from "@/lib/editor/types";
-import { StockItem, downloadStockFile, resolveIaFile, searchStock } from "@/lib/editor/stockClient";
+import { StockItem, downloadStockFile, resolveIaFile, searchStock, searchStickers } from "@/lib/editor/stockClient";
 import { useLibPlayer } from "@/lib/editor/libPlayer";
+import { useT } from "@/lib/editor/i18n";
 
 type StockType = "image" | "video" | "music" | "sfx" | "sticker";
 type DurId = "any" | "short" | "mid" | "long" | "custom";
 
-const TYPE_TABS: { id: StockType; label: string; icon: typeof ImageIcon; ph: string }[] = [
-  { id: "image", label: "Foto", icon: ImageIcon, ph: "ex: montanha ao pôr do sol" },
-  { id: "video", label: "Vídeo", icon: Video, ph: "ex: gameplay minecraft" },
-  { id: "music", label: "Música", icon: Music4, ph: "ex: épico tensão" },
-  { id: "sfx", label: "Efeito", icon: AudioLines, ph: "ex: explosão whoosh" },
-  { id: "sticker", label: "Sticker", icon: Smile, ph: "" },
+/** Emojis (sub-aba de Stickers — 100% offline). */
+const STICKER_SETS: { key: string; emojis: string[] }[] = [
+  { key: "faces", emojis: ["😀","😂","🤣","😍","😎","🥳","🤯","😭","😡","🤔","😴","🥺","😱","🤡","😈","🤠","😇","🤪"] },
+  { key: "hands", emojis: ["👍","👎","👏","🙌","🙏","💪","✌️","🤝","👌","🤟","👉","🖐️"] },
+  { key: "hearts", emojis: ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","💖","💘","💝","💔","❣️","💕"] },
+  { key: "animals", emojis: ["🐶","🐱","🦊","🐻","🐼","🐨","🦁","🐯","🐸","🐷","🦄","🐔","🐢","🦖","🐙","🦅"] },
+  { key: "food", emojis: ["🍕","🍔","🍟","🌮","🍿","🍩","🍪","🎂","🍎","🍌","🍉","🍓"] },
+  { key: "impact", emojis: ["🔥","⭐","✨","💫","⚡","💯","🎉","🎊","🎮","🏆","👑","💰","💣","💀"] },
+  { key: "signs", emojis: ["➡️","⬅️","✅","❌","❓","❗","⚠️","🚫","🔍","🔖","📌","💬","👁️","🧠"] },
 ];
 
-/** Stickers de emoji (100% offline — clica e entra na timeline como figurinha). */
-const STICKER_SETS: { name: string; emojis: string[] }[] = [
-  { name: "Caras", emojis: ["😀","😂","🤣","😍","😎","🥳","🤯","😭","😡","🤔","😴","🥺","😱","🤡","😈","🤠","😇","🤪"] },
-  { name: "Mãos", emojis: ["👍","👎","👏","🙌","🙏","💪","✌️","🤝","👌","🤟","👉","🖐️"] },
-  { name: "Corações", emojis: ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","💖","💘","💝","💔","❣️","💕"] },
-  { name: "Bichos", emojis: ["🐶","🐱","🦊","🐻","🐼","🐨","🦁","🐯","🐸","🐷","🦄","🐔","🐢","🦖","🐙","🦅"] },
-  { name: "Comidas", emojis: ["🍕","🍔","🍟","🌮","🍿","🍩","🍪","🎂","🍎","🍌","🍉","🍓"] },
-  { name: "Impacto", emojis: ["🔥","⭐","✨","💫","⚡","💯","🎉","🎊","🎮","🏆","👑","💰","💣","💀"] },
-  { name: "Sinais", emojis: ["➡️","⬅️","✅","❌","❓","❗","⚠️","🚫","🔍","🔖","📌","💬","👁️","🧠"] },
-];
-
-/** Gêneros musicais estilo CapCut (os terms entram na busca). */
-const GENRES: { id: string; label: string }[] = [
-  { id: "all", label: "Todos" },
-  { id: "epic", label: "Épico" },
-  { id: "calm", label: "Calmo" },
-  { id: "electronic", label: "Eletrônica" },
-  { id: "gaming", label: "Gaming" },
-  { id: "lofi", label: "Lo-Fi" },
-  { id: "trap", label: "Trap/HipHop" },
-  { id: "rock", label: "Rock" },
-  { id: "classical", label: "Clássico" },
-  { id: "ambient", label: "Ambiente" },
-  { id: "happy", label: "Alegre" },
-  { id: "tense", label: "Tensão" },
-  { id: "sad", label: "Triste" },
-  { id: "funk", label: "Funk/Soul" },
-];
-
-const DUR_OPTIONS: { id: DurId; label: string }[] = [
-  { id: "any", label: "Qualquer" },
-  { id: "short", label: "≤ 15s" },
-  { id: "mid", label: "15s–1min" },
-  { id: "long", label: "+ 1min" },
-  { id: "custom", label: "Personalizado" },
+const GENRES = [
+  { id: "all", key: "g.all" },
+  { id: "epic", key: "g.epic" },
+  { id: "calm", key: "g.calm" },
+  { id: "electronic", key: "g.electronic" },
+  { id: "gaming", key: "g.gaming" },
+  { id: "lofi", key: "g.lofi" },
+  { id: "trap", key: "g.trap" },
+  { id: "rock", key: "g.rock" },
+  { id: "classical", key: "g.classical" },
+  { id: "ambient", key: "g.ambient" },
+  { id: "happy", key: "g.happy" },
+  { id: "tense", key: "g.tense" },
+  { id: "sad", key: "g.sad" },
+  { id: "funk", key: "g.funk" },
 ];
 
 function fmtDur(d: number) {
@@ -72,6 +56,7 @@ function fmtDur(d: number) {
 }
 
 export function StockSearch() {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [type, setType] = useState<StockType>("image");
   const [loading, setLoading] = useState(false);
@@ -82,6 +67,8 @@ export function StockSearch() {
   const [genre, setGenre] = useState("all");
   const [cmin, setCmin] = useState(10);
   const [cmax, setCmax] = useState(60);
+  // sub-aba do Stickers: busca de figurinhas ou emojis
+  const [stickTab, setStickTab] = useState<"stickers" | "emojis">("stickers");
   const addMedia = useProject((s) => s.addMedia);
   const addClipFromMedia = useProject((s) => s.addClipFromMedia);
   const openPlayer = useLibPlayer((s) => s.open);
@@ -89,12 +76,38 @@ export function StockSearch() {
   /** id do vídeo com prévia rodando (hover) */
   const [hoverVideo, setHoverVideo] = useState<string | null>(null);
 
-  const showDur = type !== "image";
+  const TYPE_TABS: { id: StockType; label: string; icon: typeof ImageIcon; ph: string }[] = [
+    { id: "image", label: t("ss.photo"), icon: ImageIcon, ph: t("ss.phPhoto") },
+    { id: "video", label: t("ss.video"), icon: Video, ph: t("ss.phVideo") },
+    { id: "music", label: t("ss.music"), icon: Music4, ph: t("ss.phMusic") },
+    { id: "sfx", label: t("ss.sfx"), icon: AudioLines, ph: t("ss.phSfx") },
+    { id: "sticker", label: t("ss.sticker"), icon: Sticker, ph: t("ss.phSticker") },
+  ];
+
+  const showDur = type !== "image" && type !== "sticker";
   const showGenre = type === "music";
+  const isSticker = type === "sticker";
 
   async function search(e?: FormEvent) {
     e?.preventDefault();
-    if (!query.trim() || type === "sticker") return;
+    if (!query.trim()) return;
+    if (isSticker) {
+      // stickers: busca PNGs com transparência
+      setLoading(true);
+      setTranslated(null);
+      try {
+        const results = await searchStickers(query.trim());
+        setItems(results);
+        if (!results.length) {
+          toast.info(t("ss.nothing"), { description: t("ss.stickerNone", { q: query.trim() }) });
+        }
+      } catch {
+        toast.error(t("ss.fail"), { description: t("ss.failDesc") });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     setLoading(true);
     setTranslated(null);
     try {
@@ -111,12 +124,10 @@ export function StockSearch() {
       setItems(results);
       if (tr && tr !== query) setTranslated(tr);
       if (!results.length) {
-        toast.info("Nada encontrado", {
-          description: "Tenta outra palavra, outra duração ou outro gênero (busco em português e inglês).",
-        });
+        toast.info(t("ss.nothing"), { description: t("ss.nothingDesc") });
       }
     } catch {
-      toast.error("Falha na busca online", { description: "Checa sua conexão e tenta de novo." });
+      toast.error(t("ss.fail"), { description: t("ss.failDesc") });
     } finally {
       setLoading(false);
     }
@@ -124,9 +135,9 @@ export function StockSearch() {
 
   // trocar filtro/gênero/aba re-busca automaticamente (se já buscou algo)
   useEffect(() => {
-    if (searchedRef.current && query.trim()) void search();
+    if (searchedRef.current && query.trim() && !isSticker) void search();
      
-  }, [type, dur, genre]);
+  }, [type, dur, genre]);  
 
   async function addStock(item: StockItem) {
     setAdding(item.id);
@@ -138,7 +149,7 @@ export function StockSearch() {
         url = d.url;
       }
       const blob = await downloadStockFile(url);
-      const ext = /\.(mp3|wav|ogg|m4a|flac|opus|mp4|webm|mov|png|jpe?g|webp|gif)$/i.exec(url)?.[1] ?? (item.audio ? "mp3" : type === "video" ? "mp4" : "jpg");
+      const ext = /\.(mp3|wav|ogg|m4a|flac|opus|mp4|webm|mov|png|jpe?g|webp|gif)$/i.exec(url)?.[1] ?? (item.audio ? "mp3" : type === "video" ? "mp4" : "png");
       const name = `${item.title.replace(/[\\/:*?"<>|]/g, "").slice(0, 40)}.${ext}`;
       const meta = await registry.importFile(blob, name);
       addMedia({
@@ -150,18 +161,17 @@ export function StockSearch() {
         creator: item.creator,
       });
       addClipFromMedia(meta.id);
-      toast.success("Salvo na aba Mídia e adicionado à timeline!", {
-        description: licenseLevel(item.license) === "free" ? "Fica salvo no navegador — recarregar a página não perde." : "Lembra de dar crédito ao autor na descrição.",
+      toast.success(t("ss.addedStock"), {
+        description: licenseLevel(item.license) === "free" ? t("ss.addedFree") : t("ss.addedCredit"),
       });
     } catch (err) {
-      toast.error("Não consegui baixar este arquivo", { description: String((err as Error).message ?? err) });
+      toast.error(t("ss.downloadFail"), { description: String((err as Error).message ?? err) });
     } finally {
       setAdding(null);
     }
   }
 
-  const activeTab = TYPE_TABS.find((t) => t.id === type)!;
-  const isSticker = type === "sticker";
+  const activeTab = TYPE_TABS.find((tb) => tb.id === type)!;
   const playhead = usePlayback((s) => s.playhead);
 
   /** sticker de emoji: entra na faixa de texto como figurinha grande */
@@ -175,59 +185,91 @@ export function StockSearch() {
       bg: "",
       highlight: false,
     });
-    toast.success(`${emoji} entrou na timeline!`, {
-      description: "Figurinha na faixa de texto — arraste na prévia pra posicionar, e os cantos mudam o tamanho.",
-    });
+    toast.success(t("ss.emojiAdded", { emoji }), { description: t("ss.emojiAddedDesc") });
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2.5 timeline-scroll">
       <div className="grid shrink-0 grid-cols-5 gap-1 rounded-lg bg-[#151b26] p-0.5">
-        {TYPE_TABS.map((t) => (
+        {TYPE_TABS.map((tb) => (
           <button
-            key={t.id}
+            key={tb.id}
             type="button"
-            onClick={() => setType(t.id)}
+            onClick={() => {
+              setType(tb.id);
+              setItems(null); // trocou de aba: limpa os resultados
+              searchedRef.current = false;
+            }}
             className={`flex items-center justify-center gap-1 rounded-md px-1 py-1 text-[11px] transition ${
-              type === t.id ? "bg-[#232d3d] text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+              type === tb.id ? "bg-[#232d3d] text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
             }`}
           >
-            <t.icon className="h-3 w-3" /> {t.label}
+            <tb.icon className="h-3 w-3" /> {tb.label}
           </button>
         ))}
       </div>
-      {!isSticker && (
-        <form onSubmit={(e) => { searchedRef.current = true; void search(e); }} className="flex shrink-0 gap-1.5">
+
+      {/* ---- aba STICKER: busca de figurinhas + sub-aba de emojis ---- */}
+      {isSticker && (
+        <div className="grid shrink-0 grid-cols-2 gap-1 rounded-lg bg-[#151b26] p-0.5">
+          <button
+            type="button"
+            onClick={() => setStickTab("stickers")}
+            className={`flex items-center justify-center gap-1.5 rounded-md py-1 text-[11px] transition ${
+              stickTab === "stickers" ? "bg-[#232d3d] text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            <Sticker className="h-3 w-3" /> {t("ss.stickersTab")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setStickTab("emojis")}
+            className={`flex items-center justify-center gap-1.5 rounded-md py-1 text-[11px] transition ${
+              stickTab === "emojis" ? "bg-[#232d3d] text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            <Smile className="h-3 w-3" /> {t("ss.emojisTab")}
+          </button>
+        </div>
+      )}
+
+      {(!isSticker || stickTab === "stickers") && (
+        <form
+          onSubmit={(e) => {
+            searchedRef.current = true;
+            void search(e);
+          }}
+          className="flex shrink-0 gap-1.5"
+        >
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={activeTab.ph}
             className="h-8 border-[#2a3546] bg-[#121722] text-xs text-zinc-200 placeholder:text-zinc-600"
           />
-          <Button type="submit" size="icon" className="h-8 w-8 shrink-0 bg-[#22C55E] text-black hover:bg-[#1ed467]" aria-label="Buscar">
+          <Button type="submit" size="icon" className="h-8 w-8 shrink-0 bg-[var(--gc-accent)] text-black hover:bg-[var(--gc-accent-hover)]" aria-label={t("ss.search")}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           </Button>
         </form>
       )}
 
-      {/* ---- stickers de emoji (offline, sem busca) ---- */}
-      {isSticker && (
+      {/* ---- emojis (offline, grid organizado por categoria) ---- */}
+      {isSticker && stickTab === "emojis" && (
         <div className="min-h-0 flex-1 space-y-3">
           <p className="rounded-lg border border-[#232d3d] bg-[#0e1320] p-2.5 text-[10px] leading-relaxed text-zinc-500">
-            Figurinhas de <b className="text-zinc-400">emoji</b> — clica numa e ela entra na timeline (faixa de texto).
-            Arraste na prévia pra posicionar e use os cantos pra mudar o tamanho.
+            {t("ss.emojiNote")}
           </p>
           {STICKER_SETS.map((set) => (
-            <div key={set.name}>
-              <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">{set.name}</p>
+            <div key={set.key}>
+              <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">{t(`ss.cat.${set.key}`)}</p>
               <div className="grid grid-cols-6 gap-1">
                 {set.emojis.map((e) => (
                   <button
                     key={e}
                     type="button"
                     onClick={() => addSticker(e)}
-                    className="flex aspect-square items-center justify-center rounded-lg border border-[#232d3d] bg-[#0e1320] text-xl transition hover:scale-110 hover:border-[#22C55E]/50 hover:bg-[#22C55E]/10"
-                    title={`Adicionar ${e}`}
+                    className="flex aspect-square items-center justify-center rounded-lg border border-[#232d3d] bg-[#0e1320] text-xl transition hover:scale-110 hover:border[var(--gc-accent-50)] hover:bg[var(--gc-accent-10)]"
+                    title={`${t("ss.addN", { name: e })}`}
                   >
                     {e}
                   </button>
@@ -242,7 +284,7 @@ export function StockSearch() {
       {showGenre && (
         <div className="shrink-0">
           <div className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
-            <Music4 className="h-3 w-3" /> Gênero
+            <Music4 className="h-3 w-3" /> {t("ss.genre")}
           </div>
           <div className="flex gap-1 overflow-x-auto pb-1 timeline-scroll">
             {GENRES.map((g) => (
@@ -252,11 +294,11 @@ export function StockSearch() {
                 onClick={() => setGenre(g.id)}
                 className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] transition ${
                   genre === g.id
-                    ? "border-[#22C55E] bg-[#22C55E]/15 text-[#22C55E]"
+                    ? "border-[var(--gc-accent)] bg[var(--gc-accent-15)] text-[var(--gc-accent)]"
                     : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                 }`}
               >
-                {g.label}
+                {t(g.key)}
               </button>
             ))}
           </div>
@@ -267,17 +309,23 @@ export function StockSearch() {
       {showDur && (
         <div className="shrink-0">
           <div className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
-            <Clock className="h-3 w-3" /> Duração
+            <Clock className="h-3 w-3" /> {t("ss.duration")}
           </div>
           <div className="flex flex-wrap gap-1">
-            {DUR_OPTIONS.map((d) => (
+            {([
+              { id: "any", label: t("ss.any") },
+              { id: "short", label: t("ss.short") },
+              { id: "mid", label: t("ss.mid") },
+              { id: "long", label: t("ss.long") },
+              { id: "custom", label: t("ss.custom") },
+            ] as const).map((d) => (
               <button
                 key={d.id}
                 type="button"
                 onClick={() => setDur(d.id)}
                 className={`rounded-full border px-2.5 py-0.5 text-[10px] transition ${
                   dur === d.id
-                    ? "border-[#22C55E] bg-[#22C55E]/15 text-[#22C55E]"
+                    ? "border-[var(--gc-accent)] bg[var(--gc-accent-15)] text-[var(--gc-accent)]"
                     : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                 }`}
               >
@@ -293,28 +341,28 @@ export function StockSearch() {
                 value={cmin}
                 onChange={(e) => setCmin(Number(e.target.value))}
                 className="h-7 w-16 border-[#2a3546] bg-[#0e1320] text-[10px] text-zinc-200"
-                aria-label="Duração mínima em segundos"
+                aria-label={t("ss.duration")}
               />
-              <span className="text-[10px] text-zinc-500">até</span>
+              <span className="text-[10px] text-zinc-500">{t("ss.to")}</span>
               <Input
                 type="number"
                 min={1}
                 value={cmax}
                 onChange={(e) => setCmax(Number(e.target.value))}
                 className="h-7 w-16 border-[#2a3546] bg-[#0e1320] text-[10px] text-zinc-200"
-                aria-label="Duração máxima em segundos"
+                aria-label={t("ss.duration")}
               />
-              <span className="text-[10px] text-zinc-500">segundos</span>
+              <span className="text-[10px] text-zinc-500">{t("ss.seconds")}</span>
               <Button
                 type="button"
                 size="sm"
-                className="h-7 bg-[#22C55E] px-2 text-[10px] font-semibold text-black hover:bg-[#1ed467]"
+                className="h-7 bg-[var(--gc-accent)] px-2 text-[10px] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
                 onClick={() => {
                   searchedRef.current = true;
                   void search();
                 }}
               >
-                Aplicar
+                {t("ss.apply")}
               </Button>
             </div>
           )}
@@ -322,108 +370,117 @@ export function StockSearch() {
       )}
 
       {translated && (
-        <p className="shrink-0 px-1 text-[10px] text-zinc-500">
-          Busquei também por <b className="text-zinc-400">“{translated}”</b> (traduzi pra inglês pra achar mais)
-        </p>
+        <p className="shrink-0 px-1 text-[10px] text-zinc-500">{t("ss.translated", { q: translated })}</p>
       )}
 
       {/* resultados — rolagem nativa (roda do mouse sempre funciona) */}
-      <div className="min-h-[260px] flex-1 shrink-0 overflow-y-auto overscroll-contain pr-0.5 timeline-scroll">
-        {items === null ? (
-          <div className="space-y-2 px-1 py-4">
-            <p className="text-center text-[11px] leading-relaxed text-zinc-600">
-              Fotos, vídeos, <b className="text-zinc-400">músicas</b> e <b className="text-zinc-400">efeitos</b> de bancos
-              livres (Openverse, Freesound, Wikimedia, Internet Archive, Jamendo…). Pode pesquisar em português — eu traduzo
-              e ordeno pelos mais relevantes.
-            </p>
-            <div className="rounded-lg border border-[#232d3d] bg-[#121722] p-2.5 text-[10px] leading-relaxed text-zinc-500">
-              <p className="mb-1 flex items-center gap-1 font-medium text-zinc-400"><Copyright className="h-3 w-3" /> Selos de licença</p>
-              {(["free", "credit", "nc", "unknown"] as const).map((k) => (
-                <p key={k} className="flex items-center gap-1.5">
-                  <span className={`w-14 rounded border px-1 text-center text-[8px] ${LICENSE_STYLE[k].cls}`}>{LICENSE_STYLE[k].label}</span>
-                  <span className="text-zinc-600">{LICENSE_STYLE[k].title}</span>
-                </p>
-              ))}
+      {(!isSticker || stickTab === "stickers") && (
+        <div className="min-h-[260px] flex-1 shrink-0 overflow-y-auto overscroll-contain pr-0.5 timeline-scroll">
+          {items === null ? (
+            <div className="space-y-2 px-1 py-4">
+              {isSticker ? (
+                <p className="text-center text-[11px] leading-relaxed text-zinc-600">{t("ss.stickerNote")}</p>
+              ) : (
+                <>
+                  <p className="text-center text-[11px] leading-relaxed text-zinc-600">{t("ss.intro")}</p>
+                  <div className="rounded-lg border border-[#232d3d] bg-[#121722] p-2.5 text-[10px] leading-relaxed text-zinc-500">
+                    <p className="mb-1 flex items-center gap-1 font-medium text-zinc-400"><Copyright className="h-3 w-3" /> {t("ss.licenses")}</p>
+                    {(["free", "credit", "nc", "unknown"] as const).map((k) => (
+                      <p key={k} className="flex items-center gap-1.5">
+                        <span className={`w-14 rounded border px-1 text-center text-[8px] ${LICENSE_STYLE[k].cls}`}>{t(`st.lic${k[0].toUpperCase()}${k.slice(1)}`)}</span>
+                        <span className="text-zinc-600">{t(`st.lic${k[0].toUpperCase()}${k.slice(1)}Title`)}</span>
+                      </p>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-1.5 pb-2">
-            {items.map((it) => {
-              const lv = licenseLevel(it.license);
-              const ls = LICENSE_STYLE[lv];
-              const isVideoTile = type === "video" && !it.audio;
-              return (
-                <div
-                  key={it.id}
-                  className="group overflow-hidden rounded-lg border border-[#232d3d] bg-[#121722]"
-                  onMouseEnter={() => isVideoTile && setHoverVideo(it.id)}
-                  onMouseLeave={() => setHoverVideo((v) => (v === it.id ? null : v))}
-                >
-                  <div className="relative aspect-video bg-[#0a0d14]">
-                    {it.thumb ? (
-                      <img src={it.thumb} alt={it.title} className="h-full w-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-zinc-700">
-                        {it.audio ? <Music2 className="h-5 w-5" /> : <Film className="h-5 w-5" />}
+          ) : (
+            <div className={`grid gap-1.5 pb-2 ${isSticker ? "grid-cols-3" : "grid-cols-2"}`}>
+              {items.map((it) => {
+                const lv = licenseLevel(it.license);
+                const ls = LICENSE_STYLE[lv];
+                const isVideoTile = type === "video" && !it.audio;
+                return (
+                  <div
+                    key={it.id}
+                    className="group overflow-hidden rounded-lg border border-[#232d3d] bg-[#121722]"
+                    onMouseEnter={() => isVideoTile && setHoverVideo(it.id)}
+                    onMouseLeave={() => setHoverVideo((v) => (v === it.id ? null : v))}
+                  >
+                    <div className={`relative ${isSticker ? "aspect-square" : "aspect-video"} ${isSticker ? "bg-[#0e1320]" : "bg-[#0a0d14]"}`}>
+                      {it.thumb ? (
+                        <img
+                          src={it.thumb}
+                          alt={it.title}
+                          loading="lazy"
+                          className={`h-full w-full ${isSticker ? "object-contain p-1.5" : "object-cover"}`}
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-zinc-700">
+                          {it.audio ? <Music2 className="h-5 w-5" /> : <Film className="h-5 w-5" />}
+                        </div>
+                      )}
+                      {/* prévia de vídeo: passe o mouse e ele toca (mudo, em loop) */}
+                      {isVideoTile && <VideoPreviewLayer item={it} active={hoverVideo === it.id} />}
+                      <span className={`absolute left-1 top-1 rounded border px-1 py-px text-[8px] backdrop-blur ${ls.cls}`} title={t(`st.lic${lv[0].toUpperCase()}${lv.slice(1)}Title`)}>
+                        {t(`st.lic${lv[0].toUpperCase()}${lv.slice(1)}`)}
+                      </span>
+                      {it.duration ? (
+                        <span className="absolute right-1 top-1 rounded bg-black/70 px-1 text-[8px] tabular-nums text-zinc-300">{fmtDur(it.duration)}</span>
+                      ) : null}
+                      {isVideoTile && !hoverVideo && (
+                        <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/70 px-1 text-[8px] text-zinc-300">{t("ss.hoverPreview")}</span>
+                      )}
+                      <button
+                        onClick={() => void addStock(it)}
+                        disabled={adding === it.id}
+                        className="absolute inset-0 flex items-center justify-center bg-black/60 text-[var(--gc-accent)] opacity-0 transition group-hover:opacity-100"
+                        aria-label={t("ss.addN", { name: it.title })}
+                      >
+                        {adding === it.id ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-6 w-6" strokeWidth={2.5} />}
+                      </button>
+                      {/* tocar no player de baixo (vídeo, música e efeito) */}
+                      {(it.audio || isVideoTile) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPlayer({
+                              id: it.id,
+                              title: it.title,
+                              url: it.url,
+                              kind: it.audio ? "audio" : "video",
+                              thumb: it.thumb,
+                              isIa: it.provider.includes("Internet Archive"),
+                            });
+                          }}
+                          className={`absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition hover:bg-black/90 ${
+                            hoverVideo === it.id ? "opacity-0" : "opacity-0 group-hover:opacity-100"
+                          }`}
+                          title={t("ss.playHint")}
+                          aria-label={t("ss.playHint")}
+                        >
+                          <Play className="h-3 w-3 fill-current" />
+                        </button>
+                      )}
+                    </div>
+                    {!isSticker && (
+                      <div className="p-1.5">
+                        <p className="truncate text-[10px] text-zinc-400" title={it.title}>{it.title}</p>
+                        <div className="mt-0.5 flex items-center justify-between gap-1">
+                          <span className="truncate text-[8px] text-zinc-600" title={it.creator ? `${it.creator}` : undefined}>
+                            {it.provider}
+                          </span>
+                        </div>
                       </div>
                     )}
-                    {/* prévia de vídeo: passe o mouse e ele toca (mudo, em loop) */}
-                    {isVideoTile && <VideoPreviewLayer item={it} active={hoverVideo === it.id} />}
-                    <span className={`absolute left-1 top-1 rounded border px-1 py-px text-[8px] backdrop-blur ${ls.cls}`} title={ls.title}>
-                      {ls.label}
-                    </span>
-                    {it.duration ? (
-                      <span className="absolute right-1 top-1 rounded bg-black/70 px-1 text-[8px] tabular-nums text-zinc-300">{fmtDur(it.duration)}</span>
-                    ) : null}
-                    {isVideoTile && !hoverVideo && (
-                      <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/70 px-1 text-[8px] text-zinc-300">passe o mouse p/ prévia</span>
-                    )}
-                    <button
-                      onClick={() => void addStock(it)}
-                      disabled={adding === it.id}
-                      className="absolute inset-0 flex items-center justify-center bg-black/60 text-[#22C55E] opacity-0 transition group-hover:opacity-100"
-                      aria-label={`Adicionar ${it.title}`}
-                    >
-                      {adding === it.id ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-6 w-6" strokeWidth={2.5} />}
-                    </button>
-                    {/* tocar no player de baixo (vídeo, música e efeito) */}
-                    {(it.audio || isVideoTile) && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openPlayer({
-                            id: it.id,
-                            title: it.title,
-                            url: it.url,
-                            kind: it.audio ? "audio" : "video",
-                            thumb: it.thumb,
-                            isIa: it.provider.includes("Internet Archive"),
-                          });
-                        }}
-                        className={`absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition hover:bg-black/90 ${
-                          hoverVideo === it.id ? "opacity-0" : "opacity-0 group-hover:opacity-100"
-                        }`}
-                        title="Tocar no player (fica embaixo, dá pra pausar, avançar e arrastar)"
-                        aria-label={`Tocar ${it.title}`}
-                      >
-                        <Play className="h-3 w-3 fill-current" />
-                      </button>
-                    )}
                   </div>
-                  <div className="p-1.5">
-                    <p className="truncate text-[10px] text-zinc-400" title={it.title}>{it.title}</p>
-                    <div className="mt-0.5 flex items-center justify-between gap-1">
-                      <span className="truncate text-[8px] text-zinc-600" title={it.creator ? `por ${it.creator}` : undefined}>
-                        {it.provider}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

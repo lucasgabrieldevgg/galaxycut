@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, RotateCcw, RotateCw, X, Loader2, Music2, Video as VideoIcon } from "lucide-react";
 import { useLibPlayer, LibItem } from "@/lib/editor/libPlayer";
+import { useT } from "@/lib/editor/i18n";
 
 function fmt(t: number): string {
   if (!isFinite(t) || t < 0) t = 0;
@@ -15,6 +16,7 @@ function fmt(t: number): string {
 }
 
 export function LibraryPlayerBar() {
+  const t = useT();
   const item = useLibPlayer((s) => s.item);
   const src = useLibPlayer((s) => s.src);
   const loading = useLibPlayer((s) => s.loading);
@@ -35,6 +37,7 @@ function PlayerCore({
   loading: boolean;
   onClose: () => void;
 }) {
+  const t = useT();
   const mediaRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -107,17 +110,17 @@ function PlayerCore({
             size="icon"
             className="h-7 w-7 text-zinc-400 hover:text-zinc-200"
             onClick={() => skip(-5)}
-            aria-label="Voltar 5 segundos"
-            title="Voltar 5s"
+            aria-label={t("lib.back5")}
+            title={t("lib.back5")}
           >
             <RotateCcw className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-full bg-[#22C55E] p-0 text-black hover:bg-[#1ed467]"
+            className="h-8 w-8 rounded-full bg-[var(--gc-accent)] p-0 text-black hover:bg-[var(--gc-accent-hover)]"
             onClick={toggle}
-            aria-label={playing ? "Pausar" : "Tocar"}
+            aria-label={playing ? t("lib.pause") : t("lib.play")}
           >
             {playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
           </Button>
@@ -126,8 +129,8 @@ function PlayerCore({
             size="icon"
             className="h-7 w-7 text-zinc-400 hover:text-zinc-200"
             onClick={() => skip(5)}
-            aria-label="Avançar 5 segundos"
-            title="Avançar 5s"
+            aria-label={t("lib.fwd5")}
+            title={t("lib.fwd5")}
           >
             <RotateCw className="h-3.5 w-3.5" />
           </Button>
@@ -143,8 +146,8 @@ function PlayerCore({
               setTime(v);
               if (mediaRef.current) mediaRef.current.currentTime = v;
             }}
-            className="gc-range h-1.5 min-w-0 flex-1 cursor-pointer accent-[#22C55E]"
-            aria-label="Posição da reprodução"
+            className="gc-range h-1.5 min-w-0 flex-1 cursor-pointer accent-[var(--gc-accent)]"
+            aria-label={t("lib.position")}
           />
           <span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-500">
             {fmt(time)} <span className="text-zinc-700">/ {fmt(dur)}</span>
@@ -152,7 +155,7 @@ function PlayerCore({
         </div>
       </div>
 
-      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-zinc-500 hover:text-zinc-200" onClick={onClose} aria-label="Fechar player">
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-zinc-500 hover:text-zinc-200" onClick={onClose} aria-label={t("lib.close")}>
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>
