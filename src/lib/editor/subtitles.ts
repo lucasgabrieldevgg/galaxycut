@@ -25,7 +25,7 @@ export const WHISPER_MODELS: { id: WhisperModelId; label: string; hint: string }
   { id: "small", label: "Preciso", hint: "~250 MB · detecta bem mais palavras (demora mais)" },
 ];
 
-// import() dinâmico de URL externa sem o bundler enxergar
+// import() dinâmico de URL externa sem o bundler enxergar (legado — hoje o worker importa direto)
 const dynImport = new Function("u", "return import(u)") as (u: string) => Promise<Record<string, unknown>>;
 
 const TRANSFORMERS_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3";
@@ -38,6 +38,142 @@ const MODEL_IDS: Record<WhisperModelId, string> = {
 function fallbackChain(requested: WhisperModelId): string[] {
   const order: WhisperModelId[] = requested === "small" ? [requested, "base", "tiny"] : requested === "tiny" ? [requested, "base"] : [requested, "tiny"];
   return order.map((m) => MODEL_IDS[m]);
+}
+
+// ---------------- Web Worker: a transcrição NUNCA mais trava a interface ----------------
+// O modelo roda num worker próprio (blob module + import do CDN). O áudio é fatiado
+// em janelas de 30s com 0,8s de sobreposição — cada janela reporta progresso REAL,
+// dá pra cancelar (worker.terminate) e a UI continua fluida o tempo todo.
+
+const WORKER_SRC = `
+import { pipeline } from "${TRANSFORMERS_URL}";
+let asrCache = new Map();
+
+self.onmessage = async (ev) => {
+  const msg = ev.data;
+  if (msg.type !== "run") return;
+  const send = (o) => self.postMessage(o);
+  try {
+    let asr = asrCache.get(msg.model);
+    if (!asr) {
+      send({ type: "stage", stage: "download", pct: 0 });
+      asr = await pipeline("automatic-speech-recognition", msg.model, {
+        dtype: "q8",
+        device: "wasm",
+        progress_callback: (p) => {
+          if (p?.status === "progress" && p.total) send({ type: "stage", stage: "download", pct: Math.min(0.999, p.loaded / p.total) });
+          else if (p?.status === "ready" || p?.status === "done") send({ type: "stage", stage: "prepare", pct: 1 });
+        },
+      });
+      asrCache.set(msg.model, asr);
+    }
+    send({ type: "stage", stage: "prepare", pct: 1 });
+
+    const WIN = 30;      // janela de 30s (mesmo chunk do whisper)
+    const OVERLAP = 0.8; // sobreposição p/ não cortar palavra na borda
+    const sr = 16000;
+    const total = msg.pcm.length / sr;
+    const n = Math.max(1, Math.ceil((total - OVERLAP) / (WIN - OVERLAP)));
+    const allWords = [];
+    let lastEnd = 0;
+    for (let w = 0; w < n; w++) {
+      const off = w * (WIN - OVERLAP);
+      const len = Math.min(WIN, total - off);
+      if (len <= 0.05) break;
+      const slice = msg.pcm.subarray(Math.round(off * sr), Math.round((off + len) * sr));
+      send({ type: "stage", stage: "transcribe", pct: 0.1 + 0.85 * (w / n), window: w + 1, windows: n });
+      const out = await asr(slice, {
+        language: msg.lang,
+        task: "transcribe",
+        chunk_length_s: 30,
+        stride_chunk_s: 5,
+        return_timestamps: "word",
+      });
+      const chunks = out?.chunks ?? [];
+      const winEnd = off + len;
+      for (const c of chunks) {
+        const text = (c.text ?? "").replace(/\\s+/g, "");
+        if (!text) continue;
+        const s = (c.timestamp?.[0] ?? lastEnd - off) + off;
+        let e = c.timestamp?.[1];
+        e = (e == null ? s - off + 0.4 : e) + off;
+        // janela não-final descarta palavra cortada na borda (a próxima recupera)
+        if (w < n - 1 && e > winEnd - 0.35) continue;
+        if (s < lastEnd - 0.06) continue; // já saiu na janela anterior (sobreposição)
+        lastEnd = Math.max(lastEnd, e);
+        allWords.push({ w: text, s, e: Math.max(s + 0.12, e) });
+      }
+    }
+    send({ type: "stage", stage: "transcribe", pct: 0.97, window: n, windows: n });
+    send({ type: "done", words: allWords });
+  } catch (err) {
+    send({ type: "error", message: String((err && err.message) || err) });
+  }
+};
+`;
+
+/** Fallback SEM worker (navegadores que bloqueiam blob worker): o código antigo,
+ *  só que com yield entre etapas. Usado só se o worker não abrir. */
+
+let activeWorker: Worker | null = null;
+/** rejeição pendente do worker atual (o botão Cancelar dispara isso) */
+let pendingCancel: ((reason: Error) => void) | null = null;
+
+/** Cancela a transcrição em andamento — o worker é morto na hora. */
+export function cancelTranscription() {
+  const reject = pendingCancel;
+  if (activeWorker) {
+    activeWorker.terminate();
+    activeWorker = null;
+  }
+  pendingCancel = null;
+  if (reject) reject(new Error("cancelada pelo usuário"));
+}
+
+let legacyCache = new Map<string, CallableFunction>();
+
+async function transcribeLegacy(
+  pcm: Float32Array,
+  lang: string,
+  model: WhisperModelId,
+  onProgress: (p: WhisperProgress) => void,
+  maxWords: number
+): Promise<SubSegment[]> {
+  let asr: CallableFunction | null = null;
+  let lastErr: unknown = null;
+  for (const id of fallbackChain(model)) {
+    try {
+      const cached = legacyCache.get(id);
+      if (cached) {
+        asr = cached;
+        break;
+      }
+      const mod: any = await dynImport(TRANSFORMERS_URL);
+      const pipeline = mod.pipeline as (t: string, m: string, o?: unknown) => Promise<unknown>;
+      asr = (await pipeline("automatic-speech-recognition", id, {
+        dtype: "q8",
+        device: "wasm",
+        progress_callback: (p: any) => {
+          if (p?.status === "progress" && p.total) onProgress({ stage: "download", pct: p.loaded / p.total });
+          else if (p?.status === "ready" || p?.status === "done") onProgress({ stage: "prepare", pct: 1 });
+        },
+      })) as CallableFunction;
+      legacyCache.set(id, asr);
+      break;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (!asr) throw lastErr instanceof Error ? lastErr : new Error("Não consegui carregar o modelo de IA");
+  onProgress({ stage: "transcribe", pct: 0.2 });
+  const out: any = await asr(pcm, { language: lang, task: "transcribe", chunk_length_s: 30, stride_chunk_s: 5, return_timestamps: "word" });
+  const words = parseWords(out);
+  onProgress({ stage: "transcribe", pct: 0.98 });
+  if (words.length) return groupWords(words, Math.max(2, Math.min(6, maxWords)));
+  const out2: any = await asr(pcm, { language: lang, task: "transcribe", chunk_length_s: 30, stride_chunk_s: 5, return_timestamps: true });
+  const chunks: { text: string; timestamp: [number | null, number | null] }[] =
+    out2?.chunks && out2.chunks.length ? out2.chunks : out2?.text ? [{ text: out2.text, timestamp: [0, null] }] : [];
+  return polish(chunkToSegments(chunks));
 }
 
 /** Extrai PCM mono 16 kHz de um blob de áudio/vídeo. */
@@ -55,9 +191,13 @@ async function extractPcm16k(blob: Blob): Promise<Float32Array> {
 
 let pipelineCache = new Map<string, CallableFunction>();
 
-async function getAsr(modelId: string, onProgress: (p: WhisperProgress) => void): Promise<CallableFunction> {
+function getAsr(modelId: string, onProgress: (p: WhisperProgress) => void): Promise<CallableFunction> {
   const cached = pipelineCache.get(modelId);
-  if (cached) return cached;
+  if (cached) return Promise.resolve(cached);
+  return transcribeLegacyGetAsr(modelId, onProgress);
+}
+
+async function transcribeLegacyGetAsr(modelId: string, onProgress: (p: WhisperProgress) => void): Promise<CallableFunction> {
   const mod: any = await dynImport(TRANSFORMERS_URL);
   const pipeline = mod.pipeline as (t: string, m: string, o?: unknown) => Promise<unknown>;
   const opts = {
@@ -82,10 +222,67 @@ interface RawWord {
   e: number;
 }
 
+/** Transcreve num worker novo pra CADA modelo da cadeia (fallback: pedido → base → tiny). */
+async function transcribeInWorkerWithFallback(
+  pcm: Float32Array,
+  lang: string,
+  model: WhisperModelId,
+  onProgress: (p: WhisperProgress) => void,
+  maxWords: number
+): Promise<SubSegment[]> {
+  let lastErr: unknown = null;
+  for (const repoId of fallbackChain(model)) {
+    // pcm é TRANSFERIDO pro worker (neutroizado) — clona pra poder tentar de novo
+    const pass = pcm.slice();
+    try {
+      return await transcribeInWorkerOnce(pass, repoId, lang, onProgress, maxWords);
+    } catch (e) {
+      if (String((e as Error)?.message ?? "").includes("cancel")) throw e;
+      lastErr = e;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Não consegui carregar o modelo de IA");
+}
+
+async function transcribeInWorkerOnce(
+  pcm: Float32Array,
+  repoId: string,
+  lang: string,
+  onProgress: (p: WhisperProgress) => void,
+  maxWords: number
+): Promise<SubSegment[]> {
+  const blob = new Blob([WORKER_SRC], { type: "text/javascript" });
+  const url = URL.createObjectURL(blob);
+  const worker = new Worker(url, { type: "module" });
+  activeWorker = worker;
+  try {
+    const words = await new Promise<RawWord[]>((resolve, reject) => {
+      pendingCancel = reject; // o botão Cancelar dispara esta rejeição
+      worker.onmessage = (ev: MessageEvent) => {
+        const m = ev.data as { type: string; stage?: string; pct?: number; words?: RawWord[]; message?: string };
+        if (m.type === "stage" && m.stage) onProgress({ stage: m.stage, pct: m.pct ?? 0 });
+        else if (m.type === "done") resolve(m.words ?? []);
+        else if (m.type === "error") reject(new Error(m.message ?? "falha na transcrição"));
+      };
+      worker.onerror = (e) => reject(new Error(e.message || "o worker de IA não abriu"));
+      worker.postMessage({ type: "run", pcm, lang, model: repoId }, [pcm.buffer]);
+    });
+    onProgress({ stage: "transcribe", pct: 0.98 });
+    if (!words.length) return [];
+    return groupWords(words, Math.max(2, Math.min(6, maxWords)));
+  } finally {
+    pendingCancel = null;
+    worker.terminate();
+    URL.revokeObjectURL(url);
+    if (activeWorker === worker) activeWorker = null;
+  }
+}
+
 /**
  * Transcreve um blob de mídia e devolve segmentos com timestamps —
  * inclusive POR PALAVRA (usado pro karaokê da legenda).
- * maxWords: quantas palavras por caixa (2–4, anti-inundação de tela).
+ * v7: roda num Web Worker (a UI não trava, dá pra cancelar e o progresso
+ * é real, janela por janela). Se o worker não abrir, cai no caminho antigo.
  */
 export async function transcribe(
   mediaId: string,
@@ -100,50 +297,17 @@ export async function transcribe(
   const pcm = await extractPcm16k(blob);
   onProgress({ stage: "prepare", pct: 0.08 });
 
-  let asr: CallableFunction | null = null;
-  let lastErr: unknown = null;
-  for (const id of fallbackChain(model)) {
-    try {
-      asr = await getAsr(id, onProgress);
-      break;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  if (!asr) throw lastErr instanceof Error ? lastErr : new Error("Não consegui carregar o modelo de IA");
-
-  onProgress({ stage: "transcribe", pct: 0.1 });
-  let words: RawWord[] = [];
   try {
-    // 1ª tentativa: timestamps POR PALAVRA (karaokê)
-    const out: any = await asr(pcm, {
-      language: lang,
-      task: "transcribe",
-      chunk_length_s: 30,
-      stride_chunk_s: 5,
-      return_timestamps: "word",
-    });
-    words = parseWords(out);
-  } catch {
-    words = [];
+    const segs = await transcribeInWorkerWithFallback(pcm, lang, model, onProgress, maxWords);
+    if (segs.length) return segs;
+    // worker abriu mas não achou fala → tenta o caminho antigo por trechos
+    throw new Error("sem fala detectada");
+  } catch (err) {
+    const msg = String((err as Error)?.message ?? err);
+    if (msg.includes("cancel")) throw err;
+    // worker indisponível (bloqueado?) ou sem fala → caminho antigo na thread principal
+    return transcribeLegacy(pcm.slice(), lang, model, onProgress, maxWords);
   }
-  if (!words.length) {
-    // 2ª tentativa: timestamps por trecho (fallback antigo)
-    const out: any = await asr(pcm, {
-      language: lang,
-      task: "transcribe",
-      chunk_length_s: 30,
-      stride_chunk_s: 5,
-      return_timestamps: true,
-    });
-    const chunks: { text: string; timestamp: [number | null, number | null] }[] =
-      out?.chunks && out.chunks.length ? out.chunks : out?.text ? [{ text: out.text, timestamp: [0, null] }] : [];
-    const segs = chunkToSegments(chunks);
-    onProgress({ stage: "transcribe", pct: 0.98 });
-    return polish(segs);
-  }
-  onProgress({ stage: "transcribe", pct: 0.98 });
-  return groupWords(words, Math.max(2, Math.min(6, maxWords)));
 }
 
 function parseWords(out: any): RawWord[] {

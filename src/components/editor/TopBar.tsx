@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Zap, Undo2, Redo2, Settings, Settings2, Download, FilePlus2, House } from "lucide-react";
+import { Zap, Undo2, Redo2, Settings, Settings2, Download, FilePlus2, House, MessageSquareHeart } from "lucide-react";
 import { useProject } from "@/lib/editor/store";
 import { ASPECTS } from "@/lib/editor/types";
 import { exportFormatLabel } from "@/lib/editor/exporter";
 import { SettingsDialog } from "./SettingsDialog";
+import { FeedbackDialog } from "./FeedbackDialog";
+import { useT } from "@/lib/editor/i18n";
 
 export function TopBar({ onExport, onExit }: { onExport: () => void; onExit: () => void }) {
   const project = useProject((s) => s.project);
@@ -23,6 +25,8 @@ export function TopBar({ onExport, onExit }: { onExport: () => void; onExit: () 
   const canRedo = useProject((s) => s.future.length > 0);
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const t = useT();
 
   // a aba de IA pede pra abrir as configurações (falta de chave etc.)
   useEffect(() => {
@@ -163,10 +167,21 @@ export function TopBar({ onExport, onExit }: { onExport: () => void; onExit: () 
         <Button
           variant="ghost"
           size="icon"
+          className="h-8 w-8 text-zinc-400 hover:text-[#22C55E]"
+          onClick={() => setFeedbackOpen(true)}
+          aria-label={t("tb.feedback")}
+          title="Manda um feedback — vira issue no GitHub e eu leio tudo"
+        >
+          <MessageSquareHeart className="h-4 w-4" />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
           className="h-8 w-8 text-zinc-400 hover:text-zinc-200"
           onClick={() => setSettingsOpen(true)}
           aria-label="Configurações do aplicativo"
-          title="Configurações (atalhos, seta, chaves de API)"
+          title="Configurações (idioma, atalhos, seta, chaves de API)"
         >
           <Settings className="h-4 w-4" />
         </Button>
@@ -183,6 +198,7 @@ export function TopBar({ onExport, onExit }: { onExport: () => void; onExit: () 
         </Button>
       </div>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
     </header>
   );
 }

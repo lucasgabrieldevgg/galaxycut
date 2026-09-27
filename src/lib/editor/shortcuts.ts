@@ -32,11 +32,15 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: "redo", label: "Refazer", group: "Edição", def: "ctrl+shift+z" },
   { id: "save", label: "Salvar projeto agora", group: "Projeto", def: "ctrl+s" },
   // ---- referência (não rebindáveis) ----
-  { id: "dragPreview", label: "Arrastar clipe selecionado na tela", group: "Preview", def: "arrastar", fixed: true },
+  { id: "dragPreview", label: "Arrastar clipe selecionado na tela (mover)", group: "Preview", def: "arrastar", fixed: true },
+  { id: "scaleRotate", label: "Cantos da moldura na tela: tamanho · alça de cima: girar", group: "Preview", def: "arrastar", fixed: true },
   { id: "wheelZoom", label: "Zoom da timeline no ponteiro", group: "Timeline", def: "ctrl + roda", fixed: true },
   { id: "trim", label: "Arrastar a beirada do clipe (aparar)", group: "Timeline", def: "arrastar", fixed: true },
   { id: "dropMedia", label: "Arrastar mídia do painel pra timeline (com ímã no início)", group: "Timeline", def: "arrastar", fixed: true },
   { id: "contextMenu", label: "Menu de opções do clipe/faixa", group: "Timeline", def: "botão direito", fixed: true },
+  { id: "batchMode", label: "Modo seleção: duplo clique no clipe ativa; clique marca/desmarca", group: "Timeline", def: "duplo clique", fixed: true },
+  { id: "batchExit", label: "Sair do modo seleção (e desselecionar tudo)", group: "Timeline", def: "escape", fixed: true },
+  { id: "shiftFrames", label: "Shift + ← → : pula 10 quadros de uma vez", group: "Reprodução", def: "shift + setas", fixed: true },
 ];
 
 const LS_KEY = "galaxiacut_shortcuts_v1";

@@ -8,6 +8,9 @@ import { useProject, usePlayback, saveToStorage } from "@/lib/editor/store";
 import { engine } from "@/lib/editor/playback";
 import { actionForEvent } from "@/lib/editor/shortcuts";
 import { useSubtitleJob } from "@/lib/editor/subtitles";
+import { useSettings } from "@/lib/editor/settings";
+import { saveToDisk } from "@/lib/editor/diskProjects";
+import { isDesktopBuild } from "@/lib/editor/desktop";
 import { toast } from "sonner";
 import { Loader2, Maximize2 } from "lucide-react";
 import { TopBar } from "./TopBar";
@@ -23,7 +26,7 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
   const isMobile = useIsMobile();
   // o projeto (e as mídias do IndexedDB) já foi carregado pela home antes de chegar aqui
 
-  // autosave com debounce
+  // autosave com debounce (navegador/IndexedDB)
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const unsub = useProject.subscribe(() => {
@@ -36,6 +39,24 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
       saveToStorage();
     };
   }, []);
+
+  // autosave em DISCO (app de desktop): a cada N minutos (Configurações → Geral)
+  // + na saída/beforeunload — sobrevive a crash, energia caindo, o que for.
+  const autosaveMin = useSettings((s) => s.autosaveMin);
+  useEffect(() => {
+    if (!isDesktopBuild() || !autosaveMin) return;
+    const iv = setInterval(() => {
+      void saveToDisk(true);
+    }, autosaveMin * 60_000);
+    const onUnload = () => {
+      void saveToDisk(true);
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener("beforeunload", onUnload);
+    };
+  }, [autosaveMin]);
 
   // atalhos de teclado — EDITÁVEIS nas Configurações → Atalhos
   useEffect(() => {
@@ -120,6 +141,7 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
           engine.seek(pb.duration);
           break;
         case "escape":
+          if (st.batchMode) st.setBatchMode(false);
           st.deselectAll();
           break;
       }

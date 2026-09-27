@@ -18,10 +18,13 @@ import { ProjectCard } from "@/lib/editor/projects";
 import { useSettings } from "@/lib/editor/settings";
 import { checkForUpdate, startAutoCheck } from "@/lib/editor/updater";
 import { APP_VERSION } from "@/lib/editor/version";
-import { desktop } from "@/lib/editor/desktop";
+import { desktop, isDesktopBuild } from "@/lib/editor/desktop";
+import { deleteDiskProject } from "@/lib/editor/diskProjects";
+import { useT } from "@/lib/editor/i18n";
 import { SettingsDialog } from "./SettingsDialog";
 import { UpdateDialog, useUpdatePrompt } from "./UpdateDialog";
 import { FloatMenu, MenuItem } from "./ClipMenu";
+import { Star, MonitorDown } from "lucide-react";
 
 function fmtDur(d: number) {
   if (!d || d <= 0) return "—";
@@ -39,6 +42,7 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
   const [checking, setChecking] = useState(false);
   const autoUpdateCheck = useSettings((s) => s.autoUpdateCheck);
   const showUpdate = useUpdatePrompt((s) => s.show);
+  const t = useT();
   const editRef = useRef<HTMLInputElement>(null);
   const refresh = () => setCards(projects.listProjects());
 
@@ -148,8 +152,27 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
             onClick={onNew}
             className="mt-2 h-11 gap-2 rounded-xl bg-[#22C55E] px-6 text-[15px] font-bold text-black shadow-[0_0_24px_rgba(34,197,94,0.3)] transition hover:scale-[1.02] hover:bg-[#1ed467]"
           >
-            <Plus className="h-5 w-5" strokeWidth={2.5} /> Nova edição
+            <Plus className="h-5 w-5" strokeWidth={2.5} /> {t("home.newEdit")}
           </Button>
+
+          {/* no navegador: um convite pro app (legendas com IA + saves em disco) */}
+          {!isDesktopBuild() && (
+            <div className="mt-6 flex max-w-md flex-col items-center gap-2 rounded-2xl border border-[#22C55E]/25 bg-[#0c1017]/80 px-5 py-4 text-center sm:flex-row sm:text-left">
+              <MonitorDown className="h-8 w-8 shrink-0 text-[#22C55E]" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold text-zinc-200">{t("home.downloadApp")}</p>
+                <p className="text-[11px] leading-relaxed text-zinc-500">{t("home.downloadAppHint")}</p>
+              </div>
+              <a
+                href="https://github.com/lucasgabrieldevgg/galaxycut/releases/latest"
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 rounded-lg bg-[#22C55E] px-4 py-2 text-[12px] font-bold text-black transition hover:bg-[#1ed467]"
+              >
+                {t("home.download")}
+              </a>
+            </div>
+          )}
         </section>
 
         {/* grade de edições */}
@@ -265,17 +288,25 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
         )}
 
         {/* rodapé */}
-        <footer className="mt-14 flex flex-col items-center gap-2 border-t border-[#141a24] pt-6 text-center">
+        <footer className="mt-14 flex flex-col items-center gap-2.5 border-t border-[#141a24] pt-6 text-center">
           <button
             onClick={() => void manualCheck()}
             className="flex items-center gap-1.5 rounded-lg border border-[#232d3d] bg-[#0c1017] px-3 py-1.5 text-[11px] text-zinc-400 transition hover:border-[#22C55E]/40 hover:text-[#22C55E]"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${checking ? "animate-spin" : ""}`} />
-            {checking ? "Procurando…" : "Verificar atualizações"}
+            {checking ? t("home.checking") : t("home.checkUpdates")}
           </button>
-          <p className="text-[10px] text-zinc-600">
-            GalaxyCut v{APP_VERSION} · grátis e sem marca d&apos;água · feito pra quem cria vídeos de game
-          </p>
+          {/* um empurrãozinho de estrela — quem gosta, brilha */}
+          <a
+            href="https://github.com/lucasgabrieldevgg/galaxycut"
+            target="_blank"
+            rel="noreferrer"
+            className="group flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-1.5 text-[11px] text-amber-300/90 transition hover:border-amber-400/50 hover:text-amber-200"
+          >
+            <Star className="h-3.5 w-3.5 transition group-hover:fill-amber-300" />
+            {t("home.starNudge")}
+          </a>
+          <p className="text-[10px] text-zinc-600">{t("home.footer", { v: APP_VERSION })}</p>
         </footer>
       </main>
 

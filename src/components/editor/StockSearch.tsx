@@ -8,15 +8,15 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ImageIcon, Music2, Film, Loader2, Search, Plus, AudioLines, Music4, Video, Clock, Copyright, Play } from "lucide-react";
-import { useProject } from "@/lib/editor/store";
+import { ImageIcon, Music2, Film, Loader2, Search, Plus, AudioLines, Music4, Video, Clock, Copyright, Play, Smile } from "lucide-react";
+import { useProject, usePlayback } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
 import { registry } from "@/lib/editor/media";
 import { licenseLevel, LICENSE_STYLE } from "@/lib/editor/types";
 import { StockItem, downloadStockFile, resolveIaFile, searchStock } from "@/lib/editor/stockClient";
 import { useLibPlayer } from "@/lib/editor/libPlayer";
 
-type StockType = "image" | "video" | "music" | "sfx";
+type StockType = "image" | "video" | "music" | "sfx" | "sticker";
 type DurId = "any" | "short" | "mid" | "long" | "custom";
 
 const TYPE_TABS: { id: StockType; label: string; icon: typeof ImageIcon; ph: string }[] = [
@@ -24,6 +24,18 @@ const TYPE_TABS: { id: StockType; label: string; icon: typeof ImageIcon; ph: str
   { id: "video", label: "Vídeo", icon: Video, ph: "ex: gameplay minecraft" },
   { id: "music", label: "Música", icon: Music4, ph: "ex: épico tensão" },
   { id: "sfx", label: "Efeito", icon: AudioLines, ph: "ex: explosão whoosh" },
+  { id: "sticker", label: "Sticker", icon: Smile, ph: "" },
+];
+
+/** Stickers de emoji (100% offline — clica e entra na timeline como figurinha). */
+const STICKER_SETS: { name: string; emojis: string[] }[] = [
+  { name: "Caras", emojis: ["😀","😂","🤣","😍","😎","🥳","🤯","😭","😡","🤔","😴","🥺","😱","🤡","😈","🤠","😇","🤪"] },
+  { name: "Mãos", emojis: ["👍","👎","👏","🙌","🙏","💪","✌️","🤝","👌","🤟","👉","🖐️"] },
+  { name: "Corações", emojis: ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","💖","💘","💝","💔","❣️","💕"] },
+  { name: "Bichos", emojis: ["🐶","🐱","🦊","🐻","🐼","🐨","🦁","🐯","🐸","🐷","🦄","🐔","🐢","🦖","🐙","🦅"] },
+  { name: "Comidas", emojis: ["🍕","🍔","🍟","🌮","🍿","🍩","🍪","🎂","🍎","🍌","🍉","🍓"] },
+  { name: "Impacto", emojis: ["🔥","⭐","✨","💫","⚡","💯","🎉","🎊","🎮","🏆","👑","💰","💣","💀"] },
+  { name: "Sinais", emojis: ["➡️","⬅️","✅","❌","❓","❗","⚠️","🚫","🔍","🔖","📌","💬","👁️","🧠"] },
 ];
 
 /** Gêneros musicais estilo CapCut (os terms entram na busca). */
@@ -82,14 +94,14 @@ export function StockSearch() {
 
   async function search(e?: FormEvent) {
     e?.preventDefault();
-    if (!query.trim()) return;
+    if (!query.trim() || type === "sticker") return;
     setLoading(true);
     setTranslated(null);
     try {
       const keys = useSettings.getState().keys;
       const { results, translated: tr } = await searchStock({
         q: query,
-        type,
+        type: type as "video" | "image" | "music" | "sfx",
         dur,
         genre,
         ...(dur === "custom" ? { dmin: Math.max(0, Math.min(cmin, cmax)), dmax: Math.max(1, Math.max(cmin, cmax)) } : {}),
@@ -149,10 +161,28 @@ export function StockSearch() {
   }
 
   const activeTab = TYPE_TABS.find((t) => t.id === type)!;
+  const isSticker = type === "sticker";
+  const playhead = usePlayback((s) => s.playhead);
+
+  /** sticker de emoji: entra na faixa de texto como figurinha grande */
+  function addSticker(emoji: string) {
+    useProject.getState().addTextClip(playhead, {
+      content: emoji,
+      size: 200,
+      bold: false,
+      strokeW: 0,
+      shadow: false,
+      bg: "",
+      highlight: false,
+    });
+    toast.success(`${emoji} entrou na timeline!`, {
+      description: "Figurinha na faixa de texto — arraste na prévia pra posicionar, e os cantos mudam o tamanho.",
+    });
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2.5 timeline-scroll">
-      <div className="grid shrink-0 grid-cols-4 gap-1 rounded-lg bg-[#151b26] p-0.5">
+      <div className="grid shrink-0 grid-cols-5 gap-1 rounded-lg bg-[#151b26] p-0.5">
         {TYPE_TABS.map((t) => (
           <button
             key={t.id}
@@ -166,17 +196,47 @@ export function StockSearch() {
           </button>
         ))}
       </div>
-      <form onSubmit={(e) => { searchedRef.current = true; void search(e); }} className="flex shrink-0 gap-1.5">
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={activeTab.ph}
-          className="h-8 border-[#2a3546] bg-[#121722] text-xs text-zinc-200 placeholder:text-zinc-600"
-        />
-        <Button type="submit" size="icon" className="h-8 w-8 shrink-0 bg-[#22C55E] text-black hover:bg-[#1ed467]" aria-label="Buscar">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-        </Button>
-      </form>
+      {!isSticker && (
+        <form onSubmit={(e) => { searchedRef.current = true; void search(e); }} className="flex shrink-0 gap-1.5">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={activeTab.ph}
+            className="h-8 border-[#2a3546] bg-[#121722] text-xs text-zinc-200 placeholder:text-zinc-600"
+          />
+          <Button type="submit" size="icon" className="h-8 w-8 shrink-0 bg-[#22C55E] text-black hover:bg-[#1ed467]" aria-label="Buscar">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          </Button>
+        </form>
+      )}
+
+      {/* ---- stickers de emoji (offline, sem busca) ---- */}
+      {isSticker && (
+        <div className="min-h-0 flex-1 space-y-3">
+          <p className="rounded-lg border border-[#232d3d] bg-[#0e1320] p-2.5 text-[10px] leading-relaxed text-zinc-500">
+            Figurinhas de <b className="text-zinc-400">emoji</b> — clica numa e ela entra na timeline (faixa de texto).
+            Arraste na prévia pra posicionar e use os cantos pra mudar o tamanho.
+          </p>
+          {STICKER_SETS.map((set) => (
+            <div key={set.name}>
+              <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">{set.name}</p>
+              <div className="grid grid-cols-6 gap-1">
+                {set.emojis.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => addSticker(e)}
+                    className="flex aspect-square items-center justify-center rounded-lg border border-[#232d3d] bg-[#0e1320] text-xl transition hover:scale-110 hover:border-[#22C55E]/50 hover:bg-[#22C55E]/10"
+                    title={`Adicionar ${e}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* gêneros musicais (estilo CapCut) */}
       {showGenre && (

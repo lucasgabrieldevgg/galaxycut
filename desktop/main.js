@@ -244,6 +244,7 @@ function buildMenu() {
         submenu: [
           { label: "Página do projeto (GitHub)", click: () => shell.openExternal(GITHUB_RELEASES) },
           { label: "Pasta dos vídeos exportados", click: () => shell.openPath(exportDir()) },
+          { label: "Pasta dos projetos (saves)", click: () => shell.openPath(projectsRoot()) },
         ],
       },
     ])
@@ -309,6 +310,166 @@ if (!gotLock) {
 }
 
 // ---------- IPC ----------
+// ---------- pasta de projetos (persistência de verdade no desktop) ----------
+// Cada edição ganha uma pasta própria: ~/Documentos/GalaxyCut/Projetos/<nome>__<id>/
+//   projeto.json  — o snapshot completo (clipes, faixas, histórico de desfazer)
+//   autosave.json — o mesmo, sobrescrito a cada N minutos
+//   media/        — os arquivos de vídeo/áudio/imagem da edição
+// Se o app fechar na marra (crash), o autosave recupera tudo na próxima abertura.
+function projectsRoot() {
+  const docs = app.getPath("documents");
+  const base = path.join(docs && docs !== "." ? docs : app.getPath("home"), "GalaxyCut", "Projetos");
+  fs.mkdirSync(base, { recursive: true });
+  return base;
+}
+
+function sanitizeDirName(name) {
+  const clean = String(name || "edicao").replace(/[^\p{L}\p{N} _-]+/gu, "").replace(/\s+/g, "-").slice(0, 48);
+  return clean || "edicao";
+}
+
+function projectDir(id, name) {
+  // id sanitizado COMPLETO (mesma regra do load/list — sem truncar)
+  return path.join(projectsRoot(), `${sanitizeDirName(name)}__${safeProjectId(id)}`);
+}
+
+function safeProjectId(id) {
+  return String(id).replace(/[^a-zA-Z0-9-]/g, "").slice(0, 40);
+}
+
+/** lê o snapshot mais fresco de uma pasta (autosave mais novo que o save manual vence) */
+async function readSnapshot(dir) {
+  const files = ["projeto.json", "autosave.json"].map((f) => path.join(dir, f));
+  let best = null;
+  for (const f of files) {
+    try {
+      const st = await fsp.stat(f);
+      const raw = await fsp.readFile(f, "utf8");
+      const data = JSON.parse(raw);
+      if (!best || st.mtimeMs > best.mtime) best = { data, mtime: st.mtimeMs };
+    } catch {
+      /* arquivo não existe / inválido */
+    }
+  }
+  return best;
+}
+
+ipcMain.handle("project:prepare", async (_ev, id, name) => {
+  try {
+    const pid = safeProjectId(id);
+    const dir = projectDir(pid, name);
+    const mediaDir = path.join(dir, "media");
+    fs.mkdirSync(mediaDir, { recursive: true });
+    // ids de mídia já salvos em disco (o renderer só manda o que falta)
+    const saved = [];
+    for (const f of await fsp.readdir(mediaDir)) {
+      const m = /^([a-zA-Z0-9-]+)\.[a-z0-9]+$/i.exec(f);
+      if (m) saved.push(m[1]);
+    }
+    return { dir, savedMediaIds: saved };
+  } catch (e) {
+    log("project:prepare:", String(e));
+    throw new Error(String(e));
+  }
+});
+
+ipcMain.handle("project:save", async (_ev, payload) => {
+  try {
+    const pid = safeProjectId(payload.id);
+    const dir = projectDir(pid, payload.name);
+    const mediaDir = path.join(dir, "media");
+    fs.mkdirSync(mediaDir, { recursive: true });
+    // mídias novas (o renderer manda só as que faltam)
+    for (const m of payload.newMedia ?? []) {
+      const ext = String(m.ext || "bin").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "bin";
+      await fsp.writeFile(path.join(mediaDir, `${safeProjectId(m.id)}.${ext}`), Buffer.from(m.buffer));
+    }
+    // snapshot completo (com histórico de desfazer — Ctrl+Z sobrevive ao restart)
+    const file = payload.autosave ? path.join(dir, "autosave.json") : path.join(dir, "projeto.json");
+    await fsp.writeFile(file, JSON.stringify(payload.snapshot), "utf8");
+    log(`projeto salvo (${payload.autosave ? "autosave" : "manual"}):`, path.basename(dir));
+    return dir;
+  } catch (e) {
+    log("project:save:", String(e));
+    throw new Error(String(e));
+  }
+});
+
+ipcMain.handle("project:list", async () => {
+  const out = [];
+  try {
+    for (const entry of await fsp.readdir(projectsRoot(), { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const m = /^(.*)__([a-zA-Z0-9-]{1,40})$/.exec(entry.name);
+      const snap = await readSnapshot(path.join(projectsRoot(), entry.name));
+      if (!m || !snap) continue;
+      const s = snap.data || {};
+      out.push({
+        id: m[2],
+        name: (s.project && s.project.name) || m[1],
+        savedAt: snap.mtime,
+        duration: (s.clips || []).reduce((acc, c) => Math.max(acc, (c.start || 0) + (c.duration || 0)), 0),
+        clipCount: (s.clips || []).length,
+        hasAutosave: true,
+      });
+    }
+  } catch (e) {
+    log("project:list:", String(e));
+  }
+  return out;
+});
+
+ipcMain.handle("project:load", async (_ev, id) => {
+  try {
+    const pid = safeProjectId(id);
+    const root = projectsRoot();
+    for (const entry of await fsp.readdir(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.endsWith(`__${pid}`)) continue;
+      const dir = path.join(root, entry.name);
+      const snap = await readSnapshot(dir);
+      if (!snap) continue;
+      const media = [];
+      const mediaDir = path.join(dir, "media");
+      try {
+        for (const f of await fsp.readdir(mediaDir)) {
+          const m = /^([a-zA-Z0-9-]+)\.([a-z0-9]+)$/i.exec(f);
+          if (!m) continue;
+          const buf = await fsp.readFile(path.join(mediaDir, f));
+          media.push({ id: m[1], ext: m[2], buffer: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) });
+        }
+      } catch {
+        /* sem pasta media */
+      }
+      return { snapshot: snap.data, media };
+    }
+    return null;
+  } catch (e) {
+    log("project:load:", String(e));
+    return null;
+  }
+});
+
+ipcMain.handle("project:delete", async (_ev, id) => {
+  try {
+    const pid = safeProjectId(id);
+    const root = projectsRoot();
+    for (const entry of await fsp.readdir(root, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name.endsWith(`__${pid}`)) {
+        await fsp.rm(path.join(root, entry.name), { recursive: true, force: true });
+        log("projeto apagado do disco:", entry.name);
+      }
+    }
+    return true;
+  } catch (e) {
+    log("project:delete:", String(e));
+    return false;
+  }
+});
+
+ipcMain.handle("open-projects-folder", () => {
+  shell.openPath(projectsRoot());
+});
+
 ipcMain.handle("app-info", () => ({
   isDesktop: true,
   appVersion: APP_VERSION,
@@ -335,5 +496,5 @@ ipcMain.handle("show-in-folder", (_ev, p) => {
 });
 
 ipcMain.handle("open-external", (_ev, url) => {
-  if (typeof url === "string" && /^https:\/\/(github\.com|lucasgabrieldevgg\.github\.io)/.test(url)) shell.openExternal(url);
+  if (typeof url === "string" && /^https:\/\/(github\.com|galaxycut\.vercel\.app|lucasgabrieldevgg\.github\.io)/.test(url)) shell.openExternal(url);
 });

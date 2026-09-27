@@ -18,4 +18,17 @@ contextBridge.exposeInMainWorld("galaxyDesktop", {
     ipcRenderer.on("update-available", handler);
     return () => ipcRenderer.removeListener("update-available", handler);
   },
+  // ---- projetos em disco (pasta dedicada por edição + autosave) ----
+  /** cria/retorna a pasta do projeto + ids de mídia já salvos nela */
+  projectPrepare: (id, name) => ipcRenderer.invoke("project:prepare", id, name),
+  /** grava o snapshot (e as mídias novas) em projeto.json/autosave.json */
+  projectSave: (payload) => ipcRenderer.invoke("project:save", payload),
+  /** lista as edições salvas em disco (pra recuperar na abertura) */
+  projectList: () => ipcRenderer.invoke("project:list"),
+  /** lê a edição do disco (snapshot mais fresco + arquivos de mídia) */
+  projectLoad: (id) => ipcRenderer.invoke("project:load", id),
+  /** apaga a pasta da edição */
+  projectDelete: (id) => ipcRenderer.invoke("project:delete", id),
+  /** abre a pasta dos projetos no gerenciador de arquivos */
+  openProjectsFolder: () => ipcRenderer.invoke("open-projects-folder"),
 });

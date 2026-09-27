@@ -11,15 +11,26 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useProject } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
-import { transcribe, SubSegment, useSubtitleJob, WhisperProgress, WHISPER_MODELS, WhisperModelId } from "@/lib/editor/subtitles";
+import { transcribe, SubSegment, useSubtitleJob, WhisperProgress, WHISPER_MODELS, WhisperModelId, cancelTranscription } from "@/lib/editor/subtitles";
 import { CAPTION_PRESETS, CaptionPreset, makeClip, defaultTextProps } from "@/lib/editor/types";
+import { isDesktopBuild, desktop } from "@/lib/editor/desktop";
 import { toast } from "sonner";
-import { Sparkles, Loader2, CheckCircle2, TriangleAlert, Cpu, Palette, Layers, Minus } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, TriangleAlert, Cpu, Palette, Layers, Minus, Download, XCircle } from "lucide-react";
 
+// idiomas que o Whisper entende (a IA detecta na hora — mais idiomas chegando)
 const LANGS = [
   { v: "pt", label: "Português" },
-  { v: "en", label: "Inglês" },
-  { v: "es", label: "Espanhol" },
+  { v: "en", label: "English" },
+  { v: "es", label: "Español" },
+  { v: "fr", label: "Français" },
+  { v: "de", label: "Deutsch" },
+  { v: "it", label: "Italiano" },
+  { v: "ja", label: "日本語" },
+  { v: "ko", label: "한국어" },
+  { v: "ru", label: "Русский" },
+  { v: "id", label: "Indonesia" },
+  { v: "hi", label: "हिन्दी" },
+  { v: "tr", label: "Türkçe" },
 ];
 
 export function SubtitleDialog() {
@@ -46,6 +57,13 @@ export function SubtitleDialog() {
 
   async function generate() {
     if (!source?.mediaId) return;
+    // no navegador a IA local trava a aba — a função fica só no app baixado
+    if (!isDesktopBuild()) {
+      toast.info("Legendas automáticas só no app de desktop", {
+        description: "No navegador o modelo de IA congela a página. Baixe o app (grátis) — lá ele roda em 2º plano sem travar nada.",
+      });
+      return;
+    }
     job.start();
     try {
       const segs = await transcribe(source.mediaId!, lang, (p: WhisperProgress) => useSubtitleJob.getState().setProg(p), model, maxWords);
@@ -59,9 +77,9 @@ export function SubtitleDialog() {
         job.setOpen(false);
       }
     } catch (e) {
-      toast.error("Falha na transcrição", {
-        description: String((e as Error).message ?? e),
-      });
+      const msg = String((e as Error).message ?? e);
+      if (msg.includes("cancel")) toast.info("Transcrição cancelada");
+      else toast.error("Falha na transcrição", { description: msg });
     } finally {
       job.finish();
     }
@@ -105,8 +123,9 @@ export function SubtitleDialog() {
       ? "Baixando o modelo de IA (só na primeira vez)…"
       : job.stage === "prepare"
         ? "Preparando o áudio…"
-        : "Transcrevendo com IA local…";
+        : "Transcrevendo com IA local (sem travar nada)…";
   const modelInfo = WHISPER_MODELS.find((m) => m.id === model)!;
+  const onWeb = !isDesktopBuild();
 
   return (
     <Dialog
@@ -262,6 +281,28 @@ export function SubtitleDialog() {
             </p>
           )}
 
+          {/* no navegador: as legendas automáticas ficam só no app baixado */}
+          {onWeb && (
+            <div className="space-y-2 rounded-lg border border-[#22C55E]/40 bg-[#22C55E]/[0.07] p-3">
+              <p className="flex items-start gap-2 text-[11px] leading-relaxed text-[#86efac]">
+                <Download className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  <b>As legendas automáticas rodam só no app de desktop.</b> No navegador o modelo de IA congela a
+                  página inteira — no app ele roda em 2º plano, sem travar nada, e dá pra cancelar no meio.
+                </span>
+              </p>
+              <Button
+                onClick={() => window.open("https://github.com/lucasgabrieldevgg/galaxycut/releases/latest", "_blank", "noreferrer")}
+                className="w-full gap-1.5 bg-[#22C55E] font-semibold text-black hover:bg-[#1ed467]"
+              >
+                <Download className="h-4 w-4" /> Baixar o app (grátis, Linux e Windows)
+              </Button>
+              <p className="text-[10px] text-zinc-500">
+                As legendas MANUAIS (aba Texto) continuam funcionando normalmente no navegador.
+              </p>
+            </div>
+          )}
+
           {job.running && (
             <div className="space-y-2 rounded-lg border border-[#22C55E]/30 bg-[#22C55E]/5 p-3">
               <div className="flex items-center justify-between text-xs">
@@ -290,10 +331,27 @@ export function SubtitleDialog() {
           >
             {job.running ? "Minimizar" : "Cancelar"}
           </Button>
-          <Button onClick={() => void generate()} disabled={job.running || !source} className="gap-1.5 bg-[#22C55E] font-semibold text-black hover:bg-[#1ed467]">
-            {job.running ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            {job.running ? "Gerando…" : "Gerar legendas"}
-          </Button>
+          {job.running ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                cancelTranscription(); // mata o worker na hora
+              }}
+              className="gap-1.5 border-red-500/40 bg-transparent text-red-400 hover:bg-red-500/10"
+            >
+              <XCircle className="h-4 w-4" /> Cancelar transcrição
+            </Button>
+          ) : (
+            <Button
+              onClick={() => void generate()}
+              disabled={!source || onWeb}
+              title={onWeb ? "Disponível só no app de desktop — baixe aí em cima" : undefined}
+              className="gap-1.5 bg-[#22C55E] font-semibold text-black hover:bg-[#1ed467]"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Gerar legendas
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

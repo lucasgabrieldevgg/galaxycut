@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useProject, usePlayback } from "@/lib/editor/store";
 import { registry } from "@/lib/editor/media";
+import { isDesktopBuild } from "@/lib/editor/desktop";
 import { useSubtitleJob } from "@/lib/editor/subtitles";
 import { CAPTION_PRESETS, LICENSE_STYLE, licenseLevel, MediaMeta } from "@/lib/editor/types";
 import { gcDrag } from "@/lib/editor/dnd";
@@ -286,9 +287,19 @@ export function MediaPanel() {
               <Sparkles className="h-4 w-4 text-[#22C55E]" /> Legendas automáticas
             </Button>
             <p className="rounded-md border border-[#2a3546] bg-[#0e1320] p-2.5 text-[10px] leading-relaxed text-zinc-500">
-              A transcrição roda <b className="text-zinc-400">dentro do seu navegador</b> (Whisper local, nada sai do seu PC).
-              Você escolhe o estilo — as palavras <b className="text-[#FACC15]">pulsam</b> conforme são faladas.
-              Dá pra minimizar com <b className="text-zinc-400">−</b> e continuar editando enquanto gera.
+              {isDesktopBuild() ? (
+                <>
+                  A transcrição roda <b className="text-zinc-400">no seu próprio PC</b> (Whisper local, em 2º plano —
+                  nada trava, nada sai da sua máquina). As palavras <b className="text-[#FACC15]">pulsam</b> conforme
+                  são faladas, e dá pra cancelar no meio.
+                </>
+              ) : (
+                <>
+                  No navegador as legendas automáticas ficam <b className="text-zinc-400">só no app baixado</b> (a IA
+                  congela a página aqui) — as <b className="text-zinc-400">manuais</b> continuam normais. No app:
+                  Whisper local em 2º plano, sem travar nada.
+                </>
+              )}
             </p>
             <div className="mt-1 min-h-0 flex-1">
               <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Estilos de legenda</p>

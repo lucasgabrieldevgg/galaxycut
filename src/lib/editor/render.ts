@@ -12,6 +12,8 @@ export interface RenderAssets {
   getElement: (clipId: string) => HTMLVideoElement | HTMLAudioElement | HTMLImageElement | undefined;
   /** v5: estado da mídia do clipe — placeholder honesto em vez de "mídia não carregada" eterno */
   statusOf?: (clipId: string) => MediaStatus;
+  /** v7: quanto do arquivo já carregou (0..1) — o placeholder mostra a % */
+  progressOf?: (clipId: string) => number | null;
 }
 
 /** opções extras de camada (usadas pelas transições) */
@@ -226,7 +228,8 @@ function drawMediaLayer(
   const d = drawableSize(assets.getElement(c.id));
   if (!d) {
     // mídia ausente: só desenha o placeholder se for o clipe principal (não em transição)
-    if (opts.alpha >= 0.999) drawPlaceholder(ctx, W, H, c, assets.statusOf?.(c.id) ?? (c.mediaId ? "loading" : "missing"));
+    if (opts.alpha >= 0.999)
+      drawPlaceholder(ctx, W, H, c, assets.statusOf?.(c.id) ?? (c.mediaId ? "loading" : "missing"), assets.progressOf?.(c.id) ?? null);
     return;
   }
   const fade = opts.alpha >= 0.999 && opts.scaleMul === undefined && !opts.dx ? fadeEnvelope(c, t) : 1;
@@ -319,7 +322,7 @@ function drawTextTransition(
   }
 }
 
-function drawPlaceholder(ctx: CanvasRenderingContext2D, W: number, H: number, c: Clip, status: MediaStatus) {
+function drawPlaceholder(ctx: CanvasRenderingContext2D, W: number, H: number, c: Clip, status: MediaStatus, progress: number | null) {
   ctx.save();
   ctx.fillStyle = status === "loading" ? "#0d1117" : "#111827";
   ctx.fillRect(0, 0, W, H);
@@ -327,23 +330,50 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D, W: number, H: number, c:
   ctx.font = `${Math.round(H / 30)}px Arial, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  const loading = status === "loading";
+  const pct = loading && progress != null && progress > 0.001 ? Math.round(Math.min(0.99, progress) * 100) : null;
   const label =
     status === "error"
       ? "este arquivo não abre neste navegador"
-      : status === "loading"
-        ? "carregando a mídia…"
+      : loading
+        ? pct != null
+          ? `carregando a mídia… ${pct}%`
+          : "carregando a mídia…"
         : status === "missing"
           ? "mídia ausente — reimporte na aba Mídia"
           : c.mediaId
             ? "mídia não carregada"
             : "sem mídia";
   ctx.fillText(label, W / 2, H / 2);
-  if (status === "loading") {
+  if (loading) {
+    // barrinha de progresso (a % que falta pra carregar inteiro, na própria tela)
+    const bw = W * 0.4;
+    const bx = (W - bw) / 2;
+    const by = H / 2 + H / 22;
+    ctx.fillStyle = "#1c2430";
+    roundedBar(ctx, bx, by, bw, Math.max(3, H / 220));
+    ctx.fill();
+    if (pct != null) {
+      ctx.fillStyle = "#22C55E";
+      roundedBar(ctx, bx, by, (bw * Math.min(0.99, progress!)) , Math.max(3, H / 220));
+      ctx.fill();
+    }
     ctx.fillStyle = "#52525b";
     ctx.font = `${Math.round(H / 44)}px Arial, sans-serif`;
-    ctx.fillText("(arquivos grandes demoram um pouco na 1ª vez)", W / 2, H / 2 + H / 24);
+    ctx.fillText(pct != null ? `${pct}% carregado — o vídeo aparece sozinho` : "(arquivos grandes demoram um pouco na 1ª vez)", W / 2, by + H / 40);
   }
   ctx.restore();
+}
+
+function roundedBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const r = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
 // ---------- texto / legendas ----------

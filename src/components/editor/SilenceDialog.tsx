@@ -14,10 +14,11 @@ import { engine } from "@/lib/editor/playback";
 import { registry } from "@/lib/editor/media";
 import { fmtTime } from "@/lib/editor/types";
 import { detectSilence, SENSITIVITY_PRESETS, SilenceOptions, SilenceSpan } from "@/lib/editor/silence";
+import type { SilenceMode } from "@/lib/editor/store";
 import { toast } from "sonner";
-import { AudioLines, Loader2, Play, Scissors, Trash2, EyeOff, TriangleAlert, VolumeX, CheckSquare, Square, Eraser } from "lucide-react";
+import { AudioLines, Loader2, Play, Scissors, Trash2, EyeOff, TriangleAlert, VolumeX, CheckSquare, Square, Eraser, AudioLines as AudioLinesOff } from "lucide-react";
 
-type Mode = "both" | "audio" | "scene";
+ type Mode = SilenceMode;
 
 export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const clips = useProject((s) => s.clips);
@@ -84,16 +85,23 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     );
     engine.markDirty();
     const verb = mode === "both" ? "excluído(s)" : mode === "audio" ? "silenciado(s)" : "escondido(s)";
-    toast.success(`${checked.length} trecho(s) ${verb} em ${n} clipe(s) 🎬`, {
-      description:
-        mode === "both"
-          ? "Os clipes da frente NÃO se mexeram — use \"Fechar espaço\" no menu do clipe se quiser emendar."
-          : mode === "audio"
-            ? isVideo
-              ? "O vídeo continua passando, mas sem som nesses trechos. A Vassoura (barra da timeline) apaga os sem som de uma vez."
-              : "O tempo continua, mas esses trechos ficam sem som nenhum. A Vassoura (barra da timeline) apaga os sem som de uma vez."
-            : "A tela ficou preta nesses trechos, mas o áudio continua.",
-    });
+    toast.success(
+      mode === "delaudio"
+        ? `Áudios sem som excluídos (${checked.length} trecho(s) em ${n} clipe(s)) 🎬`
+        : `${checked.length} trecho(s) ${verb} em ${n} clipe(s) 🎬`,
+      {
+        description:
+          mode === "both"
+            ? "Os clipes da frente NÃO se mexeram — use \"Juntar\" na barra da timeline se quiser emendar."
+            : mode === "audio"
+              ? isVideo
+                ? "O vídeo continua passando, mas sem som nesses trechos. A Vassoura (barra da timeline) apaga os sem som de uma vez."
+                : "O tempo continua, mas esses trechos ficam sem som nenhum. A Vassoura (barra da timeline) apaga os sem som de uma vez."
+              : mode === "delaudio"
+                ? "Os vídeos continuam passando (sem som nos trechos) e TODO clipe de áudio sem som foi apagado."
+                : "A tela ficou preta nesses trechos, mas o áudio continua.",
+      }
+    );
     setSpans(null);
     onOpenChange(false);
   }
@@ -104,6 +112,12 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
       label: isVideo ? "Excluir cena + áudio" : "Excluir o trecho",
       hint: "o trecho some inteiro (cortado)",
       icon: <Trash2 className="h-3.5 w-3.5" />,
+    },
+    {
+      id: "delaudio",
+      label: "Excluir só o áudio",
+      hint: "vídeo continua passando; todo áudio sem som é apagado",
+      icon: <AudioLinesOff className="h-3.5 w-3.5 text-red-400" />,
     },
     {
       id: "audio",
@@ -266,7 +280,15 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                 {mode === "both" && (
                   <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">
                     ⚠️ Os clipes da frente <b className="text-zinc-400">NÃO se movem</b> pra preencher o buraco (como você
-                    pediu). Se quiser emendar, clique com o botão direito no clipe da frente → <b className="text-zinc-400">Fechar espaço com o de trás</b>.
+                    pediu). Se quiser emendar, use o botão <b className="text-zinc-400">Juntar</b> da barra da timeline.
+                  </p>
+                )}
+                {mode === "delaudio" && (
+                  <p className="mt-1.5 flex items-start gap-1.5 text-[10px] leading-relaxed text-zinc-500">
+                    <Eraser className="mt-0.5 h-3 w-3 shrink-0 text-red-400" />
+                    Nos <b className="text-zinc-400">vídeos</b> o trecho fica mudo (a cena continua); nos clipes de{" "}
+                    <b className="text-zinc-400">áudio puro</b> o trecho some — e a vassoura ainda leva qualquer outro áudio
+                    sem som que já existia no projeto.
                   </p>
                 )}
                 {mode === "audio" && (

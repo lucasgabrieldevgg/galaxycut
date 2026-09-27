@@ -1,7 +1,7 @@
 // GaláxiaCut — inspetor de propriedades do clipe selecionado
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -76,6 +76,95 @@ function Section({ title, children, onReset }: { title: string; children: ReactN
   );
 }
 
+/** caixa de número com setinhas: clicar soma/subtrai 1 passo; SEGURAR acelera sozinho */
+function NumStepper({
+  value, min, max, step, onChange, fmt,
+}: {
+  value: number; min: number; max: number; step: number; onChange: (v: number) => void; fmt?: (v: number) => string;
+}) {
+  const [text, setText] = useState<string | null>(null); // null = mostra o valor real
+  const clamp = (v: number) => Math.max(min, Math.min(max, v));
+
+  // valor atual sempre fresco (o "segurar" lê daqui)
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** 1 clique = 1 passo; segurando = repete e acelera (60ms no ritmo máximo) */
+  const press = (dir: 1 | -1) => {
+    useProject.getState().pushHistory();
+    onChange(clamp(Math.round((valueRef.current + dir * step) / step) * step));
+    let reps = 1;
+    let delay = 450;
+    const fire = () => {
+      const step2 = reps > 14 ? step * 5 : reps > 6 ? step * 2 : step; // acelera conforme segura
+      onChange(clamp(Math.round((valueRef.current + dir * step2) / step) * step));
+      reps++;
+      delay = Math.max(45, delay * 0.86);
+      timerRef.current = setTimeout(fire, delay);
+    };
+    timerRef.current = setTimeout(fire, 450);
+  };
+  const release = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+  };
+  useEffect(() => release, []);
+
+  const commitText = () => {
+    if (text == null) return;
+    const n = parseFloat(text.replace(",", "."));
+    if (isFinite(n)) onChange(clamp(n));
+    setText(null);
+  };
+
+  return (
+    <span className="flex items-stretch overflow-hidden rounded-md border border-[#2a3546] bg-[#0e1320]">
+      <input
+        value={text ?? (fmt ? fmt(value) : String(Math.round(value * 100) / 100))}
+        onChange={(e) => setText(e.target.value)}
+        onFocus={() => {
+          useProject.getState().pushHistory();
+          setText(String(Math.round(value * 100) / 100));
+        }}
+        onBlur={commitText}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            commitText();
+            (e.target as HTMLInputElement).blur();
+          }
+          if (e.key === "Escape") setText(null);
+          e.stopPropagation();
+        }}
+        inputMode="decimal"
+        className="w-14 bg-transparent px-1.5 py-0.5 text-right font-mono text-[10px] tabular-nums text-zinc-300 outline-none"
+        aria-label="valor"
+      />
+      <span className="flex flex-col border-l border-[#2a3546]">
+        {([1, -1] as const).map((dir) => (
+          <button
+            key={dir}
+            type="button"
+            aria-label={dir === 1 ? "aumentar" : "diminuir"}
+            title="Clique = 1 passo · segure = acelera"
+            className={`flex h-[13px] w-4 items-center justify-center text-zinc-500 transition select-none hover:bg-[#22C55E]/15 hover:text-[#22C55E] ${
+              dir === -1 ? "border-t border-[#2a3546]" : ""
+            }`}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              press(dir);
+            }}
+            onPointerUp={release}
+            onPointerLeave={release}
+          >
+            {dir === 1 ? <span className="text-[7px] leading-none">▲</span> : <span className="text-[7px] leading-none">▼</span>}
+          </button>
+        ))}
+      </span>
+    </span>
+  );
+}
+
 function SliderRow({
   label, value, min, max, step, onChange, fmt,
 }: {
@@ -84,9 +173,9 @@ function SliderRow({
 }) {
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between">
+      <div className="mb-1 flex items-center justify-between gap-2">
         <Label className="text-[11px] text-zinc-400">{label}</Label>
-        <span className="font-mono text-[10px] tabular-nums text-zinc-500">{fmt ? fmt(value) : Math.round(value * 100) / 100}</span>
+        <NumStepper value={value} min={min} max={max} step={step} onChange={onChange} fmt={fmt} />
       </div>
       <Slider
         value={[value]}

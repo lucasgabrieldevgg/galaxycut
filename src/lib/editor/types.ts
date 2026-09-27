@@ -160,6 +160,43 @@ export const ASPECTS: Record<string, { w: number; h: number; label: string }> = 
   "16:9": { w: 1920, h: 1080, label: "Horizontal (YouTube)" },
 };
 
+/** Todos os formatos de projeto disponíveis na criação (com quadradinho visual). */
+export interface AspectChoice {
+  key: string;
+  w: number;
+  h: number;
+  label: string;
+  hint: string;
+  main?: boolean; // aparece como "principal" na tela de novo projeto
+}
+
+export const ASPECT_CHOICES: AspectChoice[] = [
+  { key: "9:16", w: 1080, h: 1920, label: "9:16", hint: "Shorts · Reels · TikTok", main: true },
+  { key: "16:9", w: 1920, h: 1080, label: "16:9", hint: "YouTube · widescreen", main: true },
+  { key: "1:1", w: 1080, h: 1080, label: "1:1", hint: "Quadrado (feed)", main: true },
+  { key: "4:5", w: 1080, h: 1350, label: "4:5", hint: "Feed do Instagram" },
+  { key: "4:3", w: 1440, h: 1080, label: "4:3", hint: "Clássico / gameplay antigo" },
+  { key: "3:2", w: 1620, h: 1080, label: "3:2", hint: "Foto / documentary" },
+  { key: "21:9", w: 2560, h: 1080, label: "21:9", hint: "Cinema ultrawide" },
+  { key: "5:4", w: 1350, h: 1080, label: "5:4", hint: "Retrato suave" },
+];
+
+/** chave do ASPECTS que melhor casa com uma proporção w/h (ou null se nenhuma bate). */
+export function aspectKeyOf(w: number, h: number): string | null {
+  if (!w || !h) return null;
+  const r = w / h;
+  for (const [k, a] of Object.entries(ASPECTS)) {
+    if (Math.abs(r - a.w / a.h) < 0.02) return k;
+  }
+  return null;
+}
+
+/** diferença relativa entre duas proporções (0 = idênticas). */
+export function aspectDiff(w1: number, h1: number, w2: number, h2: number): number {
+  if (!w1 || !h1 || !w2 || !h2) return 0;
+  return Math.abs(w1 / h1 - w2 / h2) / Math.max(w1 / h1, w2 / h2);
+}
+
 /** Fontes que já vêm no sistema/Google Fonts — o preview mostra o jeitão real. */
 export const FONTS = [
   { value: "Impact, Haettenschweiler, 'Arial Black', sans-serif", label: "Impact (thumbnail)" },

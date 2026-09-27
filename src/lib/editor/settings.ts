@@ -25,6 +25,8 @@ export interface AppSettings {
   keys: { pexels: string; pixabay: string };
   /** verificador de atualização automático (mostra changelog quando sai versão nova) */
   autoUpdateCheck: boolean;
+  /** autosave em DISCO (app de desktop): intervalo em minutos (0 = desligado) */
+  autosaveMin: number;
   set: (patch: Partial<AppSettings>) => void;
 }
 
@@ -48,6 +50,7 @@ function load(): Partial<AppSettings> {
       captionPos: parsed.captionPos ?? { x: 0, y: 0.62 },
       keys: { pexels: "", pixabay: "", ...(parsed.keys ?? {}) },
       autoUpdateCheck: parsed.autoUpdateCheck ?? true,
+      autosaveMin: parsed.autosaveMin ?? 2,
     };
   } catch {
     return {};
@@ -68,6 +71,7 @@ function persist(s: AppSettings) {
         whisperModel: s.whisperModel,
         keys: s.keys,
         autoUpdateCheck: s.autoUpdateCheck,
+        autosaveMin: s.autosaveMin,
       })
     );
   } catch {
@@ -87,6 +91,7 @@ export const useSettings = create<AppSettings>((set, get) => ({
   whisperModel: "base",
   keys: { pexels: "", pixabay: "" },
   autoUpdateCheck: true,
+  autosaveMin: 2,
   ...boot,
   set: (patch) => {
     set(patch as AppSettings);

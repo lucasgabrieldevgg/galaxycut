@@ -67,11 +67,11 @@ interface ProjectState extends Snapshot {
    *  próprio, salvo no navegador) — aparece na aba Áudio e sobrevive ao F5. */
   extractAudio: (id: string) => Promise<Clip | null>;
   /** aplica os trechos sem som (tempo do ARQUIVO) em TODOS os clipes que usam essa mídia */
-  applySilenceToMany: (clipIds: string[], fileSpans: SilenceSpan[], mode: "both" | "audio" | "scene") => number;
+  applySilenceToMany: (clipIds: string[], fileSpans: SilenceSpan[], mode: SilenceMode) => number;
   /** vassoura: apaga de uma vez todos os clipes de áudio sem som (mutados/volume 0) */
   deleteSilentClips: () => number;
   /** aplica os trechos sem som: corta/muta/esconde (num clipe só — veja applySilenceToMany) */
-  applySilence: (clipId: string, ranges: { a: number; b: number }[], mode: "both" | "audio" | "scene") => void;
+  applySilence: (clipId: string, ranges: { a: number; b: number }[], mode: SilenceMode) => void;
   duplicateClip: (id: string) => void;
   splitAt: (t: number) => void;
   select: (id: string | null) => void;
@@ -82,6 +82,11 @@ interface ProjectState extends Snapshot {
   deselectAll: () => void;
   /** apaga todos os clipes da seleção múltipla (sem mexer nos da frente) */
   deleteSelected: () => number;
+  /** modo seleção (duplo clique): clicar nos clipes vai marcando/desmarcando */
+  batchMode: boolean;
+  setBatchMode: (v: boolean) => void;
+  /** fecha os espaços de TODAS as faixas de uma vez (efeito dominó) */
+  closeAllGaps: () => number;
   setTransition: (clipId: string, trans: Transition | undefined) => void;
   // área de transferência
   copyClip: (id: string) => void;
@@ -123,6 +128,9 @@ export function findFreeSlot(clips: Clip[], trackId: string, want: number, dur: 
   // faixa lotada (só com clipes coladíssimos) → fim da faixa
   return { start: cursor, moved: true };
 }
+
+/** modos do detector de silêncio */
+export type SilenceMode = "both" | "audio" | "scene" | "delaudio";
 
 /** Fatiamento do cortar-silêncio: devolve os pedaços que sobram do clipe
  *  depois de tratar os trechos marcados (excluir / mutar / esconder a cena). */
@@ -216,7 +224,24 @@ export const useProject = create<ProjectState>((set, get) => ({
       selectedIds: [],
     });
   },
-  loadSnapshot: (s) => set({ ...s, selectedId: null, selectedIds: [], past: [], future: [] }),
+  loadSnapshot: (s: {
+    project: ProjectMeta;
+    tracks: Track[];
+    clips: Clip[];
+    media: MediaMeta[];
+    /** histórico salvo em disco (desktop): restaura o Ctrl+Z depois de fechar o app */
+    past?: Snapshot[];
+    future?: Snapshot[];
+  }) => set({
+    project: s.project,
+    tracks: s.tracks,
+    clips: s.clips,
+    media: s.media,
+    selectedId: null,
+    selectedIds: [],
+    past: (s.past ?? []).slice(-30),
+    future: (s.future ?? []).slice(0, 30),
+  }),
 
   addMedia: (meta) => set((s) => ({ media: [...s.media, meta] })),
   updateMedia: (id, patch) => set((s) => ({ media: s.media.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
@@ -500,11 +525,17 @@ export const useProject = create<ProjectState>((set, get) => ({
         if (!live) continue;
         const ranges = spansToTimeline(fileSpans, live); // tempo do arquivo → tempo deste clipe
         if (!ranges.length) continue;
-        const pieces = buildSilencePieces(live, ranges, mode);
+        // "excluir só áudio": vídeo continua (mutado no trecho), áudio puro é CORTADO fora
+        const pieceMode = mode === "delaudio" ? (live.kind === "audio" ? "both" : "audio") : mode;
+        const pieces = buildSilencePieces(live, ranges, pieceMode);
         if (!pieces.length) continue;
         clips = [...clips.filter((c) => c.id !== live.id), ...pieces];
-        selIds.push(...pieces.map((p) => p.id));
+        selIds.push(...pieces.filter((p) => p.kind !== "audio" || !p.muted).map((p) => p.id));
         touched++;
+      }
+      // "excluir só áudio": a vassoura também leva os áudios sem som do projeto inteiro
+      if (mode === "delaudio") {
+        clips = clips.filter((c) => !(c.kind === "audio" && (c.muted || (c.volume ?? 1) <= 0.001)));
       }
       return {
         clips,
@@ -532,12 +563,15 @@ export const useProject = create<ProjectState>((set, get) => ({
     const s = get();
     const clip = s.clips.find((c) => c.id === clipId);
     if (!clip || !ranges.length) return;
-    const pieces = buildSilencePieces(clip, ranges, mode);
+    // "excluir só áudio": vídeo continua (mutado no trecho), áudio puro é CORTADO fora
+    const pieceMode = mode === "delaudio" ? (clip.kind === "audio" ? "both" : "audio") : mode;
+    const pieces = buildSilencePieces(clip, ranges, pieceMode);
+    const finalPieces = mode === "delaudio" ? pieces.filter((p) => p.kind !== "audio" || !p.muted) : pieces;
     get().pushHistory();
     set((st) => ({
-      clips: [...st.clips.filter((c) => c.id !== clipId), ...pieces],
-      selectedId: pieces[0]?.id ?? null,
-      selectedIds: pieces[0] ? [pieces[0].id] : [],
+      clips: [...st.clips.filter((c) => c.id !== clipId), ...finalPieces],
+      selectedId: finalPieces[0]?.id ?? null,
+      selectedIds: finalPieces[0] ? [finalPieces[0].id] : [],
     }));
   },
   duplicateClip: (id) => {
@@ -590,6 +624,31 @@ export const useProject = create<ProjectState>((set, get) => ({
       return { selectedIds: ids, selectedId: ids[ids.length - 1] ?? null };
     }),
   deselectAll: () => set({ selectedId: null, selectedIds: [] }),
+  batchMode: false,
+  setBatchMode: (v) => set({ batchMode: v }),
+  closeAllGaps: () => {
+    const s = get();
+    // emenda os clipes de cada faixa (domó), sem mexer em quem já tá colado
+    let moved = 0;
+    const starts = new Map<string, number>();
+    for (const tr of s.tracks) {
+      const onTrack = s.clips.filter((c) => c.trackId === tr.id).sort((a, b) => a.start - b.start);
+      let pos = 0;
+      for (const c of onTrack) {
+        if (Math.abs(c.start - pos) > 0.01) {
+          starts.set(c.id, pos);
+          moved++;
+        }
+        pos = pos + c.duration; // domino: o próximo encosta no fim deste
+      }
+    }
+    if (!moved) return 0;
+    get().pushHistory();
+    set((st) => ({
+      clips: st.clips.map((c) => (starts.has(c.id) ? { ...c, start: starts.get(c.id)! } : c)),
+    }));
+    return moved;
+  },
   setTransition: (clipId, trans) => {
     get().pushHistory();
     set((s) => ({

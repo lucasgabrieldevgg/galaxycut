@@ -20,10 +20,13 @@ import { CAPTION_PRESETS } from "@/lib/editor/types";
 import { WHISPER_MODELS } from "@/lib/editor/subtitles";
 import { APP_VERSION } from "@/lib/editor/version";
 import { checkForUpdate } from "@/lib/editor/updater";
+import { isDesktopBuild } from "@/lib/editor/desktop";
+import { LANGUAGES, useLang } from "@/lib/editor/i18n";
+import { useT } from "@/lib/editor/i18n";
 import { useUpdatePrompt } from "./UpdateDialog";
 import { toast } from "sonner";
 import {
-  Keyboard, SlidersHorizontal, KeyRound, ExternalLink, ArrowUpDown, Pencil, RotateCcw, RefreshCw,
+  Keyboard, SlidersHorizontal, KeyRound, ExternalLink, ArrowUpDown, Pencil, RotateCcw, RefreshCw, Languages, Save,
 } from "lucide-react";
 
 export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
@@ -56,6 +59,10 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <TabsContent value="geral" className="mt-3">
             <ScrollArea className="h-[52vh] pr-3">
               <div className="space-y-5">
+                <LanguageSection />
+
+                {isDesktopBuild() && <AutosaveSection />}
+
                 <div>
                   <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-zinc-300">
                     <ArrowUpDown className="h-3.5 w-3.5 text-amber-400" /> Movimento da seta do playhead
@@ -75,7 +82,9 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 </div>
 
                 <div>
-                  <p className="mb-1.5 text-xs font-medium text-zinc-300">Modelo das legendas automáticas (roda no seu PC)</p>
+                  <p className="mb-1.5 text-xs font-medium text-zinc-300">
+                    Modelo das legendas automáticas {isDesktopBuild() ? "(roda no seu PC, em 2º plano)" : "(só no app de desktop)"}
+                  </p>
                   <div className="grid grid-cols-3 gap-1.5">
                     {WHISPER_MODELS.map((m) => (
                       <WhisperBtn key={m.id} id={m.id} label={m.label} hint={m.hint} />
@@ -113,6 +122,72 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 }
 
 /** switches da aba Geral (componente pra re-renderizar sozinho) */
+
+/** idioma do app (português / english / español) */
+function LanguageSection() {
+  const t = useT();
+  const lang = useLang((s) => s.lang);
+  const setLang = useLang((s) => s.setLang);
+  return (
+    <div>
+      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-zinc-300">
+        <Languages className="h-3.5 w-3.5 text-sky-400" /> {t("st.language")}
+      </p>
+      <div className="grid grid-cols-3 gap-1.5">
+        {LANGUAGES.map((l) => (
+          <button
+            key={l.id}
+            onClick={() => setLang(l.id)}
+            className={`rounded-lg border p-2 text-center transition ${
+              lang === l.id ? "border-[#22C55E] bg-[#22C55E]/10" : "border-[#2a3546] hover:border-[#3a4759]"
+            }`}
+          >
+            <span className="block text-base leading-none">{l.flag}</span>
+            <span className={`mt-1 block text-[10px] font-medium ${lang === l.id ? "text-[#22C55E]" : "text-zinc-400"}`}>{l.label}</span>
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-[10px] text-zinc-600">{t("st.languageHint")}</p>
+    </div>
+  );
+}
+
+/** autosave em disco (app de desktop) — intervalo configurável */
+function AutosaveSection() {
+  const t = useT();
+  const autosaveMin = useSettings((s) => s.autosaveMin);
+  const set = useSettings((s) => s.set);
+  const opts: { v: number; label: string }[] = [
+    { v: 1, label: "1 min" },
+    { v: 2, label: "2 min" },
+    { v: 3, label: "3 min" },
+    { v: 5, label: "5 min" },
+    { v: 10, label: "10 min" },
+    { v: 0, label: "desligado" },
+  ];
+  return (
+    <div className="rounded-lg border border-[#2a3546] bg-[#0e1320] p-3">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-zinc-300">
+        <Save className="h-3.5 w-3.5 text-[#22C55E]" /> {t("st.autosave")}
+      </p>
+      <div className="grid grid-cols-6 gap-1">
+        {opts.map((o) => (
+          <button
+            key={o.v}
+            onClick={() => set({ autosaveMin: o.v })}
+            className={`rounded-md border px-1 py-1 text-[10px] transition ${
+              autosaveMin === o.v ? "border-[#22C55E] bg-[#22C55E]/10 text-[#22C55E]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">{t("st.autosaveHint")}</p>
+    </div>
+  );
+}
+
 function UpdateSection() {
   const auto = useSettings((s) => s.autoUpdateCheck);
   const set = useSettings((s) => s.set);

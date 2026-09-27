@@ -5,10 +5,11 @@
 // Nenhum pointerup do próprio clique de abertura pode fechá-lo.
 "use client";
 
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const MENU_W = 240; // largura máxima do menu (pro clamp lateral)
+const SUB_W = 190; // largura estimada do submenu
 
 export interface MenuItem {
   type?: "item" | "sep" | "submenu" | "info";
@@ -27,6 +28,9 @@ export function FloatMenu({ items, children }: { items: MenuItem[]; children: Re
   const [subOpen, setSubOpen] = useState<number>(-1);
   const hostRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const subRef = useRef<HTMLDivElement>(null);
+  /** ajuste do submenu: vira pra esquerda/rola quando não cabe na tela */
+  const [subAdj, setSubAdj] = useState<{ flip: boolean; maxH: number }>({ flip: false, maxH: 400 });
   const openedAt = useRef(0);
 
   // fecha e limpa
@@ -82,6 +86,20 @@ export function FloatMenu({ items, children }: { items: MenuItem[]; children: Re
       }
     : null;
 
+  // submenu aberto perto da borda? mede DEPOIS de pintar e ajusta:
+  // vira pra ESQUERDA quando não cabe à direita, e ganha altura máxima com
+  // rolagem quando é mais alto que a tela (fim do bug da "lista que some lá pra baixo")
+  useLayoutEffect(() => {
+    if (subOpen < 0 || !subRef.current || !menuRef.current) {
+      return;
+    }
+    const sub = subRef.current.getBoundingClientRect();
+    const menu = menuRef.current.getBoundingClientRect();
+    const flip = sub.right > window.innerWidth - 8 || menu.right + SUB_W > window.innerWidth - 8;
+    const maxH = Math.max(160, window.innerHeight - Math.max(8, sub.top) - 12);
+    setSubAdj({ flip, maxH });
+  }, [subOpen, pos]);
+
   return (
     <div ref={hostRef} className="contents">
       {children}
@@ -89,7 +107,7 @@ export function FloatMenu({ items, children }: { items: MenuItem[]; children: Re
         createPortal(
           <div
             ref={menuRef}
-            className="fixed z-[90] min-w-[218px] rounded-lg border border-[#232d3d] bg-[#121722] p-1 text-zinc-200 shadow-[0_12px_36px_rgba(0,0,0,0.55)]"
+            className="fixed z-[90] min-w-[218px] max-h-[calc(100vh-24px)] overflow-y-auto rounded-lg border border-[#232d3d] bg-[#121722] p-1 text-zinc-200 shadow-[0_12px_36px_rgba(0,0,0,0.55)]"
             style={{ left: clamped.x, top: clamped.y }}
             onContextMenu={(e) => e.preventDefault()}
           >
@@ -115,7 +133,13 @@ export function FloatMenu({ items, children }: { items: MenuItem[]; children: Re
                     <span className="text-zinc-600">›</span>
                   </button>
                   {subOpen === i && it.children?.length ? (
-                    <div className="absolute left-[calc(100%-4px)] top-0 z-[91] min-w-[170px] rounded-lg border border-[#232d3d] bg-[#121722] p-1 shadow-[0_12px_36px_rgba(0,0,0,0.55)]">
+                    <div
+                      ref={subRef}
+                      className={`absolute z-[91] min-w-[170px] overflow-y-auto rounded-lg border border-[#232d3d] bg-[#121722] p-1 shadow-[0_12px_36px_rgba(0,0,0,0.55)] ${
+                        subAdj.flip ? "right-[calc(100%-4px)]" : "left-[calc(100%-4px)]"
+                      } top-0`}
+                      style={{ maxHeight: subAdj.maxH }}
+                    >
                       {it.children.map((c, j) =>
                         c.type === "sep" ? (
                           <div key={j} className="my-1 h-px bg-[#232d3d]" />

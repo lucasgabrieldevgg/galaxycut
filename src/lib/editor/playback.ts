@@ -226,6 +226,36 @@ class PlaybackEngine {
     return "ok";
   }
 
+  /** Quanto do arquivo já foi carregado (0..1) — alimenta o “carregando… N%” do preview. */
+  loadProgress(clipId: string): number | null {
+    const key = this.bindings.get(clipId) ?? elKeyOf("video", "");
+    let el = this.elements.get(this.bindings.get(clipId) ?? "");
+    if (!el) {
+      const c = useProject.getState().clips.find((x) => x.id === clipId);
+      if (c?.mediaId) el = this.elements.get(elKeyOf(c.kind === "image" ? "image" : c.kind, c.mediaId));
+    }
+    void key;
+    if (!el) return null;
+    if (el instanceof HTMLVideoElement) {
+      if (!isFinite(el.duration) || el.duration <= 0) return null;
+      try {
+        return el.buffered.length ? Math.min(1, el.buffered.end(el.buffered.length - 1) / el.duration) : 0;
+      } catch {
+        return null;
+      }
+    }
+    if (el instanceof HTMLImageElement) return el.complete ? 1 : 0;
+    if (el instanceof HTMLAudioElement) {
+      if (!isFinite(el.duration) || el.duration <= 0) return null;
+      try {
+        return el.buffered.length ? Math.min(1, el.buffered.end(el.buffered.length - 1) / el.duration) : 0;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
   activeClips(t: number): Clip[] {
     const { clips } = useProject.getState();
     return clips.filter((c) => c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001);
@@ -369,6 +399,7 @@ class PlaybackEngine {
     drawFrame(ctx, project, tracks, clips, t, {
       getElement: (clipId) => this.elements.get(this.bindings.get(clipId) ?? ""),
       statusOf: (clipId) => this.statusOf(clipId),
+      progressOf: (clipId) => this.loadProgress(clipId),
     });
     ctx.restore();
   }
@@ -381,6 +412,7 @@ class PlaybackEngine {
     drawFrame(ctx, project, tracks, clips, t, {
       getElement: (clipId) => this.elements.get(this.bindings.get(clipId) ?? ""),
       statusOf: (clipId) => this.statusOf(clipId),
+      progressOf: (clipId) => this.loadProgress(clipId),
     });
     ctx.restore();
   }

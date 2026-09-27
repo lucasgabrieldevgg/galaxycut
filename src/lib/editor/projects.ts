@@ -80,7 +80,7 @@ export function listProjects(): ProjectCard[] {
   return [...list].sort((a, b) => b.savedAt - a.savedAt);
 }
 
-export function createProject(name?: string): ProjectCard {
+export function createProject(name?: string, fmt?: { w: number; h: number }): ProjectCard {
   const siblings = readIdx().length + 1;
   const card: ProjectCard = {
     id: uid(),
@@ -90,12 +90,12 @@ export function createProject(name?: string): ProjectCard {
     duration: 0,
     clipCount: 0,
   };
-  // snapshot vazio já nasce salvo
+  // snapshot vazio já nasce salvo (com o formato escolhido na criação)
   try {
     localStorage.setItem(
       pkey(card.id),
       JSON.stringify({
-        project: { name: card.name, width: 1080, height: 1920, fps: 30 },
+        project: { name: card.name, width: fmt?.w ?? 1080, height: fmt?.h ?? 1920, fps: 30 },
         tracks: defaultTracks(),
         clips: [],
         media: [],
@@ -106,6 +106,20 @@ export function createProject(name?: string): ProjectCard {
   }
   writeIdx([...readIdx(), card]);
   return card;
+}
+
+/** insere/atualiza o cartão do índice SEM mexer no snapshot (recuperação do disco) */
+export function upsertCard(card: ProjectCard) {
+  const list = readIdx();
+  const i = list.findIndex((c) => c.id === card.id);
+  if (i >= 0) list[i] = { ...list[i], ...card };
+  else list.push(card);
+  writeIdx(list);
+}
+
+/** quando a edição foi salva pela última vez (do índice local) */
+export function getSavedAt(id: string): number | null {
+  return readIdx().find((c) => c.id === id)?.savedAt ?? null;
 }
 
 function defaultTracks(): Track[] {

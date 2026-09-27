@@ -4,6 +4,28 @@
 
 import { downloadBlob } from "./exporter";
 
+export interface DesktopSavedMedia {
+  id: string;
+  ext: string;
+  buffer: ArrayBuffer;
+}
+
+export interface DesktopProjectCard {
+  id: string;
+  name: string;
+  savedAt: number;
+  duration: number;
+  clipCount: number;
+}
+
+export interface DesktopProjectSave {
+  id: string;
+  name: string;
+  snapshot: unknown;
+  newMedia: { id: string; ext: string; buffer: ArrayBuffer }[];
+  autosave?: boolean;
+}
+
 export interface DesktopApi {
   isDesktop: true;
   appVersion: string;
@@ -14,6 +36,13 @@ export interface DesktopApi {
   openExternal(url: string): void;
   showInFolder(path: string): void;
   onUpdateAvailable(cb: (info: { version: string; notes: string[]; url: string }) => void): void;
+  // ---- projetos em disco ----
+  projectPrepare(id: string, name: string): Promise<{ dir: string; savedMediaIds: string[] }>;
+  projectSave(payload: DesktopProjectSave): Promise<string>;
+  projectList(): Promise<DesktopProjectCard[]>;
+  projectLoad(id: string): Promise<{ snapshot: Record<string, unknown>; media: DesktopSavedMedia[] } | null>;
+  projectDelete(id: string): Promise<boolean>;
+  openProjectsFolder(): void;
 }
 
 export const desktop: DesktopApi | undefined =

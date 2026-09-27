@@ -15,16 +15,20 @@ import { useProject, usePlayback, findFreeSlot } from "@/lib/editor/store";
 import { useSettings, PLAYHEAD_MODES, PlayheadMode } from "@/lib/editor/settings";
 import { useComboLabel } from "@/lib/editor/shortcuts";
 import { engine } from "@/lib/editor/playback";
-import { Clip, Track, TRANSITIONS, TransitionType, clipEnd } from "@/lib/editor/types";
+import { Clip, Track, TRANSITIONS, TransitionType, aspectDiff, clipEnd } from "@/lib/editor/types";
 import { toast } from "sonner";
 import { registry } from "@/lib/editor/media";
 import { gcDrag } from "@/lib/editor/dnd";
 import { SilenceDialog } from "./SilenceDialog";
 import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Scissors, Copy, Trash2, Magnet, ZoomIn, ZoomOut, Maximize2,
   Eye, EyeOff, VolumeX, Volume2, Type as TypeIcon, Film, ImageIcon, Music2, TriangleAlert,
   ArrowUpDown, Plus, Scissors as ScissorsIcon, ClipboardPaste, AudioLines, ArrowRightFromLine,
   AudioWaveform, UnfoldHorizontal, ArrowLeftToLine, AudioLines as AudioLinesIcon, Wand2, Eraser,
+  Combine, ListChecks, X, MonitorPlay,
 } from "lucide-react";
 
 const HEADER_W = 128;
@@ -67,6 +71,11 @@ function startClipDrag(
   e.stopPropagation();
   // Ctrl+clique: liga/desliga da seleção múltipla (sem arrastar)
   if ((e.ctrlKey || e.metaKey) && mode === "move") {
+    useProject.getState().toggleSelect(clip.id);
+    return;
+  }
+  // MODO SELEÇÃO (duplo clique): clique simples marca/desmarca, sem arrastar
+  if (useProject.getState().batchMode && mode === "move") {
     useProject.getState().toggleSelect(clip.id);
     return;
   }
@@ -162,6 +171,12 @@ export function Timeline() {
   const [snapX, setSnapX] = useState<number | null>(null); // guia de encaixe (px)
   const [dropHint, setDropHint] = useState<{ t: number; trackId: string; occupied: boolean } | null>(null);
   const [silenceOpen, setSilenceOpen] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
+  /** proporção do vídeo difere da do projeto → pergunta se muda o formato */
+  const [askAspect, setAskAspect] = useState<{ w: number; h: number; name: string } | null>(null);
+  const batchMode = useProject((s) => s.batchMode);
+  /** mídias que já perguntaram sobre proporção nesta sessão (não enche o saco) */
+  const askedAspects = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
@@ -301,6 +316,16 @@ export function Timeline() {
       } else {
         toast.success(`Clipe em ${out.clip.start.toFixed(1)}s na faixa ${trackName}`);
       }
+      // vídeo/imagem de OUTRO formato que o do projeto → pergunta se muda (1× por mídia)
+      const meta = st.media.find((m) => m.id === mediaId);
+      if (
+        meta && (meta.kind === "video" || meta.kind === "image") && meta.width > 0 && meta.height > 0 &&
+        aspectDiff(meta.width, meta.height, st.project.width, st.project.height) > 0.08 &&
+        !askedAspects.current.has(mediaId)
+      ) {
+        askedAspects.current.add(mediaId);
+        setAskAspect({ w: meta.width, h: meta.height, name: meta.name });
+      }
     };
 
     // 1) mídia do painel
@@ -323,7 +348,19 @@ export function Timeline() {
           useProject.getState().addMedia(meta);
           const targetTrack = redirectTrack(meta.kind);
           const out = useProject.getState().dropMediaAt(meta.id, targetTrack, t + offset);
-          if (out) offset = Math.max(offset, out.clip.start + out.clip.duration - t);
+          if (out) {
+            offset = Math.max(offset, out.clip.start + out.clip.duration - t);
+            // arquivo do PC com proporção diferente → também pergunta
+            const proj = useProject.getState().project;
+            if (
+              (meta.kind === "video" || meta.kind === "image") && meta.width > 0 &&
+              aspectDiff(meta.width, meta.height, proj.width, proj.height) > 0.08 &&
+              !askedAspects.current.has(meta.id)
+            ) {
+              askedAspects.current.add(meta.id);
+              setAskAspect({ w: meta.width, h: meta.height, name: meta.name });
+            }
+          }
           ok++;
         } catch (err) {
           toast.error(`Não consegui importar "${f.name}"`, { description: String((err as Error).message ?? err) });
@@ -413,6 +450,17 @@ export function Timeline() {
             title={"Apaga de uma vez todos os clipes de áudio mutados/sem som (pedaços deixados pelo \u201csilenciar o trecho\u201d)"}
           >
             <Eraser className="h-3.5 w-3.5 text-amber-400" /> Vassoura{silentCount ? ` (${silentCount})` : ""}
+          </Button>
+          {/* juntar clipes: fecha os espaços (pergunta: todas as faixas ou uma) */}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!clips.length}
+            className="h-7 gap-1 px-2 text-xs text-zinc-300 hover:bg-[#1c2430]"
+            onClick={() => setJoinOpen(true)}
+            title="Encosta os clipes de uma faixa (ou de todas), fechando os espaços vazios"
+          >
+            <Combine className="h-3.5 w-3.5 text-sky-400" /> Juntar
           </Button>
           <div className="mx-1 h-4 w-px bg-[#1c2430]" />
           <Button
@@ -718,7 +766,145 @@ export function Timeline() {
         </div>
       )}
 
+      {/* barra flutuante do MODO SELEÇÃO (duplo clique num clipe) */}
+      {batchMode && (
+        <div className="absolute left-1/2 top-2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#22C55E]/50 bg-[#121722]/95 px-3 py-1.5 shadow-[0_0_20px_rgba(34,197,94,0.25)] backdrop-blur">
+          <ListChecks className="h-4 w-4 text-[#22C55E]" />
+          <span className="text-[11px] font-medium text-zinc-200">
+            Modo seleção · {selectedIds.length} marcado(s)
+          </span>
+          <Button
+            size="sm"
+            className="h-6 gap-1 rounded-full bg-red-500/90 px-2.5 text-[10px] font-semibold text-white hover:bg-red-500"
+            disabled={!selectedIds.length}
+            onClick={() => {
+              const st = useProject.getState();
+              const n = st.deleteSelected();
+              toast.info(`${n} clipe(s) apagado(s)`);
+              engine.markDirty();
+            }}
+          >
+            <Trash2 className="h-3 w-3" /> Apagar
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 gap-1 rounded-full border-[#2a3546] bg-transparent px-2.5 text-[10px] text-zinc-300 hover:bg-[#1c2430]"
+            onClick={() => {
+              useProject.getState().setBatchMode(false);
+              useProject.getState().deselectAll();
+            }}
+          >
+            <X className="h-3 w-3" /> Sair
+          </Button>
+        </div>
+      )}
+
       <SilenceDialog open={silenceOpen} onOpenChange={setSilenceOpen} />
+
+      {/* juntar clipes: todas as faixas ou uma específica */}
+      <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
+        <DialogContent className="max-w-sm border-[#232d3d] bg-[#121722] text-zinc-200">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Combine className="h-4 w-4 text-sky-400" /> Juntar clipes (fechar espaços)
+            </DialogTitle>
+            <DialogDescription className="text-zinc-500">
+              Encosta os clipes, tirando os espaços vazios entre eles. Em qual(is) faixa(s)?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-64 space-y-1.5 overflow-y-auto py-1">
+            <button
+              type="button"
+              onClick={() => {
+                const n = useProject.getState().closeAllGaps();
+                engine.markDirty();
+                setJoinOpen(false);
+                toast.success(n ? `${n} clipe(s) juntado(s) — todas as faixas emendadas` : "As faixas já estavam emendadas");
+              }}
+              className="flex w-full items-center gap-2 rounded-lg border border-[#22C55E]/40 bg-[#22C55E]/10 px-3 py-2.5 text-left transition hover:bg-[#22C55E]/20"
+            >
+              <UnfoldHorizontal className="h-4 w-4 text-[#22C55E]" />
+              <span>
+                <span className="block text-xs font-semibold text-[#22C55E]">Todas as faixas</span>
+                <span className="block text-[10px] text-zinc-500">dominó geral: cada clipe encosta no anterior</span>
+              </span>
+            </button>
+            {tracks.filter((tr) => clips.some((c) => c.trackId === tr.id)).map((tr) => (
+              <button
+                key={tr.id}
+                type="button"
+                onClick={() => {
+                  useProject.getState().closeTrackGaps(tr.id);
+                  engine.markDirty();
+                  setJoinOpen(false);
+                  toast.success(`Espaços de "${tr.name}" fechados`);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg border border-[#2a3546] px-3 py-2 text-left transition hover:border-[#3a4759]"
+              >
+                {tr.kind === "video" ? <Film className="h-4 w-4 text-emerald-400" /> : tr.kind === "audio" ? <AudioLines className="h-4 w-4 text-amber-400" /> : <TypeIcon className="h-4 w-4 text-zinc-400" />}
+                <span>
+                  <span className="block text-xs font-medium text-zinc-200">Só a faixa: {tr.name}</span>
+                  <span className="block text-[10px] text-zinc-500">{clips.filter((c) => c.trackId === tr.id).length} clipe(s)</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* formato do vídeo difere do projeto → oferece mudar */}
+      <Dialog open={!!askAspect} onOpenChange={(v) => !v && setAskAspect(null)}>
+        <DialogContent className="max-w-sm border-[#232d3d] bg-[#121722] text-zinc-200">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MonitorPlay className="h-4 w-4 text-[#22C55E]" /> Formato diferente do projeto
+            </DialogTitle>
+            <DialogDescription className="text-zinc-500">
+              {askAspect && (
+                <>
+                  “{askAspect.name}” é <b className="text-zinc-300">{askAspect.w}×{askAspect.h}</b> (
+                  {askAspect.w > askAspect.h ? "horizontal" : askAspect.w === askAspect.h ? "quadrado" : "vertical"}).
+                  Quer mudar o formato do projeto pra combinar com ele?
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2 py-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (!askAspect) return;
+                // redimensiona mantendo a QUALIDADE do projeto (menor lado atual)
+                const p = useProject.getState().project;
+                const vertical = askAspect.h > askAspect.w;
+                const short = Math.min(p.width, p.height);
+                useProject.getState().setProject({
+                  width: vertical ? short : Math.round(short * (askAspect.w / askAspect.h) / 2) * 2,
+                  height: vertical ? Math.round(short * (askAspect.h / askAspect.w) / 2) * 2 : short,
+                });
+                engine.markDirty();
+                setAskAspect(null);
+                toast.success("Formato do projeto atualizado ✨", { description: "Dá pra voltar no menu Projeto (Ctrl+Z também desfaz)." });
+              }}
+              className="rounded-lg border border-[#22C55E]/50 bg-[#22C55E]/10 px-3 py-2.5 text-xs font-semibold text-[#22C55E] transition hover:bg-[#22C55E]/20"
+            >
+              Mudar pra {askAspect ? `${askAspect.w}×${askAspect.h}` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAskAspect(null)}
+              className="rounded-lg border border-[#2a3546] px-3 py-2.5 text-xs text-zinc-300 transition hover:bg-[#1c2430]"
+            >
+              Manter o atual
+            </button>
+          </div>
+          <p className="text-[10px] leading-relaxed text-zinc-600">
+            Mantendo o atual, o vídeo é enquadrado no formato do projeto (com as bordas que sobrarem) — e você
+            pode ajustar a posição e o tamanho dele direto na tela de pré-visualização.
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -848,6 +1034,7 @@ interface ClipBlockProps {
 /** Clipe na timeline — memoizado: mexer UM clipe não re-renderiza todos os outros. */
 const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showWave, onDown }: ClipBlockProps) {
   const media = useProject((s) => s.media.find((m) => m.id === clip.mediaId));
+  const batchMode = useProject((s) => s.batchMode);
   const splitKey = useComboLabel("split");
   const delKey = useComboLabel("delete");
   const copyKey = useComboLabel("copy");
@@ -1027,10 +1214,27 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
     <FloatMenu items={items}>
       <div
         className={`group absolute bottom-1 top-1 overflow-hidden rounded-md border text-[10px] transition-shadow ${kindStyle} ${
-          selected ? "z-20 ring-2 ring-[#22C55E] shadow-[0_0_12px_rgba(34,197,94,0.35)]" : "hover:brightness-125"
+          selected
+            ? batchMode
+              ? "z-20 ring-2 ring-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.4)]"
+              : "z-20 ring-2 ring-[#22C55E] shadow-[0_0_12px_rgba(34,197,94,0.35)]"
+            : "hover:brightness-125"
         } ${missing ? "border-red-500/60" : ""}`}
         style={{ left, width: w }}
         onPointerDown={(e) => onDown(e, clip, "move")}
+        onDoubleClick={(e) => {
+          if (e.button !== 0) return;
+          const st = useProject.getState();
+          if (!st.batchMode) {
+            st.setBatchMode(true);
+            st.select(clip.id);
+            toast.info("Modo seleção ativado", {
+              description: "Clique nos clipes pra marcar/desmarcar e apague tudo de uma vez. Esc sai do modo.",
+            });
+          } else {
+            st.toggleSelect(clip.id);
+          }
+        }}
         role="button"
         tabIndex={0}
         aria-label={`Clipe ${clip.kind} de ${Math.round(clip.duration * 10) / 10}s`}

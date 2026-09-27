@@ -1,7 +1,35 @@
 {
   "name": "GalaxyCut",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "changelog": [
+    {
+      "version": "7.0.0",
+      "date": "2026-09-28",
+      "items": [
+        "App: seus projetos agora moram numa PASTA no disco (uma por edição, com os arquivos dentro) — nada mais some quando o app fecha",
+        "Autosave em disco configurável (1/2/3/5/10 min) e o Ctrl+Z sobrevive ao reinício",
+        "Legendas automáticas sem travar: a IA roda em 2º plano, com progresso real e botão de CANCELAR",
+        "Legendas automáticas em mais idiomas (francês, alemão, italiano, japonês, coreano, russo e outros)",
+        "No navegador, as legendas automáticas apontam pro app baixado (a IA congela a página web)",
+        "Edição visual na prévia estilo CapCut: arraste, mude o tamanho pelos cantos e GIRE pela alça",
+        "Números com setinhas (▲▼) em todos os ajustes — segure e ele acelera sozinho; sincronizado com as barras",
+        "Exportação reformulada: 240p até 8K, fps 24–60 e formatos MP4, WebM, GIF animado, WAV do áudio e PNG do quadro",
+        "Corrigido: exportação vertical em 1080p agora sai 1080×1920 DE VERDADE (antes saía 608×1080)",
+        "Nova edição começa escolhendo o FORMATO (com quadradinhos demonstrando) e título opcional",
+        "Vídeo de proporção diferente do projeto? O app pergunta se quer mudar o formato na hora",
+        "Carregando mídia agora mostra a PORCENTAGEM na própria tela (com barrinha), em vez de ficar piscando",
+        "Modo seleção: duplo clique no clipe ativa, clique marca quantos quiser e apaga tudo de uma vez",
+        "Botão JUNTAR clipes: fecha os espaços de uma faixa ou de todas de uma vez",
+        "Detector de silêncio: opção EXCLUIR SÓ O ÁUDIO (vídeo continua, todo áudio sem som é apagado)",
+        "Stickers de emoji na aba Busca (caras, corações, fogo, coroa e mais)",
+        "Botão de FEEDBACK no editor — vira issue no GitHub e chega direto",
+        "App em PORTUGUÊS, INGLÊS e ESPANHOL (seletor nas configurações)",
+        "Fix do menu do botão direito: a lista de transições não some mais pra fora da tela",
+        "Convite pra deixar uma ⭐ no GitHub pra quem gostou (home e pós-exportação)",
+        "No navegador, um cartão pra baixar o app de graça",
+        "Todos os atalhos listados nas Configurações → Atalhos (inclusive os novos)"
+      ]
+    },
     {
       "version": "6.0.0",
       "date": "2026-09-27",
@@ -41,5 +69,5 @@
       ]
     }
   ],
-  "date": "2026-09-27T05:50:45.182Z"
+  "date": "2026-09-27T17:25:39.779Z"
 }
