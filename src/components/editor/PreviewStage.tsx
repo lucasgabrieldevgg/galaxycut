@@ -25,8 +25,9 @@ import { useComboLabel } from "@/lib/editor/shortcuts";
 import { engine } from "@/lib/editor/playback";
 import { Clip, fmtTime } from "@/lib/editor/types";
 import { useT } from "@/lib/editor/i18n";
-import { Play, Pause, SkipBack, ChevronLeft, ChevronRight, Move, RotateCw, Magnet } from "lucide-react";
+import { Play, Pause, SkipBack, ChevronLeft, ChevronRight, Move, RotateCw, Magnet, Diamond } from "lucide-react";
 import { DbMeter } from "./DbMeter";
+import { toast } from "sonner";
 
 function TimeDisplay() {
   const playhead = usePlayback((s) => s.playhead);
@@ -184,6 +185,43 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
   useEffect(() => {
     if (canvasRef.current) engine.bind(canvasRef.current);
   }, []);
+
+  // Informações de Keyframes do clipe selecionado
+  const isInsideClip = !!selected && playhead >= selected.start - 0.001 && playhead <= selected.start + selected.duration + 0.001;
+  const tRel = selected ? Math.max(0, Math.min(selected.duration, playhead - selected.start)) : 0;
+  const kfs = (selected?.keyframes || []).slice().sort((a, b) => a.time - b.time);
+  const currentKf = selected ? kfs.find((k) => Math.abs(k.time - tRel) < 0.08) : null;
+  const prevKf = selected ? kfs.filter((k) => k.time < tRel - 0.08).pop() : null;
+  const nextKf = selected ? kfs.filter((k) => k.time > tRel + 0.08)[0] : null;
+
+  const jumpToKf = (time: number) => {
+    if (!selected) return;
+    usePlayback.getState().seek(selected.start + time);
+    engine.markDirty();
+  };
+
+  const toggleKeyframeAtPlayhead = () => {
+    if (!selected || !isInsideClip) {
+      toast.info("Posicione a agulha dentro do clipe para marcar o losango ◆");
+      return;
+    }
+    const addOrUpdateKeyframe = useProject.getState().addOrUpdateKeyframe;
+    const deleteKeyframe = useProject.getState().deleteKeyframe;
+    if (currentKf) {
+      deleteKeyframe(selected.id, currentKf.id);
+      toast.success("Losango ◆ removido neste ponto");
+    } else {
+      addOrUpdateKeyframe(selected.id, tRel, {
+        x: selected.x,
+        y: selected.y,
+        scale: selected.scale,
+        rotation: selected.rotation,
+        opacity: selected.opacity,
+      });
+      toast.success("Losango ◆ marcado! Mova a figura na tela para animar.");
+    }
+    engine.markDirty();
+  };
 
   // trocou a seleção pela timeline? o modo de edição aqui só liga clicando na
   // prévia (padrão React de ajustar state quando uma "prop" muda — sem effect)
@@ -346,6 +384,9 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
       if (!cur) return;
       const cX = b.left + (cx / project.width) * b.width;
       const cY = b.top + (cy / project.height) * b.height;
+      const curRel = Math.max(0, Math.min(cur.duration, playhead - cur.start));
+      const hasKfs = (cur.keyframes && cur.keyframes.length > 0);
+
       if (mode === "scale") {
         const d = Math.hypot(latest.clientX - cX, latest.clientY - cY);
         const ratio = d / startDist;
@@ -355,14 +396,22 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
           s.updateClip(selected.id, { text: { ...cur.text, size: next } }, { history: false });
         } else {
           const next = Math.max(0.1, Math.min(4, scale0 * ratio));
-          s.updateClip(selected.id, { scale: Math.round(next * 100) / 100 }, { history: false });
+          if (hasKfs) {
+            s.addOrUpdateKeyframe(cur.id, curRel, { scale: Math.round(next * 100) / 100 });
+          } else {
+            s.updateClip(selected.id, { scale: Math.round(next * 100) / 100 }, { history: false });
+          }
         }
       } else {
         const a = Math.atan2(latest.clientY - cY, latest.clientX - cX);
         let deg = rot0 + ((a - startAngle) * 180) / Math.PI;
         deg = ((Math.round(deg) % 360) + 360) % 360;
         if (deg > 180) deg -= 360;
-        s.updateClip(selected.id, { rotation: deg }, { history: false });
+        if (hasKfs) {
+          s.addOrUpdateKeyframe(cur.id, curRel, { rotation: deg });
+        } else {
+          s.updateClip(selected.id, { rotation: deg }, { history: false });
+        }
       }
       engine.markDirty();
     };
@@ -413,7 +462,13 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
         ? snapMove(clip, box, rawX, rawY)
         : { x: rawX, y: rawY, guides: NO_GUIDES };
       const st = useProject.getState();
-      st.updateClip(clip.id, { x: snap.x, y: snap.y }, { history: false });
+      const curRel = Math.max(0, Math.min(clip.duration, playhead - clip.start));
+      const hasKfs = (clip.keyframes && clip.keyframes.length > 0);
+      if (hasKfs) {
+        st.addOrUpdateKeyframe(clip.id, curRel, { x: snap.x, y: snap.y });
+      } else {
+        st.updateClip(clip.id, { x: snap.x, y: snap.y }, { history: false });
+      }
       setGuides(snap.guides);
       // legenda gerada e destravada: mexer numa mexe TODAS (posição global)
       if (clip.kind === "text" && clip.isCaption && !clip.posLock) {
@@ -627,6 +682,42 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
             <Magnet className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{t("pv.magnet")}</span>
           </button>
+        )}
+        {/* Controles rápidos de Keyframe (Losango ◆ estilo CapCut) */}
+        {selected && selected.kind !== "audio" && (
+          <div className="ml-1 flex items-center gap-0.5 rounded-md border border-[#2a3546] bg-[#121722] p-0.5" data-gc-keepedit>
+            <button
+              type="button"
+              onClick={() => prevKf && jumpToKf(prevKf.time)}
+              disabled={!prevKf}
+              className="flex h-6 w-5 items-center justify-center text-zinc-400 hover:text-amber-300 disabled:opacity-25 transition"
+              title="Losango anterior (◀◆)"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={toggleKeyframeAtPlayhead}
+              className={`flex h-6 items-center gap-1 rounded px-1.5 text-[10px] font-medium transition ${
+                currentKf
+                  ? "bg-amber-500 text-black shadow-[0_0_6px_rgba(245,158,11,0.5)] font-bold"
+                  : "text-zinc-400 hover:text-amber-300 hover:bg-amber-500/10"
+              }`}
+              title={currentKf ? "Remover Losango ◆ neste ponto" : "Marcar Losango ◆ de animação aqui"}
+            >
+              <Diamond className={`h-3 w-3 ${currentKf ? "fill-current" : ""}`} />
+              <span className="hidden sm:inline">{currentKf ? "◆ Ativo" : "+ ◆"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => nextKf && jumpToKf(nextKf.time)}
+              disabled={!nextKf}
+              className="flex h-6 w-5 items-center justify-center text-zinc-400 hover:text-amber-300 disabled:opacity-25 transition"
+              title="Próximo losango (◆▶)"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         )}
         <div className="ml-auto flex items-center gap-2">
           {/* medidor de áudio horizontal estilo OBS — som no ponto da seta, em decibéis */}

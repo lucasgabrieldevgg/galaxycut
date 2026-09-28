@@ -1,7 +1,32 @@
 {
   "name": "GalaxyCut",
-  "version": "7.5.0",
+  "version": "7.6.0",
   "changelog": [
+    {
+      "version": "7.6.0",
+      "date": "2026-09-28",
+      "items": [
+        "CAPCUT KEYFRAME SYSTEM (◆): Mark keyframe diamonds at timestamps to animate zoom, scale, position X/Y, rotation, and opacity directly on the preview or in the inspector with smooth easing curves (Ease In-Out, Linear, Spring, Bounce)",
+        "PRESET ANIMATIONS LIBRARY: 1-click animations for Entrance (Zoom In/Out, Slide, Spin 360°, Bounce, Flip 3D), Exit, and Combo/Loop (Pulse, Float, Shake, Swing, Heartbeat, Wave) with custom duration sliders",
+        "VISUAL EFFECTS ENGINE: 25+ real-time post-processing effects (Camera Shake, Glitch, VHS Retro Scanlines, RGB Split / Chromatic Aberration, Flash, Neon Glow, Vignette, Film Grain, Light Leak, Matrix, Teal & Orange, Cyberpunk, Tilt-Shift, Fisheye, Thermal, Emboss) with intensity and speed controls",
+        "INTERACTIVE PREVIEW KEYFRAMING: Dragging, zooming, or rotating elements on the canvas automatically records and interpolates keyframes in real-time",
+        "TIMELINE KEYFRAME MARKERS: Visual diamond markers (◆) and effect/animation badges directly on timeline clips"
+      ],
+      "items_pt": [
+        "SISTEMA DE KEYFRAMES CAPCUT (◆): Marque losangos na linha do tempo para animar zoom, escala, posição X/Y, rotação e opacidade diretamente na prévia ou no painel com curvas suaves (Ease In-Out, Linear, Mola Elástica, Pulo com Impacto)",
+        "BIBLIOTECA DE ANIMAÇÕES PRONTAS (1-CLIQUE): Animações de Entrada (Zoom In/Out, Deslizar, Giro 360°, Pulo, Giro 3D), Saída e Combo/Loop (Pulsar Batida, Flutuar, Vibração, Balanço, Batimento Cardíaco, Onda Senoidal) com barra de duração",
+        "MOTOR DE EFEITOS VISUAIS: Mais de 25 efeitos visuais profissionais (Tremor de Câmera, Glitch Digital, Fita VHS Anos 80, RGB Split / Aberração Cromática, Flash, Brilho Neon, Vinheta, Granulação de Cinema, Vazamento de Luz, Matrix, Teal & Orange, Cyberpunk, Tilt-Shift, Olho de Peixe, Visão Térmica, Relevo 3D) com controle de intensidade e velocidade",
+        "KEYFRAMES INTERATIVOS NA PRÉVIA: Mover, aproximar ou girar figuras na tela grava e interpola os movimentos automaticamente",
+        "MARCADORES VISUAIS NA TIMELINE: Losangos (◆) e selos de efeitos e animações exibidos diretamente nos blocos de clipe na timeline"
+      ],
+      "items_es": [
+        "SISTEMA DE KEYFRAMES CAPCUT (◆): Marca rombos en la línea de tiempo para animar zoom, escala, posición X/Y, rotación y opacidad en la pantalla o inspector con curvas suaves (Ease In-Out, Linear, Muelle, Rebote)",
+        "BIBLIOTECA DE ANIMACIONES LISTAS (1-CLIC): Animaciones de Entrada (Zoom In/Out, Deslizar, Giro 360°, Rebote, Giro 3D), Salida y Combo/Bucle (Pulsar Ritmo, Flotar, Vibración, Balanceo, Latido, Onda) con duración ajustable",
+        "MOTOR DE EFECTOS VISUALES: Más de 25 efectos visuales (Temblor de Cámara, Glitch, VHS Retro, RGB Split, Flash, Brillo Neón, Viñeta, Grano de Cine, Fugas de Luz, Matrix, Teal & Orange, Cyberpunk, Tilt-Shift, Ojo de Pez, Visión Térmica, Relieve 3D) con controles de intensidad y velocidad",
+        "KEYFRAMES INTERACTIVOS EN PREVIEW: Mover, acercar o rotar figuras en pantalla graba e interpola movimientos automáticamente",
+        "MARCADORES EN LA TIMELINE: Rombos (◆) e insignias de efectos y animaciones en los clips"
+      ]
+    },
     {
       "version": "7.5.0",
       "date": "2026-09-28",
@@ -330,5 +355,5 @@
       ]
     }
   ],
-  "date": "2026-09-28T19:58:14.182Z"
+  "date": "2026-09-28T20:25:35.129Z"
 }

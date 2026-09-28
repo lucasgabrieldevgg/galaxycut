@@ -63,6 +63,209 @@ export const TRANSITIONS: { type: TransitionType; label: string; icon: string }[
   { type: "blurIn", label: "Desfoque", icon: "≈" },
 ];
 
+// ---------- KEYFRAMES (CapCut Quadros-chave ◆) ----------
+export type KeyframeEasing = "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring" | "bounce";
+
+export interface Keyframe {
+  id: string;
+  time: number; // segundos relativos ao início do clipe (0..duration)
+  x?: number; // posição horizontal -1..1
+  y?: number; // posição vertical -1..1
+  scale?: number; // escala/zoom (0.1..4)
+  rotation?: number; // rotação em graus (-180..180)
+  opacity?: number; // opacidade 0..1
+  blur?: number; // desfoque px @1080
+  brightness?: number; // brilho
+  contrast?: number; // contraste
+  saturation?: number; // saturação
+  hue?: number; // matiz
+  easing?: KeyframeEasing;
+}
+
+// ---------- ANIMAÇÕES PRONTAS (CapCut Estilo 1-clique) ----------
+export type AnimationInType =
+  | "none"
+  | "zoomIn"
+  | "zoomOut"
+  | "slideLeft"
+  | "slideRight"
+  | "slideUp"
+  | "slideDown"
+  | "spinIn"
+  | "bounceIn"
+  | "fadeIn"
+  | "wipeRight"
+  | "dropIn"
+  | "popIn"
+  | "blurIn"
+  | "shakeIn"
+  | "flipInX"
+  | "flipInY";
+
+export type AnimationOutType =
+  | "none"
+  | "zoomOut"
+  | "slideLeft"
+  | "slideRight"
+  | "slideUp"
+  | "slideDown"
+  | "spinOut"
+  | "fadeOut"
+  | "sinkDown"
+  | "blurOut"
+  | "popOut";
+
+export type AnimationComboType =
+  | "none"
+  | "pulse"
+  | "float"
+  | "shake"
+  | "swing"
+  | "spin"
+  | "heartbeat"
+  | "glitchHop"
+  | "wave"
+  | "breathe"
+  | "pendulum";
+
+export interface ClipAnimation {
+  inType?: AnimationInType;
+  inDuration?: number; // segundos (ex: 0.5)
+  outType?: AnimationOutType;
+  outDuration?: number; // segundos (ex: 0.5)
+  comboType?: AnimationComboType;
+  comboSpeed?: number; // 0.5..2 (default 1)
+}
+
+export const ANIMATIONS_IN: { type: AnimationInType; label: string; icon: string }[] = [
+  { type: "none", label: "Nenhuma", icon: "∅" },
+  { type: "zoomIn", label: "Zoom Entrada", icon: "🔍" },
+  { type: "zoomOut", label: "Zoom Afastando", icon: "🔎" },
+  { type: "slideLeft", label: "Deslizar Esquerda", icon: "⬅️" },
+  { type: "slideRight", label: "Deslizar Direita", icon: "➡️" },
+  { type: "slideUp", label: "Subir", icon: "⬆️" },
+  { type: "slideDown", label: "Descer", icon: "⬇️" },
+  { type: "spinIn", label: "Giro 360°", icon: "🔄" },
+  { type: "bounceIn", label: "Pulo Elástico", icon: "⚡" },
+  { type: "fadeIn", label: "Fade Suave", icon: "✨" },
+  { type: "wipeRight", label: "Cortina", icon: "📑" },
+  { type: "dropIn", label: "Queda de Cima", icon: "🎯" },
+  { type: "popIn", label: "Pop / Impacto", icon: "💥" },
+  { type: "blurIn", label: "Foco Nítido", icon: "🌫️" },
+  { type: "shakeIn", label: "Entrada com Tremor", icon: "📳" },
+  { type: "flipInX", label: "Giro 3D Vertical", icon: "🔁" },
+  { type: "flipInY", label: "Giro 3D Horizontal", icon: "🔂" },
+];
+
+export const ANIMATIONS_OUT: { type: AnimationOutType; label: string; icon: string }[] = [
+  { type: "none", label: "Nenhuma", icon: "∅" },
+  { type: "zoomOut", label: "Zoom Saída", icon: "🔍" },
+  { type: "slideLeft", label: "Sair Esquerda", icon: "⬅️" },
+  { type: "slideRight", label: "Sair Direita", icon: "➡️" },
+  { type: "slideUp", label: "Subir Fora", icon: "⬆️" },
+  { type: "slideDown", label: "Descer Fora", icon: "⬇️" },
+  { type: "spinOut", label: "Giro Saída", icon: "🔄" },
+  { type: "fadeOut", label: "Fade Saída", icon: "✨" },
+  { type: "sinkDown", label: "Afundar", icon: "⚓" },
+  { type: "blurOut", label: "Desfoque Saída", icon: "🌫️" },
+  { type: "popOut", label: "Encolher Rápido", icon: "💥" },
+];
+
+export const ANIMATIONS_COMBO: { type: AnimationComboType; label: string; icon: string }[] = [
+  { type: "none", label: "Nenhum", icon: "∅" },
+  { type: "pulse", label: "Pulsar Batida", icon: "💓" },
+  { type: "float", label: "Flutuar Suave", icon: "🎈" },
+  { type: "shake", label: "Vibração Contínua", icon: "📳" },
+  { type: "swing", label: "Balanço Pêndulo", icon: "🔔" },
+  { type: "spin", label: "Giro Contínuo", icon: "🎡" },
+  { type: "heartbeat", label: "Batimento Cardíaco", icon: "❤️" },
+  { type: "glitchHop", label: "Glitch Pulando", icon: "👾" },
+  { type: "wave", label: "Onda Senoidal", icon: "🌊" },
+  { type: "breathe", label: "Respiração Zoom", icon: "🫁" },
+  { type: "pendulum", label: "Pêndulo Lateral", icon: "🕰️" },
+];
+
+// ---------- EFEITOS VISUAIS (Continuous Post-Processing Effects) ----------
+export type EffectType =
+  | "shake"
+  | "glitch"
+  | "chromatic"
+  | "vhs"
+  | "flash"
+  | "glow"
+  | "vignette"
+  | "radialBlur"
+  | "pixelate"
+  | "lightLeak"
+  | "wave"
+  | "fisheye"
+  | "thermal"
+  | "filmGrain"
+  | "neonEdge"
+  | "mirror"
+  | "tiltShift"
+  | "cyberpunk"
+  | "noir"
+  | "tealOrange"
+  | "goldenHour"
+  | "matrix"
+  | "invert"
+  | "duotone"
+  | "emboss";
+
+export interface ClipEffect {
+  id: string;
+  type: EffectType;
+  enabled: boolean;
+  intensity: number; // 0..2 (1 = padrão)
+  speed?: number; // 0.1..3 (1 = normal)
+  params?: Record<string, number | string | boolean>;
+}
+
+export interface EffectMeta {
+  type: EffectType;
+  name: string;
+  category: "motion" | "retro" | "light" | "stylize";
+  icon: string;
+  description: string;
+  defaultIntensity: number;
+}
+
+export const EFFECT_CATALOG: EffectMeta[] = [
+  // Impacto & Movimento
+  { type: "shake", name: "Tremor de Câmera", category: "motion", icon: "📳", description: "Vibração e solavancos para ação, batidas musicais e sustos", defaultIntensity: 1 },
+  { type: "glitch", name: "Glitch Digital", category: "motion", icon: "👾", description: "Distorção cibernética com cortes de linhas e interferência RGB", defaultIntensity: 1 },
+  { type: "chromatic", name: "RGB Split (Aberração)", category: "motion", icon: "🌈", description: "Separação estilizada de canais vermelho, verde e azul", defaultIntensity: 1 },
+  { type: "flash", name: "Flash Estroboscópico", category: "motion", icon: "⚡", description: "Clarões intensos periódicos para o ritmo das batidas", defaultIntensity: 1 },
+  { type: "radialBlur", name: "Desfoque de Impacto", category: "motion", icon: "💥", description: "Zoom radial explosivo do centro para fora", defaultIntensity: 1 },
+  { type: "wave", name: "Onda Líquida", category: "motion", icon: "🌊", description: "Distorção senoidal ondulada simulando água ou calor", defaultIntensity: 1 },
+
+  // Retrô & VHS
+  { type: "vhs", name: "Fita VHS / TV Antiga", category: "retro", icon: "📼", description: "Linhas de scanlines horizontais, ruído magnético e look vintage anos 80", defaultIntensity: 1 },
+  { type: "filmGrain", name: "Granulação de Cinema", category: "retro", icon: "🎞️", description: "Textura orgânica de película cinematográfica 35mm", defaultIntensity: 1 },
+  { type: "matrix", name: "Código Matrix", category: "retro", icon: "💻", description: "Tonalidade verde futurista com visual hacker", defaultIntensity: 1 },
+  { type: "pixelate", name: "Pixel Art / 8-Bit", category: "retro", icon: "🕹️", description: "Pixelização retrô estilo videogame arcade e censura", defaultIntensity: 1 },
+
+  // Luz & Brilho
+  { type: "glow", name: "Brilho Neon / Bloom", category: "light", icon: "✨", description: "Aura luminosa suave e difusa nas áreas claras da cena", defaultIntensity: 1 },
+  { type: "lightLeak", name: "Vazamento de Luz Solar", category: "light", icon: "☀️", description: "Feixes dourados e flares orgânicos de luz quente", defaultIntensity: 1 },
+  { type: "vignette", name: "Vinheta Escura", category: "light", icon: "🎯", description: "Escurecimento suave nas bordas para focar no centro da ação", defaultIntensity: 1 },
+  { type: "invert", name: "Negativo / Inversão", category: "light", icon: "🌓", description: "Inversão completa de cores para impacto visual ou pesadelo", defaultIntensity: 1 },
+
+  // Cinema & Estilização
+  { type: "tealOrange", name: "Teal & Orange", category: "stylize", icon: "🎬", description: "Color grading moderno de Hollywood (sombras ciano, tons quentes)", defaultIntensity: 1 },
+  { type: "cyberpunk", name: "Cyberpunk Neon", category: "stylize", icon: "🌆", description: "Contraste vibrante azul ciano e rosa magenta futurista", defaultIntensity: 1 },
+  { type: "goldenHour", name: "Golden Hour (Pôr do Sol)", category: "stylize", icon: "🌅", description: "Iluminação cinematográfica quente e tons dourados", defaultIntensity: 1 },
+  { type: "noir", name: "Preto & Branco Noir", category: "stylize", icon: "🎩", description: "Preto e branco dramático de alto contraste com pretos profundos", defaultIntensity: 1 },
+  { type: "duotone", name: "Duotone Pop", category: "stylize", icon: "🎨", description: "Bicolorização artística moderna de duas tonalidades", defaultIntensity: 1 },
+  { type: "neonEdge", name: "Contorno Neon / Cyber", category: "stylize", icon: "⚡", description: "Detecção de bordas brilhantes estilo raio-x futurista", defaultIntensity: 1 },
+  { type: "mirror", name: "Espelho Caledoscópio", category: "stylize", icon: "🪞", description: "Reflexão simétrica quádrupla hipnotizante", defaultIntensity: 1 },
+  { type: "tiltShift", name: "Miniatura Tilt-Shift", category: "stylize", icon: "📸", description: "Desfoque seletivo superior/inferior simulando mundo miniatura", defaultIntensity: 1 },
+  { type: "fisheye", name: "Lente Olho de Peixe", category: "stylize", icon: "🐟", description: "Curvatura convexa de lente ultra-angular estilo GoPro", defaultIntensity: 1 },
+  { type: "thermal", name: "Visão Térmica", category: "stylize", icon: "🌡️", description: "Mapa de calor infravermelho simulando câmera militar", defaultIntensity: 1 },
+  { type: "emboss", name: "Relevo 3D Metálico", category: "stylize", icon: "🗿", description: "Textura escultural em baixo-relevo de metal escovado", defaultIntensity: 1 },
+];
+
 export interface Clip {
   id: string;
   kind: ClipKind;
@@ -103,6 +306,9 @@ export interface Clip {
   enhance: boolean; // melhoria de áudio (highpass + compressor)
   transitionIn?: Transition; // transição na entrada (na junção com o clipe anterior da faixa)
   text?: TextProps;
+  keyframes?: Keyframe[]; // CapCut Keyframes (losangos ◆)
+  animation?: ClipAnimation; // Animações de Entrada / Saída / Combo
+  effects?: ClipEffect[]; // Efeitos Visuais Contínuos (Shake, Glitch, VHS, RGB, etc.)
 }
 
 export interface Track {
@@ -513,4 +719,412 @@ export function fmtSrtTime(t: number): string {
   const s = Math.floor(t % 60);
   const ms = Math.round((t % 1) * 1000);
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
+}
+
+// ============================================================================
+// MATEMÁTICA DE KEYFRAMES & ANIMAÇÕES (Curvas de interpolação & Easing)
+// ============================================================================
+
+export function applyEasing(p: number, easing?: KeyframeEasing): number {
+  const t = Math.max(0, Math.min(1, p));
+  switch (easing) {
+    case "linear":
+      return t;
+    case "easeIn":
+      return t * t * t;
+    case "easeOut":
+      return 1 - Math.pow(1 - t, 3);
+    case "easeInOut":
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    case "spring": {
+      const c4 = (2 * Math.PI) / 3;
+      return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+    }
+    case "bounce": {
+      const n1 = 7.5625;
+      const d1 = 2.75;
+      let cur = t;
+      if (cur < 1 / d1) return n1 * cur * cur;
+      if (cur < 2 / d1) return n1 * (cur -= 1.5 / d1) * cur + 0.75;
+      if (cur < 2.5 / d1) return n1 * (cur -= 2.25 / d1) * cur + 0.9375;
+      return n1 * (cur -= 2.625 / d1) * cur + 0.984375;
+    }
+    default:
+      // Padrão suave (easeInOut) estilo CapCut
+      return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  }
+}
+
+export function easeOutBack(x: number): number {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
+export function easeOutBounce(t: number): number {
+  return applyEasing(t, "bounce");
+}
+
+export function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+export function easeInCubic(t: number): number {
+  return t * t * t;
+}
+
+export interface EvaluatedTransform {
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+  opacity: number;
+  blur: number;
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  hue: number;
+  sepia: number;
+  grayscale: number;
+  // Modificadores adicionais de animações/efeitos
+  extraDx: number;
+  extraDy: number;
+  extraScale: number;
+  extraRot: number;
+  extraAlpha: number;
+  extraBlur: number;
+  shakeOffsetX: number;
+  shakeOffsetY: number;
+  shakeRot: number;
+  flashAlpha: number;
+}
+
+/**
+ * Avalia o estado exato de transformação e filtros de um clipe no tempo `t` da timeline.
+ * Combina:
+ * 1. Base values do Clip
+ * 2. Interpolação suave de Keyframes (losangos ◆) se existirem
+ * 3. Animações de Entrada / Saída / Combo estilo CapCut
+ * 4. Efeitos contínuos de movimento (Shake, Flash)
+ */
+export function evaluateClipState(c: Clip, t: number): EvaluatedTransform {
+  const tRel = Math.max(0, Math.min(c.duration, t - c.start));
+
+  let x = c.x;
+  let y = c.y;
+  let scale = c.scale;
+  let rotation = c.rotation;
+  let opacity = c.opacity;
+  let blur = c.blur;
+  let brightness = c.brightness;
+  let contrast = c.contrast;
+  let saturation = c.saturation;
+  let hue = c.hue;
+  const sepia = c.sepia;
+  const grayscale = c.grayscale;
+
+  // 1. Interpolação de Keyframes ◆
+  const kfs = (c.keyframes || []).slice().sort((a, b) => a.time - b.time);
+  if (kfs.length > 0) {
+    if (tRel <= kfs[0].time) {
+      // Antes do primeiro keyframe
+      const k = kfs[0];
+      if (k.x !== undefined) x = k.x;
+      if (k.y !== undefined) y = k.y;
+      if (k.scale !== undefined) scale = k.scale;
+      if (k.rotation !== undefined) rotation = k.rotation;
+      if (k.opacity !== undefined) opacity = k.opacity;
+      if (k.blur !== undefined) blur = k.blur;
+      if (k.brightness !== undefined) brightness = k.brightness;
+      if (k.contrast !== undefined) contrast = k.contrast;
+      if (k.saturation !== undefined) saturation = k.saturation;
+      if (k.hue !== undefined) hue = k.hue;
+    } else if (tRel >= kfs[kfs.length - 1].time) {
+      // Depois do último keyframe
+      const k = kfs[kfs.length - 1];
+      if (k.x !== undefined) x = k.x;
+      if (k.y !== undefined) y = k.y;
+      if (k.scale !== undefined) scale = k.scale;
+      if (k.rotation !== undefined) rotation = k.rotation;
+      if (k.opacity !== undefined) opacity = k.opacity;
+      if (k.blur !== undefined) blur = k.blur;
+      if (k.brightness !== undefined) brightness = k.brightness;
+      if (k.contrast !== undefined) contrast = k.contrast;
+      if (k.saturation !== undefined) saturation = k.saturation;
+      if (k.hue !== undefined) hue = k.hue;
+    } else {
+      // Entre dois keyframes: interpolação suave
+      let idx = 0;
+      for (let i = 0; i < kfs.length - 1; i++) {
+        if (tRel >= kfs[i].time && tRel <= kfs[i + 1].time) {
+          idx = i;
+          break;
+        }
+      }
+      const k0 = kfs[idx];
+      const k1 = kfs[idx + 1];
+      const dt = k1.time - k0.time;
+      const rawP = dt > 0.0001 ? (tRel - k0.time) / dt : 1;
+      const p = applyEasing(rawP, k0.easing || "easeInOut");
+
+      const k0x = k0.x !== undefined ? k0.x : c.x;
+      const k1x = k1.x !== undefined ? k1.x : c.x;
+      x = k0x + (k1x - k0x) * p;
+
+      const k0y = k0.y !== undefined ? k0.y : c.y;
+      const k1y = k1.y !== undefined ? k1.y : c.y;
+      y = k0y + (k1y - k0y) * p;
+
+      const k0s = k0.scale !== undefined ? k0.scale : c.scale;
+      const k1s = k1.scale !== undefined ? k1.scale : c.scale;
+      scale = k0s + (k1s - k0s) * p;
+
+      const k0r = k0.rotation !== undefined ? k0.rotation : c.rotation;
+      const k1r = k1.rotation !== undefined ? k1.rotation : c.rotation;
+      rotation = k0r + (k1r - k0r) * p;
+
+      const k0o = k0.opacity !== undefined ? k0.opacity : c.opacity;
+      const k1o = k1.opacity !== undefined ? k1.opacity : c.opacity;
+      opacity = k0o + (k1o - k0o) * p;
+
+      const k0b = k0.blur !== undefined ? k0.blur : c.blur;
+      const k1b = k1.blur !== undefined ? k1.blur : c.blur;
+      blur = k0b + (k1b - k0b) * p;
+
+      const k0br = k0.brightness !== undefined ? k0.brightness : c.brightness;
+      const k1br = k1.brightness !== undefined ? k1.brightness : c.brightness;
+      brightness = k0br + (k1br - k0br) * p;
+
+      const k0ct = k0.contrast !== undefined ? k0.contrast : c.contrast;
+      const k1ct = k1.contrast !== undefined ? k1.contrast : c.contrast;
+      contrast = k0ct + (k1ct - k0ct) * p;
+
+      const k0st = k0.saturation !== undefined ? k0.saturation : c.saturation;
+      const k1st = k1.saturation !== undefined ? k1.saturation : c.saturation;
+      saturation = k0st + (k1st - k0st) * p;
+
+      const k0h = k0.hue !== undefined ? k0.hue : c.hue;
+      const k1h = k1.hue !== undefined ? k1.hue : c.hue;
+      hue = k0h + (k1h - k0h) * p;
+    }
+  }
+
+  let extraDx = 0;
+  let extraDy = 0;
+  let extraScale = 1;
+  let extraRot = 0;
+  let extraAlpha = 1;
+  let extraBlur = 0;
+
+  // 2. Animação de Entrada (In)
+  const anim = c.animation;
+  if (anim?.inType && anim.inType !== "none") {
+    const inDur = Math.min(c.duration * 0.95, anim.inDuration ?? 0.5);
+    if (tRel < inDur && inDur > 0.001) {
+      const p = Math.max(0, Math.min(1, tRel / inDur));
+      switch (anim.inType) {
+        case "zoomIn":
+          extraScale *= 0.15 + 0.85 * easeOutBack(p);
+          extraAlpha *= Math.min(1, p * 2);
+          break;
+        case "zoomOut":
+          extraScale *= 1.8 - 0.8 * easeOutCubic(p);
+          extraAlpha *= Math.min(1, p * 2);
+          break;
+        case "slideLeft":
+          extraDx += (1 - easeOutCubic(p)) * 2;
+          break;
+        case "slideRight":
+          extraDx -= (1 - easeOutCubic(p)) * 2;
+          break;
+        case "slideUp":
+          extraDy += (1 - easeOutCubic(p)) * 2;
+          break;
+        case "slideDown":
+          extraDy -= (1 - easeOutCubic(p)) * 2;
+          break;
+        case "spinIn":
+          extraRot += (1 - easeOutCubic(p)) * 360;
+          extraScale *= p;
+          break;
+        case "bounceIn":
+          extraScale *= easeOutBounce(p);
+          break;
+        case "fadeIn":
+          extraAlpha *= applyEasing(p, "easeInOut");
+          break;
+        case "dropIn":
+          extraDy -= (1 - easeOutBounce(p)) * 2;
+          break;
+        case "popIn":
+          extraScale *= easeOutBack(p);
+          break;
+        case "blurIn":
+          extraBlur += (1 - p) * 20;
+          extraAlpha *= Math.min(1, p * 1.5);
+          break;
+        case "shakeIn":
+          extraDx += Math.sin(p * Math.PI * 8) * (1 - p) * 0.15;
+          extraScale *= 0.7 + 0.3 * p;
+          break;
+        case "flipInX":
+          extraScale *= Math.max(0.01, Math.sin(p * Math.PI * 0.5));
+          extraRot += (1 - p) * 90;
+          break;
+        case "flipInY":
+          extraScale *= Math.max(0.01, Math.sin(p * Math.PI * 0.5));
+          break;
+        case "wipeRight":
+          extraDx -= (1 - easeOutCubic(p)) * 1.5;
+          extraAlpha *= p;
+          break;
+      }
+    }
+  }
+
+  // 3. Animação de Saída (Out)
+  if (anim?.outType && anim.outType !== "none") {
+    const outDur = Math.min(c.duration * 0.95, anim.outDuration ?? 0.5);
+    const timeLeft = c.duration - tRel;
+    if (timeLeft < outDur && outDur > 0.001) {
+      const p = Math.max(0, Math.min(1, (outDur - timeLeft) / outDur)); // 0 no início da saída, 1 no final
+      switch (anim.outType) {
+        case "zoomOut":
+          extraScale *= Math.max(0.01, 1 - p * 0.85);
+          extraAlpha *= Math.max(0, 1 - p * 1.5);
+          break;
+        case "slideLeft":
+          extraDx -= easeInCubic(p) * 2;
+          break;
+        case "slideRight":
+          extraDx += easeInCubic(p) * 2;
+          break;
+        case "slideUp":
+          extraDy -= easeInCubic(p) * 2;
+          break;
+        case "slideDown":
+          extraDy += easeInCubic(p) * 2;
+          break;
+        case "spinOut":
+          extraRot += easeInCubic(p) * 360;
+          extraScale *= Math.max(0.01, 1 - p);
+          break;
+        case "fadeOut":
+          extraAlpha *= Math.max(0, 1 - p);
+          break;
+        case "sinkDown":
+          extraDy += easeInCubic(p) * 2;
+          extraAlpha *= Math.max(0, 1 - p);
+          break;
+        case "blurOut":
+          extraBlur += p * 24;
+          extraAlpha *= Math.max(0, 1 - p);
+          break;
+        case "popOut":
+          extraScale *= Math.max(0.01, 1 - p * 1.1);
+          break;
+      }
+    }
+  }
+
+  // 4. Animação Combo / Loop
+  if (anim?.comboType && anim.comboType !== "none") {
+    const spd = anim.comboSpeed ?? 1;
+    const phase = tRel * spd * Math.PI * 2;
+    switch (anim.comboType) {
+      case "pulse":
+        extraScale *= 1 + 0.09 * Math.sin(phase * 1.8);
+        break;
+      case "float":
+        extraDy += Math.sin(phase * 0.8) * 0.04;
+        extraDx += Math.cos(phase * 0.4) * 0.02;
+        break;
+      case "shake":
+        extraDx += Math.sin(phase * 8) * 0.025;
+        extraDy += Math.cos(phase * 9.5) * 0.025;
+        extraRot += Math.sin(phase * 7) * 1.8;
+        break;
+      case "swing":
+        extraRot += Math.sin(phase * 1.2) * 8;
+        break;
+      case "spin":
+        extraRot += (tRel * spd * 90) % 360;
+        break;
+      case "heartbeat": {
+        const hb = Math.sin(phase * 2);
+        extraScale *= 1 + (hb > 0.4 ? 0.12 * Math.sin((hb - 0.4) * Math.PI * 1.66) : 0);
+        break;
+      }
+      case "glitchHop": {
+        const step = Math.floor(tRel * spd * 6);
+        const rnd = Math.sin(step * 999);
+        if (rnd > 0.6) {
+          extraDx += (rnd - 0.6) * 0.15;
+          extraDy += Math.cos(step * 777) * 0.08;
+        }
+        break;
+      }
+      case "wave":
+        extraDy += Math.sin(phase * 1.5) * 0.05;
+        extraRot += Math.cos(phase * 1.2) * 3.5;
+        break;
+      case "breathe":
+        extraScale *= 1 + 0.06 * Math.sin(phase * 0.6);
+        break;
+      case "pendulum":
+        extraDx += Math.sin(phase) * 0.1;
+        extraRot += Math.sin(phase) * 6;
+        break;
+    }
+  }
+
+  // 5. Efeitos contínuos de movimento (Shake / Flash)
+  let shakeOffsetX = 0;
+  let shakeOffsetY = 0;
+  let shakeRot = 0;
+  let flashAlpha = 0;
+
+  const effects = c.effects || [];
+  for (const eff of effects) {
+    if (!eff.enabled) continue;
+    const intensity = eff.intensity ?? 1;
+    const spd = eff.speed ?? 1;
+    if (eff.type === "shake") {
+      const p1 = tRel * spd * 28;
+      const p2 = tRel * spd * 34;
+      shakeOffsetX += (Math.sin(p1) * 0.6 + Math.cos(p2 * 1.4) * 0.4) * 0.06 * intensity;
+      shakeOffsetY += (Math.cos(p1 * 1.2) * 0.6 + Math.sin(p2) * 0.4) * 0.06 * intensity;
+      shakeRot += (Math.sin(p1 * 0.8) * 3) * intensity;
+    } else if (eff.type === "flash") {
+      const fPhase = (tRel * spd * 2.5) % 1;
+      if (fPhase < 0.25) {
+        flashAlpha = Math.max(flashAlpha, Math.sin(fPhase * 4 * Math.PI * 0.5) * 0.8 * intensity);
+      }
+    }
+  }
+
+  return {
+    x,
+    y,
+    scale,
+    rotation,
+    opacity,
+    blur,
+    brightness,
+    contrast,
+    saturation,
+    hue,
+    sepia,
+    grayscale,
+    extraDx,
+    extraDy,
+    extraScale,
+    extraRot,
+    extraAlpha,
+    extraBlur,
+    shakeOffsetX,
+    shakeOffsetY,
+    shakeRot,
+    flashAlpha,
+  };
 }

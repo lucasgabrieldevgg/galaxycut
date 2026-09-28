@@ -105,6 +105,13 @@ interface ProjectState extends Snapshot {
   /** fecha os espaços de TODAS as faixas de uma vez (efeito dominó) */
   closeAllGaps: () => number;
   setTransition: (clipId: string, trans: Transition | undefined) => void;
+  // keyframes & animações & efeitos
+  addOrUpdateKeyframe: (clipId: string, time: number, props?: Partial<Keyframe>) => Keyframe;
+  deleteKeyframe: (clipId: string, keyframeId: string) => void;
+  setClipAnimation: (clipId: string, anim: ClipAnimation | undefined) => void;
+  addClipEffect: (clipId: string, effect: ClipEffect) => void;
+  updateClipEffect: (clipId: string, effectId: string, patch: Partial<ClipEffect>) => void;
+  removeClipEffect: (clipId: string, effectId: string) => void;
   // área de transferência
   copyClip: (id: string) => void;
   cutClip: (id: string) => void;
@@ -766,6 +773,91 @@ export const useProject = create<ProjectState>((set, get) => ({
     get().pushHistory();
     set((s) => ({
       clips: s.clips.map((c) => (c.id === clipId ? { ...c, transitionIn: trans } : c)),
+    }));
+  },
+  addOrUpdateKeyframe: (clipId, time, props) => {
+    get().pushHistory();
+    let createdKf: Keyframe | null = null;
+    set((s) => ({
+      clips: s.clips.map((c) => {
+        if (c.id !== clipId) return c;
+        const kfs = (c.keyframes || []).slice();
+        const existingIdx = kfs.findIndex((k) => Math.abs(k.time - time) < 0.05);
+        if (existingIdx >= 0) {
+          const updated = { ...kfs[existingIdx], ...props, time };
+          kfs[existingIdx] = updated;
+          createdKf = updated;
+        } else {
+          const newKf: Keyframe = {
+            id: uid(),
+            time,
+            x: props?.x ?? c.x,
+            y: props?.y ?? c.y,
+            scale: props?.scale ?? c.scale,
+            rotation: props?.rotation ?? c.rotation,
+            opacity: props?.opacity ?? c.opacity,
+            blur: props?.blur ?? c.blur,
+            brightness: props?.brightness ?? c.brightness,
+            contrast: props?.contrast ?? c.contrast,
+            saturation: props?.saturation ?? c.saturation,
+            hue: props?.hue ?? c.hue,
+            easing: props?.easing ?? "easeInOut",
+            ...props,
+          };
+          kfs.push(newKf);
+          createdKf = newKf;
+        }
+        kfs.sort((a, b) => a.time - b.time);
+        return { ...c, keyframes: kfs };
+      }),
+    }));
+    return createdKf!;
+  },
+  deleteKeyframe: (clipId, keyframeId) => {
+    get().pushHistory();
+    set((s) => ({
+      clips: s.clips.map((c) => {
+        if (c.id !== clipId) return c;
+        const kfs = (c.keyframes || []).filter((k) => k.id !== keyframeId);
+        return { ...c, keyframes: kfs.length ? kfs : undefined };
+      }),
+    }));
+  },
+  setClipAnimation: (clipId, anim) => {
+    get().pushHistory();
+    set((s) => ({
+      clips: s.clips.map((c) => (c.id === clipId ? { ...c, animation: anim } : c)),
+    }));
+  },
+  addClipEffect: (clipId, effect) => {
+    get().pushHistory();
+    set((s) => ({
+      clips: s.clips.map((c) => {
+        if (c.id !== clipId) return c;
+        const effs = (c.effects || []).slice();
+        effs.push(effect);
+        return { ...c, effects: effs };
+      }),
+    }));
+  },
+  updateClipEffect: (clipId, effectId, patch) => {
+    get().pushHistory();
+    set((s) => ({
+      clips: s.clips.map((c) => {
+        if (c.id !== clipId) return c;
+        const effs = (c.effects || []).map((e) => (e.id === effectId ? { ...e, ...patch } : e));
+        return { ...c, effects: effs };
+      }),
+    }));
+  },
+  removeClipEffect: (clipId, effectId) => {
+    get().pushHistory();
+    set((s) => ({
+      clips: s.clips.map((c) => {
+        if (c.id !== clipId) return c;
+        const effs = (c.effects || []).filter((e) => e.id !== effectId);
+        return { ...c, effects: effs.length ? effs : undefined };
+      }),
     }));
   },
   copyClip: (id) => {

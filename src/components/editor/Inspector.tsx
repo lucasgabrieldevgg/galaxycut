@@ -17,6 +17,9 @@ import { AlignLeft, AlignCenter, AlignRight, Bold, Italic, RotateCcw, Wand2, Arr
 import { engine } from "@/lib/editor/playback";
 import { toast } from "sonner";
 import { useT } from "@/lib/editor/i18n";
+import { KeyframeInspector } from "./KeyframeInspector";
+import { AnimationInspector } from "./AnimationInspector";
+import { EffectsInspector } from "./EffectsInspector";
 
 export function Inspector() {
   const t = useT();
@@ -473,6 +476,27 @@ function ClipInspector({ clip }: { clip: Clip }) {
             </>
           )}
         </Section>
+      )}
+
+      {/* ---------- KEYFRAMES (CapCut Quadros-chave ◆) ---------- */}
+      {clip.kind !== "audio" && (
+        <div className="mb-4">
+          <KeyframeInspector clip={clip} />
+        </div>
+      )}
+
+      {/* ---------- ANIMAÇÕES PRONTAS (CapCut Estilo 1-Clique) ---------- */}
+      {clip.kind !== "audio" && (
+        <div className="mb-4">
+          <AnimationInspector clip={clip} />
+        </div>
+      )}
+
+      {/* ---------- EFEITOS VISUAIS CONTÍNUOS ---------- */}
+      {clip.kind !== "audio" && (
+        <div className="mb-4">
+          <EffectsInspector clip={clip} />
+        </div>
       )}
 
       {/* ---------- TRANSIÇÃO (só visual: vídeo/imagem/texto — áudio usa FADE) ---------- */}

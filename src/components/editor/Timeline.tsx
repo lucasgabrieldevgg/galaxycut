@@ -1485,7 +1485,22 @@ function ClipContent({
         </span>
         <span className="ml-auto tabular-nums opacity-70">{(Math.round(clip.duration * 10) / 10).toFixed(1)}s</span>
         {clip.enhance && <Wand2 className="h-2.5 w-2.5 text-[var(--gc-accent)]" />}
-        {hasFx && (
+        {clip.keyframes && clip.keyframes.length > 0 && (
+          <span className="flex items-center gap-0.5 rounded-sm bg-amber-500/25 px-0.5 text-[8px] font-bold leading-none text-amber-300" title={`${clip.keyframes.length} losangos (keyframes ◆)`}>
+            <span className="text-[7px]">◆</span>{clip.keyframes.length}
+          </span>
+        )}
+        {clip.animation && (clip.animation.inType || clip.animation.outType || clip.animation.comboType) && (
+          <span className="flex items-center gap-0.5 rounded-sm bg-violet-500/25 px-0.5 text-[8px] font-bold leading-none text-violet-300" title="Animação ativa">
+            <Wand2 className="h-2 w-2" />anim
+          </span>
+        )}
+        {clip.effects && clip.effects.filter((e) => e.enabled).length > 0 && (
+          <span className="flex items-center gap-0.5 rounded-sm bg-emerald-500/25 px-0.5 text-[8px] font-bold leading-none text-emerald-300" title={`${clip.effects.filter((e) => e.enabled).length} efeitos visuais`}>
+            <Sparkles className="h-2 w-2" />{clip.effects.filter((e) => e.enabled).length}fx
+          </span>
+        )}
+        {hasFx && !clip.effects?.length && !clip.keyframes?.length && (
           <span className="flex items-center gap-0.5 rounded-sm bg-fuchsia-500/20 px-0.5 text-[8px] font-bold leading-none text-fuchsia-300" title={tr("tl.fxBadge")}>
             <Sparkles className="h-2 w-2" />fx
           </span>
@@ -1499,6 +1514,19 @@ function ClipContent({
         {clip.videoHidden && <EyeOff className="h-2.5 w-2.5 text-sky-400" />}
         {hasTrans && <ArrowRightFromLine className="h-2.5 w-2.5 text-fuchsia-400" />}
       </div>
+      {/* Marcadores visuais dos Losangos (Keyframes ◆) ao longo do clipe */}
+      {clip.keyframes && clip.keyframes.length > 0 && (
+        <div className="pointer-events-none absolute inset-x-0 top-1 z-10">
+          {clip.keyframes.map((k) => (
+            <div
+              key={k.id}
+              className="absolute top-0 h-2 w-2 -translate-x-1/2 rotate-45 border border-amber-300 bg-amber-400 shadow-[0_0_4px_#f59e0b]"
+              style={{ left: `${(k.time / clip.duration) * 100}%` }}
+              title={`Losango ◆ aos ${k.time.toFixed(2)}s`}
+            />
+          ))}
+        </div>
+      )}
       {clip.fadeIn > 0 && <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-white/25 to-transparent" style={{ width: clip.fadeIn * zoom }} />}
       {clip.fadeOut > 0 && <div className="absolute inset-y-0 right-0 bg-gradient-to-l from-white/25 to-transparent" style={{ width: clip.fadeOut * zoom }} />}
       {missing && <TriangleAlert className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-red-400" />}

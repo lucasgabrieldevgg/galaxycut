@@ -17,14 +17,30 @@ import { useProject, usePlayback } from "@/lib/editor/store";
 import { registry } from "@/lib/editor/media";
 import { isDesktopBuild } from "@/lib/editor/desktop";
 import { useSubtitleJob } from "@/lib/editor/subtitles";
-import { CAPTION_PRESETS, LICENSE_STYLE, licenseLevel, MediaFolder, MediaMeta } from "@/lib/editor/types";
+import {
+  CAPTION_PRESETS,
+  LICENSE_STYLE,
+  licenseLevel,
+  MediaFolder,
+  MediaMeta,
+  EFFECT_CATALOG,
+  EffectMeta,
+  ANIMATIONS_IN,
+  ANIMATIONS_OUT,
+  ANIMATIONS_COMBO,
+  AnimationInType,
+  AnimationOutType,
+  AnimationComboType,
+  ClipEffect,
+  uid,
+} from "@/lib/editor/types";
 import { gcDrag } from "@/lib/editor/dnd";
 import { useLibPlayer } from "@/lib/editor/libPlayer";
 import { toast } from "sonner";
 import {
   Upload, FolderOpen, FolderPlus, Folder, ChevronRight, ArrowLeft, Trash2, Plus, Type, Sparkles,
   Search, Film, ImageIcon, Music2, FileWarning, Loader2, PlusCircle, Mic, Play as PlayIcon,
-  Scissors, Copy, ClipboardPaste, MoreVertical, Pencil, Check, X,
+  Scissors, Copy, ClipboardPaste, MoreVertical, Pencil, Check, X, Wand2,
 } from "lucide-react";
 import { SubtitleDialog } from "./SubtitleDialog";
 import { StockSearch } from "./StockSearch";
@@ -88,9 +104,62 @@ export function MediaPanel() {
   const [selMedia, setSelMedia] = useState<string | null>(null);
   /** filtro da aba Mídia: tudo/vídeos/áudios/imagens */
   const [kindFilter, setKindFilter] = useState<"all" | "video" | "audio" | "image">("all");
+  const [effectSearch, setEffectSearch] = useState("");
+  const [effectCategory, setEffectCategory] = useState<"all" | "motion" | "retro" | "light" | "stylize">("all");
   const [recordOpen, setRecordOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
+
+  const applyEffectToSelection = (meta: EffectMeta) => {
+    const st = useProject.getState();
+    const selId = st.selectedId;
+    let target = st.clips.find((c) => c.id === selId);
+    if (!target || target.kind === "audio") {
+      const pb = usePlayback.getState().playhead;
+      target = st.clips.find(
+        (c) => c.start <= pb + 0.001 && c.start + c.duration > pb - 0.001 && c.kind !== "audio"
+      );
+    }
+    if (!target) {
+      toast.info("Selecione um clipe de vídeo, imagem ou texto na linha do tempo.");
+      return;
+    }
+    st.addClipEffect(target.id, {
+      id: uid(),
+      type: meta.type,
+      enabled: true,
+      intensity: meta.defaultIntensity,
+      speed: 1,
+    });
+    engine.markDirty();
+    toast.success(`Efeito "${meta.name}" aplicado!`);
+  };
+
+  const applyAnimationToSelection = (type: string, kind: "in" | "out" | "combo") => {
+    const st = useProject.getState();
+    const selId = st.selectedId;
+    let target = st.clips.find((c) => c.id === selId);
+    if (!target || target.kind === "audio") {
+      const pb = usePlayback.getState().playhead;
+      target = st.clips.find(
+        (c) => c.start <= pb + 0.001 && c.start + c.duration > pb - 0.001 && c.kind !== "audio"
+      );
+    }
+    if (!target) {
+      toast.info("Selecione um clipe na linha do tempo para aplicar a animação.");
+      return;
+    }
+    const anim = target.animation || {};
+    if (kind === "in") {
+      st.setClipAnimation(target.id, { ...anim, inType: type as AnimationInType, inDuration: anim.inDuration ?? 0.5 });
+    } else if (kind === "out") {
+      st.setClipAnimation(target.id, { ...anim, outType: type as AnimationOutType, outDuration: anim.outDuration ?? 0.5 });
+    } else {
+      st.setClipAnimation(target.id, { ...anim, comboType: type as AnimationComboType, comboSpeed: anim.comboSpeed ?? 1 });
+    }
+    engine.markDirty();
+    toast.success("Animação aplicada no clipe!");
+  };
 
   const currentFolder = useMemo(
     () => folders.find((f) => f.id === currentFolderId) ?? null,
@@ -243,14 +312,20 @@ export function MediaPanel() {
     <div className="flex h-full flex-col bg-[#0c1017]">
       <Tabs defaultValue="media" className="flex min-h-0 flex-1 flex-col gap-0">
         <div className="shrink-0 border-b border-[#1c2430] px-2 pt-2">
-          <TabsList className="grid h-8 w-full grid-cols-3 bg-[#151b26]">
-            <TabsTrigger value="media" className="h-7 gap-1 text-[11px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-zinc-100">
+          <TabsList className="grid h-8 w-full grid-cols-5 bg-[#151b26]">
+            <TabsTrigger value="media" className="h-7 gap-0.5 px-1 text-[10px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-zinc-100" title={t("mp.media")}>
               <Film className="h-3 w-3" /> {t("mp.media")}
             </TabsTrigger>
-            <TabsTrigger value="text" className="h-7 gap-1 text-[11px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-zinc-100">
+            <TabsTrigger value="effects" className="h-7 gap-0.5 px-1 text-[10px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-emerald-300" title={t("mp.effects")}>
+              <Sparkles className="h-3 w-3 text-emerald-400" /> {t("mp.effects")}
+            </TabsTrigger>
+            <TabsTrigger value="animations" className="h-7 gap-0.5 px-1 text-[10px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-violet-300" title={t("mp.animations")}>
+              <Wand2 className="h-3 w-3 text-violet-400" /> {t("mp.animations")}
+            </TabsTrigger>
+            <TabsTrigger value="text" className="h-7 gap-0.5 px-1 text-[10px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-zinc-100" title={t("mp.text")}>
               <Type className="h-3 w-3" /> {t("mp.text")}
             </TabsTrigger>
-            <TabsTrigger value="stock" className="h-7 gap-1 text-[11px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-zinc-100">
+            <TabsTrigger value="stock" className="h-7 gap-0.5 px-1 text-[10px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-zinc-100" title={t("mp.search")}>
               <Search className="h-3 w-3" /> {t("mp.search")}
             </TabsTrigger>
           </TabsList>
@@ -524,6 +599,143 @@ export function MediaPanel() {
               </div>
             </ScrollArea>
           </div>
+        </TabsContent>
+
+        {/* ---------- EFEITOS VISUAIS ---------- */}
+        <TabsContent value="effects" className="min-h-0 flex-1 overflow-y-auto p-3 timeline-scroll">
+          <div className="space-y-3">
+            {/* Campo de busca de efeitos */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-500" />
+              <Input
+                placeholder="Buscar efeitos (tremor, vhs, glitch, luz...)"
+                value={effectSearch}
+                onChange={(e) => setEffectSearch(e.target.value)}
+                className="h-8 pl-8 text-xs border-[#2a3546] bg-[#121722] text-zinc-200"
+              />
+            </div>
+
+            {/* Categorias de filtro */}
+            <div className="flex gap-1 overflow-x-auto pb-1 timeline-scroll">
+              {[
+                { id: "all", label: "Todos" },
+                { id: "motion", label: "Impacto" },
+                { id: "retro", label: "Retrô/VHS" },
+                { id: "light", label: "Luz" },
+                { id: "stylize", label: "Cinema" },
+              ].map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setEffectCategory(c.id as any)}
+                  className={`px-2 py-1 rounded-md text-[10px] font-medium transition whitespace-nowrap ${
+                    effectCategory === c.id
+                      ? "bg-emerald-600 text-white shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                      : "bg-[#151b26] text-zinc-400 hover:text-zinc-200 border border-[#232d3d]"
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Grid de Efeitos */}
+            <div className="grid grid-cols-2 gap-2">
+              {EFFECT_CATALOG
+                .filter((e) => {
+                  if (effectCategory !== "all" && e.category !== effectCategory) return false;
+                  if (effectSearch.trim()) {
+                    const q = effectSearch.toLowerCase();
+                    return e.name.toLowerCase().includes(q) || e.description.toLowerCase().includes(q);
+                  }
+                  return true;
+                })
+                .map((e) => (
+                  <button
+                    key={e.type}
+                    type="button"
+                    onClick={() => applyEffectToSelection(e)}
+                    className="flex flex-col items-start p-2.5 rounded-lg border border-[#232d3d] bg-[#121722] hover:border-emerald-500/60 hover:bg-[#161f2e] transition text-left group"
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <span className="text-xl group-hover:scale-110 transition">{e.icon}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">
+                        + Aplicar
+                      </span>
+                    </div>
+                    <span className="text-xs font-semibold text-zinc-200 leading-tight mb-0.5">{e.name}</span>
+                    <span className="text-[10px] text-zinc-500 line-clamp-2 leading-tight">{e.description}</span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ---------- ANIMAÇÕES (ENTRADA, SAÍDA, COMBO) ---------- */}
+        <TabsContent value="animations" className="min-h-0 flex-1 overflow-y-auto p-3 timeline-scroll">
+          <Tabs defaultValue="in" className="space-y-3">
+            <TabsList className="grid grid-cols-3 h-7 bg-[#151b26] p-0.5">
+              <TabsTrigger value="in" className="h-6 text-[10px] data-[state=active]:bg-violet-600/30 data-[state=active]:text-violet-300">
+                Entrada (In)
+              </TabsTrigger>
+              <TabsTrigger value="out" className="h-6 text-[10px] data-[state=active]:bg-violet-600/30 data-[state=active]:text-violet-300">
+                Saída (Out)
+              </TabsTrigger>
+              <TabsTrigger value="combo" className="h-6 text-[10px] data-[state=active]:bg-violet-600/30 data-[state=active]:text-violet-300">
+                Combo / Loop
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="in" className="space-y-2">
+              <p className="text-[10px] text-zinc-500 px-1">Clique para aplicar no clipe selecionado:</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {ANIMATIONS_IN.filter((a) => a.type !== "none").map((item) => (
+                  <button
+                    key={item.type}
+                    type="button"
+                    onClick={() => applyAnimationToSelection(item.type, "in")}
+                    className="flex items-center gap-2 p-2 rounded-md border border-[#232d3d] bg-[#121722] hover:border-violet-500 hover:bg-[#1a172e] transition text-left"
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="text-[11px] font-medium text-zinc-200">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="out" className="space-y-2">
+              <p className="text-[10px] text-zinc-500 px-1">Clique para aplicar no clipe selecionado:</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {ANIMATIONS_OUT.filter((a) => a.type !== "none").map((item) => (
+                  <button
+                    key={item.type}
+                    type="button"
+                    onClick={() => applyAnimationToSelection(item.type, "out")}
+                    className="flex items-center gap-2 p-2 rounded-md border border-[#232d3d] bg-[#121722] hover:border-violet-500 hover:bg-[#1a172e] transition text-left"
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="text-[11px] font-medium text-zinc-200">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="combo" className="space-y-2">
+              <p className="text-[10px] text-zinc-500 px-1">Clique para aplicar no clipe selecionado:</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {ANIMATIONS_COMBO.filter((a) => a.type !== "none").map((item) => (
+                  <button
+                    key={item.type}
+                    type="button"
+                    onClick={() => applyAnimationToSelection(item.type, "combo")}
+                    className="flex items-center gap-2 p-2 rounded-md border border-[#232d3d] bg-[#121722] hover:border-violet-500 hover:bg-[#1a172e] transition text-left"
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="text-[11px] font-medium text-zinc-200">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         {/* ---------- TEXTO & LEGENDAS ---------- */}

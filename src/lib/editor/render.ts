@@ -1,7 +1,18 @@
 // GaláxiaCut — renderização de frame no canvas (preview e exportação usam a mesma função)
 "use client";
 
-import { Clip, Track, ProjectMeta, TextProps, TransitionType, clipEnd, fadeEnvelope } from "./types";
+import {
+  Clip,
+  Track,
+  ProjectMeta,
+  TextProps,
+  TransitionType,
+  clipEnd,
+  fadeEnvelope,
+  evaluateClipState,
+  EvaluatedTransform,
+  easeOutBack,
+} from "./types";
 import { registry } from "./media";
 import { estimateWords } from "./subtitles";
 import { useSettings } from "./settings";
@@ -116,7 +127,7 @@ function drawVisualClip(
 ) {
   const trans = activeTransition(c, clips, t);
   if (!trans) {
-    drawMediaLayer(ctx, W, H, c, t, assets, { alpha: c.opacity * fadeEnvelope(c, t) });
+    drawMediaLayer(ctx, W, H, c, t, assets, { alpha: 1 });
     return;
   }
   const prev = prevClip(clips, c);
@@ -207,17 +218,322 @@ function drawableSize(el: HTMLVideoElement | HTMLAudioElement | HTMLImageElement
   return null;
 }
 
-function buildFilter(c: Clip, H: number, extraBlurPx?: number): string {
+function buildEvaluatedFilter(st: EvaluatedTransform, H: number, extraBlurPx?: number): string {
   const parts: string[] = [];
-  if (c.brightness !== 1) parts.push(`brightness(${c.brightness})`);
-  if (c.contrast !== 1) parts.push(`contrast(${c.contrast})`);
-  if (c.saturation !== 1) parts.push(`saturate(${c.saturation})`);
-  if (c.blur > 0) parts.push(`blur(${(c.blur * H) / 1080}px)`);
+  if (st.brightness !== 1) parts.push(`brightness(${st.brightness})`);
+  if (st.contrast !== 1) parts.push(`contrast(${st.contrast})`);
+  if (st.saturation !== 1) parts.push(`saturate(${st.saturation})`);
+  const totalBlur = (st.blur || 0) + (st.extraBlur || 0);
+  if (totalBlur > 0) parts.push(`blur(${(totalBlur * H) / 1080}px)`);
   if (extraBlurPx && extraBlurPx > 0.5) parts.push(`blur(${extraBlurPx}px)`);
-  if (c.hue !== 0) parts.push(`hue-rotate(${c.hue}deg)`);
-  if (c.sepia > 0) parts.push(`sepia(${c.sepia})`);
-  if (c.grayscale > 0) parts.push(`grayscale(${c.grayscale})`);
+  if (st.hue !== 0) parts.push(`hue-rotate(${st.hue}deg)`);
+  if (st.sepia > 0) parts.push(`sepia(${st.sepia})`);
+  if (st.grayscale > 0) parts.push(`grayscale(${st.grayscale})`);
   return parts.length ? parts.join(" ") : "none";
+}
+
+function applyPostEffects(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  c: Clip,
+  t: number,
+  d: { el: CanvasImageSource; sw: number; sh: number } | null,
+  dw: number,
+  dh: number,
+  st: EvaluatedTransform
+) {
+  const tRel = Math.max(0, t - c.start);
+  const effects = (c.effects || []).filter((e) => e.enabled);
+
+  // Flash de impacto / batida
+  if (st.flashAlpha > 0.01) {
+    ctx.save();
+    ctx.globalAlpha = st.flashAlpha;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
+  }
+
+  for (const eff of effects) {
+    const intensity = eff.intensity ?? 1;
+    const spd = eff.speed ?? 1;
+
+    switch (eff.type) {
+      case "chromatic": {
+        if (!d) break;
+        const shift = Math.max(2, (H * 0.012) * intensity);
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.65 * intensity;
+        try {
+          ctx.drawImage(d.el, -dw / 2 - shift, -dh / 2, dw, dh);
+          ctx.drawImage(d.el, -dw / 2 + shift, -dh / 2, dw, dh);
+        } catch {}
+        ctx.restore();
+        break;
+      }
+      case "glitch": {
+        if (!d) break;
+        const numSlices = Math.floor(4 * intensity) + 2;
+        const seed = Math.floor(tRel * spd * 14);
+        ctx.save();
+        for (let i = 0; i < numSlices; i++) {
+          const rand1 = Math.sin(seed * 37 + i * 19);
+          if (rand1 > 0.15) {
+            const sliceY = (Math.sin(seed * 23 + i * 11) * 0.5 + 0.5) * dh;
+            const sliceH = ((Math.cos(seed * 41 + i * 17) * 0.5 + 0.5) * 0.14 + 0.04) * dh;
+            const offset = Math.sin(seed * 53 + i * 7) * (W * 0.04) * intensity;
+            const sy = (sliceY / dh) * d.sh;
+            const sh = (sliceH / dh) * d.sh;
+            try {
+              ctx.drawImage(d.el, 0, Math.max(0, sy), d.sw, Math.min(d.sh, sh), -dw / 2 + offset, -dh / 2 + sliceY, dw, sliceH);
+            } catch {}
+          }
+        }
+        ctx.restore();
+        break;
+      }
+      case "vhs": {
+        ctx.save();
+        // Scanlines horizontais
+        ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+        const gap = Math.max(2, Math.round(H / 220));
+        for (let y = -dh / 2; y < dh / 2; y += gap * 2) {
+          ctx.fillRect(-dw / 2, y, dw, gap);
+        }
+        // Faixa de tracking analógico
+        const scanY = -dh / 2 + (((tRel * spd * 140) % (dh + 60)) - 30);
+        ctx.fillStyle = "rgba(0, 255, 230, 0.08)";
+        ctx.fillRect(-dw / 2, scanY, dw, gap * 6);
+        ctx.fillStyle = "rgba(255, 0, 100, 0.06)";
+        ctx.fillRect(-dw / 2, scanY + gap * 3, dw, gap * 4);
+        ctx.restore();
+        break;
+      }
+      case "glow": {
+        if (!d) break;
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.filter = `blur(${Math.max(4, Math.round(H * 0.02 * intensity))}px) brightness(1.35)`;
+        ctx.globalAlpha = 0.55 * intensity;
+        try {
+          ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+        } catch {}
+        ctx.restore();
+        break;
+      }
+      case "vignette": {
+        ctx.save();
+        const rad = Math.max(dw, dh) * 0.68;
+        const grad = ctx.createRadialGradient(0, 0, rad * 0.25, 0, 0, rad);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(0.7, `rgba(0,0,0,${0.35 * intensity})`);
+        grad.addColorStop(1, `rgba(0,0,0,${0.9 * intensity})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+        break;
+      }
+      case "radialBlur": {
+        if (!d) break;
+        ctx.save();
+        ctx.globalAlpha = 0.25 * intensity;
+        for (let step = 1; step <= 3; step++) {
+          const zoom = 1 + step * 0.035 * intensity;
+          const zw = dw * zoom;
+          const zh = dh * zoom;
+          try {
+            ctx.drawImage(d.el, -zw / 2, -zh / 2, zw, zh);
+          } catch {}
+        }
+        ctx.restore();
+        break;
+      }
+      case "lightLeak": {
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        const phase = (tRel * spd * 0.35) % 1;
+        const lx = Math.sin(phase * Math.PI * 2) * dw * 0.35;
+        const ly = Math.cos(phase * Math.PI * 2) * dh * 0.35;
+        const leakRad = Math.max(dw, dh) * 0.65;
+        const leakGrad = ctx.createRadialGradient(lx, ly, 10, lx, ly, leakRad);
+        leakGrad.addColorStop(0, `rgba(255, 200, 60, ${0.75 * intensity})`);
+        leakGrad.addColorStop(0.4, `rgba(255, 80, 100, ${0.4 * intensity})`);
+        leakGrad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = leakGrad;
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+        break;
+      }
+      case "filmGrain": {
+        ctx.save();
+        ctx.globalCompositeOperation = "overlay";
+        ctx.globalAlpha = 0.3 * intensity;
+        const seed = Math.floor(tRel * 24);
+        for (let i = 0; i < 350; i++) {
+          const gx = ((Math.sin(seed * 157 + i * 47) * 0.5 + 0.5) - 0.5) * dw;
+          const gy = ((Math.cos(seed * 89 + i * 61) * 0.5 + 0.5) - 0.5) * dh;
+          const sz = (Math.sin(i * 23) * 0.5 + 0.5) * 3 + 1;
+          ctx.fillStyle = i % 2 === 0 ? "#ffffff" : "#000000";
+          ctx.fillRect(gx, gy, sz, sz);
+        }
+        ctx.restore();
+        break;
+      }
+      case "tealOrange": {
+        ctx.save();
+        ctx.globalCompositeOperation = "overlay";
+        ctx.globalAlpha = 0.45 * intensity;
+        const toGrad = ctx.createLinearGradient(-dw / 2, -dh / 2, dw / 2, dh / 2);
+        toGrad.addColorStop(0, "#0d9488"); // Teal
+        toGrad.addColorStop(1, "#f97316"); // Orange
+        ctx.fillStyle = toGrad;
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+        break;
+      }
+      case "cyberpunk": {
+        ctx.save();
+        ctx.globalCompositeOperation = "overlay";
+        ctx.globalAlpha = 0.5 * intensity;
+        const cpGrad = ctx.createLinearGradient(-dw / 2, dh / 2, dw / 2, -dh / 2);
+        cpGrad.addColorStop(0, "#06b6d4"); // Cyan
+        cpGrad.addColorStop(1, "#ec4899"); // Magenta
+        ctx.fillStyle = cpGrad;
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+        break;
+      }
+      case "goldenHour": {
+        ctx.save();
+        ctx.globalCompositeOperation = "soft-light";
+        ctx.globalAlpha = 0.6 * intensity;
+        ctx.fillStyle = "#f59e0b"; // Dourado âmbar
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+        break;
+      }
+      case "matrix": {
+        ctx.save();
+        ctx.globalCompositeOperation = "color";
+        ctx.globalAlpha = 0.7 * intensity;
+        ctx.fillStyle = "#22c55e"; // Verde Matrix
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = "rgba(34, 197, 94, 0.12)";
+        const gap = Math.max(3, Math.round(H / 180));
+        for (let y = -dh / 2; y < dh / 2; y += gap * 3) {
+          ctx.fillRect(-dw / 2, y, dw, gap);
+        }
+        ctx.restore();
+        break;
+      }
+      case "noir": {
+        ctx.save();
+        ctx.globalCompositeOperation = "color";
+        ctx.fillStyle = "#808080";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.globalCompositeOperation = "overlay";
+        ctx.globalAlpha = 0.35 * intensity;
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+        break;
+      }
+      case "invert": {
+        ctx.save();
+        ctx.globalCompositeOperation = "difference";
+        ctx.globalAlpha = intensity;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+        break;
+      }
+      case "duotone": {
+        ctx.save();
+        ctx.globalCompositeOperation = "multiply";
+        ctx.globalAlpha = 0.5 * intensity;
+        ctx.fillStyle = "#3b82f6";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.4 * intensity;
+        ctx.fillStyle = "#f43f5e";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+        break;
+      }
+      case "mirror": {
+        if (!d) break;
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.globalAlpha = 0.45 * intensity;
+        try {
+          ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+        } catch {}
+        ctx.restore();
+        break;
+      }
+      case "tiltShift": {
+        ctx.save();
+        const blurBandH = dh * 0.28 * intensity;
+        ctx.fillStyle = "rgba(0,0,0,0.01)";
+        ctx.filter = `blur(${Math.round(H * 0.015 * intensity)}px)`;
+        if (d) {
+          try {
+            ctx.drawImage(d.el, 0, 0, d.sw, d.sh * 0.3, -dw / 2, -dh / 2, dw, blurBandH);
+            ctx.drawImage(d.el, 0, d.sh * 0.7, d.sw, d.sh * 0.3, -dw / 2, dh / 2 - blurBandH, dw, blurBandH);
+          } catch {}
+        }
+        ctx.restore();
+        break;
+      }
+      case "neonEdge": {
+        if (!d) break;
+        ctx.save();
+        ctx.globalCompositeOperation = "difference";
+        ctx.globalAlpha = 0.8 * intensity;
+        const shift = Math.max(1, (H * 0.003) * intensity);
+        try {
+          ctx.drawImage(d.el, -dw / 2 - shift, -dh / 2 - shift, dw, dh);
+          ctx.globalCompositeOperation = "screen";
+          ctx.filter = "hue-rotate(180deg) saturate(3)";
+          ctx.drawImage(d.el, -dw / 2 + shift, -dh / 2 + shift, dw, dh);
+        } catch {}
+        ctx.restore();
+        break;
+      }
+      case "wave": {
+        if (!d) break;
+        const waveSlices = 12;
+        const sliceH = dh / waveSlices;
+        const srcSliceH = d.sh / waveSlices;
+        ctx.save();
+        for (let i = 0; i < waveSlices; i++) {
+          const wOff = Math.sin((tRel * spd * 6) + (i * 0.7)) * (W * 0.02) * intensity;
+          try {
+            ctx.drawImage(d.el, 0, i * srcSliceH, d.sw, srcSliceH, -dw / 2 + wOff, -dh / 2 + i * sliceH, dw, sliceH);
+          } catch {}
+        }
+        ctx.restore();
+        break;
+      }
+      case "emboss": {
+        if (!d) break;
+        ctx.save();
+        ctx.globalCompositeOperation = "difference";
+        ctx.globalAlpha = 0.7 * intensity;
+        const shift = Math.max(1, (H * 0.002) * intensity);
+        try {
+          ctx.drawImage(d.el, -dw / 2 - shift, -dh / 2 - shift, dw, dh);
+        } catch {}
+        ctx.restore();
+        break;
+      }
+      default:
+        break;
+    }
+  }
 }
 
 function drawMediaLayer(
@@ -231,32 +547,40 @@ function drawMediaLayer(
 ) {
   const d = drawableSize(assets.getElement(c.id));
   if (!d) {
-    // mídia ainda sem quadro: só desenha o placeholder se for o clipe principal (não em transição)
     if (opts.alpha >= 0.999) {
       const st = assets.statusOf?.(c.id) ?? (c.mediaId ? "loading" : "missing");
-      // v7.3: status "ok" mas sem quadro = o frame tá chegando (seek/acabou de
-      // carregar) → mostra "carregando… N%" em vez de assustar com "mídia não
-      // carregada" piscando (era o bug do aparece-e-some no preview)
       const eff: MediaStatus = st === "ok" ? "loading" : st;
       drawPlaceholder(ctx, W, H, c, eff, assets.progressOf?.(c.id) ?? null);
     }
     return;
   }
-  const fade = opts.alpha >= 0.999 && opts.scaleMul === undefined && !opts.dx ? fadeEnvelope(c, t) : 1;
-  void fade; // alpha já vem multiplicado pelo envelope nas chamadas principais
+
+  // Avaliação unificada de Keyframes, Animações e Efeitos
+  const st = evaluateClipState(c, t);
+  const fade = fadeEnvelope(c, t);
+  const effAlpha = Math.max(0, Math.min(1, opts.alpha * st.opacity * st.extraAlpha * fade));
+
   const base = Math.min(W / d.sw, H / d.sh);
-  const k = base * c.scale * (opts.scaleMul ?? 1);
+  const k = base * st.scale * (opts.scaleMul ?? 1) * st.extraScale;
   const dw = d.sw * k;
   const dh = d.sh * k;
-  const cx = W / 2 + (c.x * W) / 2 + (opts.dx ?? 0);
-  const cy = H / 2 + (c.y * H) / 2 + (opts.dy ?? 0);
+
+  const effX = st.x + st.extraDx + st.shakeOffsetX + ((opts.dx ?? 0) * 2 / W);
+  const effY = st.y + st.extraDy + st.shakeOffsetY + ((opts.dy ?? 0) * 2 / H);
+  const cx = W / 2 + (effX * W) / 2;
+  const cy = H / 2 + (effY * H) / 2;
+  const rot = st.rotation + st.extraRot + st.shakeRot;
+
   ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, opts.alpha));
-  ctx.filter = buildFilter(c, H, opts.blurPx);
+  ctx.globalAlpha = effAlpha;
+  ctx.filter = buildEvaluatedFilter(st, H, opts.blurPx);
   ctx.translate(cx, cy);
-  if (c.rotation) ctx.rotate((c.rotation * Math.PI) / 180);
+  if (rot) ctx.rotate((rot * Math.PI) / 180);
+
   try {
     ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+    // Aplicação de efeitos de pós-processamento (Glitch, VHS, Glow, Vinheta, Aberração, etc.)
+    applyPostEffects(ctx, W, H, c, t, d, dw, dh, st);
   } catch {
     /* frame não disponível */
   }
@@ -408,12 +732,6 @@ function wrapWords(ctx: CanvasRenderingContext2D, tokens: string[], maxW: number
   return lines.length ? lines : [[""]];
 }
 
-function easeOutBack(x: number): number {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
-  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
-}
-
 interface WordToken {
   text: string;
   active: boolean;
@@ -443,13 +761,28 @@ function tokensForKaraoke(tp: TextProps, tRel: number): WordToken[] {
 
 function drawTextLayer(ctx: CanvasRenderingContext2D, W: number, H: number, c: Clip, t: number, opts: LayerOpts) {
   const tp = c.text!;
-  const size = (tp.size * H) / 1080 * (opts.scaleMul ?? 1);
+  const st = evaluateClipState(c, t);
+  const fade = fadeEnvelope(c, t);
+  const effAlpha = Math.max(0, Math.min(1, opts.alpha * st.opacity * st.extraAlpha * fade));
+
+  const size = (tp.size * H) / 1080 * (opts.scaleMul ?? 1) * st.scale * st.extraScale;
   const weight = tp.bold ? "700" : "400";
   const style = tp.italic ? "italic " : "";
   const tRel = t - c.start;
+
+  const effX = st.x + st.extraDx + st.shakeOffsetX + ((opts.dx ?? 0) * 2 / W);
+  const effY = st.y + st.extraDy + st.shakeOffsetY + ((opts.dy ?? 0) * 2 / H);
+  const cx = W / 2 + (effX * W) / 2;
+  const cy = H / 2 + (effY * H) / 2;
+  const rot = st.rotation + st.extraRot + st.shakeRot;
+
   ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, opts.alpha));
-  if (opts.blurPx && opts.blurPx > 0.5) ctx.filter = `blur(${opts.blurPx}px)`;
+  ctx.globalAlpha = effAlpha;
+  const totalBlur = (st.blur || 0) + (st.extraBlur || 0) + (opts.blurPx ? (opts.blurPx * 1080) / H : 0);
+  if (totalBlur > 0.5) ctx.filter = `blur(${totalBlur}px)`;
+  ctx.translate(cx, cy);
+  if (rot) ctx.rotate((rot * Math.PI) / 180);
+
   ctx.font = `${style}${weight} ${size}px ${tp.font}`;
   ctx.textBaseline = "middle";
   const maxW = W * 0.88;
@@ -458,8 +791,6 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, W: number, H: number, c: C
   const tokens = tokensForKaraoke(tp, tRel);
   const lines = wrapWords(ctx, tokens.map((x) => x.text), maxW);
   const lineH = size * 1.24;
-  const cx = W / 2 + (c.x * W) / 2 + (opts.dx ?? 0);
-  const cy = H / 2 + (c.y * H) / 2 + (opts.dy ?? 0);
   const totalH = lines.length * lineH;
   const pad = (tp.bgPad * H) / 1080;
 
@@ -475,7 +806,7 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, W: number, H: number, c: C
     const boxW = maxLineW + pad * 2;
     const boxH = totalH + pad * 1.6;
     ctx.fillStyle = tp.bg;
-    roundedRect(ctx, cx - boxW / 2, cy - boxH / 2, boxW, boxH, (tp.bgRadius * H) / 1080);
+    roundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, (tp.bgRadius * H) / 1080);
     ctx.fill();
     ctx.restore();
   }
@@ -488,14 +819,14 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, W: number, H: number, c: C
 
   // desenha palavra por palavra (karaokê: a palavra atual pulsa/muda de cor)
   let tokenIdx = 0;
-  const startY = cy - totalH / 2 + lineH / 2;
+  const startY = -totalH / 2 + lineH / 2;
   for (let li = 0; li < lines.length; li++) {
     const ln = lines[li];
     const lineW = ln.reduce((acc, word) => acc + ctx.measureText(word).width, 0) + spaceW * Math.max(0, ln.length - 1);
     let x: number;
-    if (tp.align === "left") x = cx - maxW / 2;
-    else if (tp.align === "right") x = cx + maxW / 2 - lineW;
-    else x = cx - lineW / 2;
+    if (tp.align === "left") x = -maxW / 2;
+    else if (tp.align === "right") x = maxW / 2 - lineW;
+    else x = -lineW / 2;
     const y = startY + li * lineH;
     for (const word of ln) {
       const tok = tokens[tokenIdx++] ?? { text: word, active: false, wp: 0, color: tp.color };
@@ -525,6 +856,16 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, W: number, H: number, c: C
       x += wWidth + spaceW;
     }
   }
+
+  // Flash em texto também
+  if (st.flashAlpha > 0.01) {
+    ctx.save();
+    ctx.globalAlpha = st.flashAlpha * 0.8;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(-maxW / 2, -totalH / 2, maxW, totalH);
+    ctx.restore();
+  }
+
   ctx.restore();
 }
 
