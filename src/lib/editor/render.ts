@@ -367,56 +367,9 @@ function applyPostEffects(
         ctx.restore();
         break;
       }
-      case "pixelate": {
-        if (!d) break;
-        ctx.save();
-        const pixelSize = Math.max(3, Math.round(24 * intensity));
-        const offW = Math.max(2, Math.floor(dw / pixelSize));
-        const offH = Math.max(2, Math.floor(dh / pixelSize));
-        const pCan = getPixelCanvas(offW, offH);
-        if (pCan) {
-          const pCtx = pCan.getContext("2d");
-          if (pCtx) {
-            pCtx.imageSmoothingEnabled = false;
-            pCtx.drawImage(d.el, 0, 0, offW, offH);
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(pCan, -dw / 2, -dh / 2, dw, dh);
-          }
-        }
-        ctx.restore();
-        break;
-      }
+      case "pixelate":
       case "fisheye": {
-        if (!d) break;
-        ctx.save();
-        const rings = 14;
-        const maxR = Math.hypot(dw, dh) * 0.55;
-        for (let r = rings; r >= 1; r--) {
-          const norm = r / rings; // 0..1
-          const distNorm = Math.pow(norm, 1 + 0.9 * intensity);
-          const radius = norm * maxR;
-          const srcRadius = distNorm * maxR;
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(0, 0, radius, 0, Math.PI * 2);
-          ctx.clip();
-          const zoom = radius / Math.max(1, srcRadius);
-          const zw = dw * zoom;
-          const zh = dh * zoom;
-          try {
-            ctx.drawImage(d.el, -zw / 2, -zh / 2, zw, zh);
-          } catch {}
-          ctx.restore();
-        }
-        const grad = ctx.createRadialGradient(0, 0, maxR * 0.4, 0, 0, maxR);
-        grad.addColorStop(0, "rgba(0,0,0,0)");
-        grad.addColorStop(0.8, `rgba(0,0,0,${0.25 * intensity})`);
-        grad.addColorStop(1, `rgba(0,0,0,${0.75 * intensity})`);
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(0, 0, maxR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        // Renderizado diretamente na camada base (drawMediaLayer) para não sobrepor o original
         break;
       }
       case "thermal": {
@@ -681,8 +634,66 @@ function drawMediaLayer(
   }
 
   try {
-    ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
-    // Aplicação de efeitos de pós-processamento (Glitch, VHS, Glow, Vinheta, Aberração, etc.)
+    const tRel = Math.max(0, t - c.start);
+    const activeEffects = (c.effects || []).filter((e) => {
+      if (!e.enabled) return false;
+      const s = e.start ?? 0;
+      const dur = e.duration != null ? e.duration : (c.duration - s);
+      return tRel >= s && tRel <= s + dur;
+    });
+
+    const hasPixelate = activeEffects.find((e) => e.type === "pixelate");
+    const hasFisheye = activeEffects.find((e) => e.type === "fisheye");
+
+    if (hasPixelate) {
+      const intensity = hasPixelate.intensity ?? 1;
+      const pixelSize = Math.max(3, Math.round(24 * intensity));
+      const offW = Math.max(2, Math.floor(dw / pixelSize));
+      const offH = Math.max(2, Math.floor(dh / pixelSize));
+      const pCan = getPixelCanvas(offW, offH);
+      if (pCan) {
+        const pCtx = pCan.getContext("2d");
+        if (pCtx) {
+          pCtx.imageSmoothingEnabled = false;
+          pCtx.drawImage(d.el, 0, 0, offW, offH);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(pCan, -dw / 2, -dh / 2, dw, dh);
+        }
+      }
+    } else if (hasFisheye) {
+      const intensity = hasFisheye.intensity ?? 1;
+      const rings = 16;
+      const maxR = Math.hypot(dw, dh) * 0.55;
+      for (let r = rings; r >= 1; r--) {
+        const norm = r / rings;
+        const distNorm = Math.pow(norm, 1 + 1.1 * intensity);
+        const radius = norm * maxR;
+        const srcRadius = distNorm * maxR;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.clip();
+        const zoom = radius / Math.max(1, srcRadius);
+        const zw = dw * zoom;
+        const zh = dh * zoom;
+        try {
+          ctx.drawImage(d.el, -zw / 2, -zh / 2, zw, zh);
+        } catch {}
+        ctx.restore();
+      }
+      const grad = ctx.createRadialGradient(0, 0, maxR * 0.4, 0, 0, maxR);
+      grad.addColorStop(0, "rgba(0,0,0,0)");
+      grad.addColorStop(0.8, `rgba(0,0,0,${0.25 * intensity})`);
+      grad.addColorStop(1, `rgba(0,0,0,${0.85 * intensity})`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, maxR, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+    }
+
+    // Aplicação de efeitos de pós-processamento (Glitch, VHS, Glow, Vinheta, Aberração, Thermal, FilmGrain, etc.)
     applyPostEffects(ctx, W, H, c, t, d, dw, dh, st);
   } catch {
     /* frame não disponível */

@@ -92,7 +92,20 @@ export function MediaPanel() {
   const [confirmDeleteFolder, setConfirmDeleteFolder] = useState<MediaFolder | null>(null);
 
   /** navegação de pastas: null = raiz */
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const currentFolderId = useProject((s) => s.currentFolderId);
+  const setCurrentFolderId = useProject((s) => s.setCurrentFolderId);
+  const [activeTab, setActiveTab] = useState("media");
+
+  useEffect(() => {
+    const handleNav = (e: any) => {
+      setActiveTab("media");
+      if (e.detail?.folderId !== undefined) {
+        setCurrentFolderId(e.detail.folderId);
+      }
+    };
+    window.addEventListener("galaxiacut:navmedia", handleNav);
+    return () => window.removeEventListener("galaxiacut:navmedia", handleNav);
+  }, [setCurrentFolderId]);
   /** diálogo de criar pasta */
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -310,7 +323,7 @@ export function MediaPanel() {
 
   return (
     <div className="flex h-full flex-col bg-[#0c1017]">
-      <Tabs defaultValue="media" className="flex min-h-0 flex-1 flex-col gap-0">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col gap-0">
         <div className="shrink-0 border-b border-[#1c2430] px-2 pt-2">
           <TabsList className="grid h-8 w-full grid-cols-5 bg-[#151b26]">
             <TabsTrigger value="media" className="h-7 gap-0.5 px-1 text-[10px] text-zinc-400 data-[state=active]:bg-[#232d3d] data-[state=active]:text-zinc-100" title={t("mp.media")}>

@@ -44,6 +44,9 @@ interface ProjectState extends Snapshot {
   clearProject: () => void;
   loadSnapshot: (s: { project: ProjectMeta; tracks: Track[]; clips: Clip[]; media: MediaMeta[]; folders?: MediaFolder[]; past?: Snapshot[]; future?: Snapshot[] }) => void;
   // pastas de mídia
+  currentFolderId: string | null;
+  setCurrentFolderId: (id: string | null) => void;
+  getOrCreateCategoryFolder: (categoryName: string) => MediaFolder;
   createFolder: (name: string, parentId?: string | null) => MediaFolder;
   renameFolder: (id: string, name: string) => void;
   deleteFolder: (id: string) => void;
@@ -275,6 +278,17 @@ export const useProject = create<ProjectState>((set, get) => ({
     past: (s.past ?? []).slice(-30),
     future: (s.future ?? []).slice(0, 30),
   }),
+
+  currentFolderId: null,
+  setCurrentFolderId: (id) => set({ currentFolderId: id }),
+
+  getOrCreateCategoryFolder: (categoryName: string) => {
+    const s = get();
+    const clean = categoryName.trim() || "Mídias";
+    const existing = s.folders.find((f) => f.name.toLowerCase() === clean.toLowerCase() && !f.parentId);
+    if (existing) return existing;
+    return s.createFolder(clean, null);
+  },
 
   createFolder: (name: string, parentId = null) => {
     const cleanName = name.trim() || "Nova pasta";

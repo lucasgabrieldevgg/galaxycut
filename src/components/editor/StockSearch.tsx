@@ -8,7 +8,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ImageIcon, Music2, Film, Loader2, Search, Plus, AudioLines, Music4, Video, Clock, Copyright, Play, Smile, Sticker } from "lucide-react";
+import { ImageIcon, Music2, Film, Loader2, Search, Plus, AudioLines, Music4, Video, Clock, Copyright, Play, Smile, Sticker, Sparkles, FolderPlus } from "lucide-react";
 import { useProject, usePlayback } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
 import { registry } from "@/lib/editor/media";
@@ -31,21 +31,35 @@ const STICKER_SETS: { key: string; emojis: string[] }[] = [
   { key: "signs", emojis: ["➡️","⬅️","✅","❌","❓","❗","⚠️","🚫","🔍","🔖","📌","💬","👁️","🧠"] },
 ];
 
+const SFX_EXAMPLES = [
+  { label: "⚡ Transição (Whoosh)", q: "whoosh transition" },
+  { label: "💥 Impacto (Boom)", q: "boom impact" },
+  { label: "🔔 Sino (Ding)", q: "ding bell chime" },
+  { label: "😂 Risadas", q: "laughter laugh audience" },
+  { label: "👏 Aplausos", q: "applause crowd clapping" },
+  { label: "👾 Glitch / Ruído", q: "glitch static noise" },
+  { label: "🎯 Pop / Bolha", q: "pop bubble click" },
+  { label: "💬 Notificação", q: "notification message chime" },
+  { label: "🔫 Laser / Sci-Fi", q: "laser blaster scifi" },
+  { label: "⌨️ Digitação", q: "keyboard typing click" },
+  { label: "🏃 Swoosh Rápido", q: "fast swoosh swipe" },
+  { label: "💣 Explosão", q: "explosion blast" },
+];
+
 const GENRES = [
-  { id: "all", key: "g.all" },
-  { id: "epic", key: "g.epic" },
-  { id: "calm", key: "g.calm" },
-  { id: "electronic", key: "g.electronic" },
-  { id: "gaming", key: "g.gaming" },
-  { id: "lofi", key: "g.lofi" },
-  { id: "trap", key: "g.trap" },
-  { id: "rock", key: "g.rock" },
-  { id: "classical", key: "g.classical" },
-  { id: "ambient", key: "g.ambient" },
-  { id: "happy", key: "g.happy" },
-  { id: "tense", key: "g.tense" },
-  { id: "sad", key: "g.sad" },
-  { id: "funk", key: "g.funk" },
+  { id: "all", label: "Todas", key: "g.all" },
+  { id: "lofi", label: "Lo-Fi", key: "g.lofi" },
+  { id: "epic", label: "Épico / Cinema", key: "g.epic" },
+  { id: "gaming", label: "Gamer / Chiptune", key: "g.gaming" },
+  { id: "calm", label: "Calmo / Relax", key: "g.calm" },
+  { id: "electronic", label: "Eletrônica / EDM", key: "g.electronic" },
+  { id: "trap", label: "Trap / Beat", key: "g.trap" },
+  { id: "rock", label: "Rock", key: "g.rock" },
+  { id: "ambient", label: "Ambiente", key: "g.ambient" },
+  { id: "happy", label: "Alegre / Feliz", key: "g.happy" },
+  { id: "tense", label: "Tenso / Suspense", key: "g.tense" },
+  { id: "sad", label: "Triste / Melancólico", key: "g.sad" },
+  { id: "funk", label: "Funk", key: "g.funk" },
 ];
 
 function fmtDur(d: number) {
@@ -133,11 +147,42 @@ export function StockSearch() {
     }
   }
 
-  // trocar filtro/gênero/aba re-busca automaticamente (se já buscou algo)
+  async function searchDirect(qText: string, searchType = type, searchDur = dur, searchGenre = genre) {
+    const qClean = qText.trim() || (searchType === "music" ? "music" : searchType === "sfx" ? "sound effect" : "");
+    if (!qClean) return;
+    setLoading(true);
+    setTranslated(null);
+    try {
+      const keys = useSettings.getState().keys;
+      const { results, translated: tr } = await searchStock({
+        q: qClean,
+        type: searchType as "video" | "image" | "music" | "sfx",
+        dur: searchDur,
+        genre: searchGenre,
+        ...(searchDur === "custom" ? { dmin: Math.max(0, Math.min(cmin, cmax)), dmax: Math.max(1, Math.max(cmin, cmax)) } : {}),
+        pexelsKey: keys.pexels || undefined,
+        pixabayKey: keys.pixabay || undefined,
+      });
+      setItems(results);
+      if (tr && tr !== qClean) setTranslated(tr);
+      if (!results.length) {
+        toast.info(t("ss.nothing"), { description: t("ss.nothingDesc") });
+      }
+    } catch {
+      toast.error(t("ss.fail"), { description: t("ss.failDesc") });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // trocar filtro/gênero/aba re-busca automaticamente
   useEffect(() => {
-    if (searchedRef.current && query.trim() && !isSticker) void search();
-     
-  }, [type, dur, genre]);  
+    if (!isSticker) {
+      if (query.trim() || type === "music" || type === "sfx") {
+        void searchDirect(query || (type === "music" ? "music background" : "sound effect"), type, dur, genre);
+      }
+    }
+  }, [type, dur, genre]);
 
   async function addStock(item: StockItem) {
     setAdding(item.id);
@@ -152,6 +197,17 @@ export function StockSearch() {
       const ext = /\.(mp3|wav|ogg|m4a|flac|opus|mp4|webm|mov|png|jpe?g|webp|gif)$/i.exec(url)?.[1] ?? (item.audio ? "mp3" : type === "video" ? "mp4" : "png");
       const name = `${item.title.replace(/[\\/:*?"<>|]/g, "").slice(0, 40)}.${ext}`;
       const meta = await registry.importFile(blob, name);
+
+      // Pasta própria automática por categoria
+      const categoryNames: Record<StockType, string> = {
+        music: "Músicas",
+        sfx: "Efeitos Sonoros",
+        video: "Vídeos de Estoque",
+        image: "Fotos & Imagens",
+        sticker: "Figurinhas / Stickers",
+      };
+      const catFolder = useProject.getState().getOrCreateCategoryFolder(categoryNames[type] || "Músicas");
+
       addMedia({
         ...meta,
         source: "stock",
@@ -159,10 +215,14 @@ export function StockSearch() {
         license: item.license,
         licenseLabel: item.license,
         creator: item.creator,
+        folderId: catFolder.id,
       });
       addClipFromMedia(meta.id);
+      useProject.getState().setCurrentFolderId(catFolder.id);
+      window.dispatchEvent(new CustomEvent("galaxiacut:navmedia", { detail: { folderId: catFolder.id } }));
+
       toast.success(t("ss.addedStock"), {
-        description: licenseLevel(item.license) === "free" ? t("ss.addedFree") : t("ss.addedCredit"),
+        description: `Adicionado à pasta "${catFolder.name}" · ${licenseLevel(item.license) === "free" ? t("ss.addedFree") : t("ss.addedCredit")}`,
       });
     } catch (err) {
       toast.error(t("ss.downloadFail"), { description: String((err as Error).message ?? err) });
@@ -233,6 +293,7 @@ export function StockSearch() {
         </div>
       )}
 
+      {/* ---- busca por texto ---- */}
       {(!isSticker || stickTab === "stickers") && (
         <form
           onSubmit={(e) => {
@@ -251,6 +312,38 @@ export function StockSearch() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           </Button>
         </form>
+      )}
+
+      {/* ---- EFEITOS SONOROS: chips de exemplos rápidos ---- */}
+      {type === "sfx" && (
+        <div className="shrink-0 space-y-1">
+          <div className="flex items-center justify-between text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
+            <span className="flex items-center gap-1">
+              <Sparkles className="h-3 w-3 text-emerald-400" /> Exemplos de Efeitos Sonoros
+            </span>
+            <span className="text-[8px] text-zinc-600 font-normal">1-clique para buscar</span>
+          </div>
+          <div className="flex gap-1 overflow-x-auto pb-1 timeline-scroll">
+            {SFX_EXAMPLES.map((ex) => (
+              <button
+                key={ex.q}
+                type="button"
+                onClick={() => {
+                  setQuery(ex.q);
+                  searchedRef.current = true;
+                  void searchDirect(ex.q, "sfx", dur, genre);
+                }}
+                className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] transition ${
+                  query === ex.q
+                    ? "border-emerald-500 bg-emerald-500/20 text-emerald-300 font-medium shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                    : "border-[#2a3546] bg-[#121722] text-zinc-300 hover:border-emerald-500/60 hover:text-white"
+                }`}
+              >
+                {ex.label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* ---- emojis (offline, grid organizado por categoria) ---- */}
@@ -477,6 +570,30 @@ export function StockSearch() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Prompt amigável quando uma categoria de música estiver marcada */}
+          {type === "music" && genre !== "all" && items !== null && (
+            <div className="my-3 rounded-xl border border-[#2a3546] bg-[#121722]/80 p-3 text-center space-y-2">
+              <p className="text-xs font-medium text-zinc-300 leading-snug">
+                Não conseguiu encontrar o que procurava nesta categoria?
+              </p>
+              <p className="text-[10px] text-zinc-500 leading-relaxed">
+                Marque a categoria <strong>"Todas"</strong> para ver muito mais opções de músicas de todos os estilos.
+              </p>
+              <Button
+                size="sm"
+                type="button"
+                onClick={() => {
+                  setGenre("all");
+                  searchedRef.current = true;
+                  void searchDirect(query || "music", "music", dur, "all");
+                }}
+                className="h-7 px-3 text-[11px] bg-[var(--gc-accent)] hover:bg-[var(--gc-accent-hover)] text-black font-semibold gap-1.5"
+              >
+                <Music4 className="h-3.5 w-3.5" /> Marcar em Todas
+              </Button>
             </div>
           )}
         </div>

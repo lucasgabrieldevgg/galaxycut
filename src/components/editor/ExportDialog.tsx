@@ -20,8 +20,17 @@ import { useT } from "@/lib/editor/i18n";
 import { toast } from "sonner";
 import {
   Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen, Star, ChevronDown, ChevronUp,
-  Image as ImageIcon, Music4, FileVideo, XCircle, Volume2, VolumeX, Sparkles, Film, Camera
+  Image as ImageIcon, Music4, FileVideo, XCircle, Volume2, VolumeX, Sparkles, Film, Camera, Clock
 } from "lucide-react";
+import { clipEnd } from "@/lib/editor/types";
+import { computeEffectiveDuration } from "@/lib/editor/store";
+
+function fmtDur(d: number) {
+  if (!isFinite(d)) return "0:00";
+  const m = Math.floor(d / 60);
+  const s = Math.floor(d % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 /** qualidade = MENOR lado da saída. 1080 é o padrão; o resto aparece em "mais opções". */
 const RESOLUTIONS: { id: number; label: string; hintKey: string }[] = [
@@ -69,6 +78,25 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const base = suggestBitrate(shortSide, project.width / project.height);
     return quality === "alta" ? base : quality === "media" ? Math.round(base * 0.65) : Math.round(base * 0.38);
   }, [shortSide, quality, project]);
+
+  const videoDuration = useMemo(() => {
+    let maxV = 0;
+    for (const c of clips) {
+      if (c.kind === "video" || c.kind === "image" || c.kind === "text") {
+        maxV = Math.max(maxV, clipEnd(c));
+      }
+    }
+    return maxV;
+  }, [clips]);
+
+  const totalDuration = useMemo(() => {
+    return computeEffectiveDuration(clips, useProject.getState().tracks);
+  }, [clips]);
+
+  const audioHasExtra = videoDuration > 0 && totalDuration > videoDuration + 0.5;
+  const [trimToVideo, setTrimToVideo] = useState(true);
+
+  const finalExportDuration = (isVideo || category === "gif") && trimToVideo && videoDuration > 0 ? videoDuration : (totalDuration > 0 ? totalDuration : duration);
 
   function fmtEta(s?: number) {
     if (s == null || !isFinite(s) || s <= 0) return "";
@@ -143,7 +171,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         stage = "GIF";
       } else {
         out = await exportVideo(
-          { shortSide, fps, bitrate, format, includeAudio, cancel: cancelRef.current },
+          { shortSide, fps, bitrate, format, includeAudio, duration: finalExportDuration, cancel: cancelRef.current },
           onProg
         );
         stage = out.ext.toUpperCase();
@@ -158,7 +186,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         {
           description: isDesktopBuild()
             ? t("ex.savedAtDesc")
-            : `${stage} · ${category === "photo" ? `${project.width}×${project.height}` : `${W}×${H}`}${isVideo ? ` · ${fps}fps · ${!includeAudio ? "Mudo" : "Com áudio"}` : ""}`,
+            : `${stage} · ${category === "photo" ? `${project.width}×${project.height}` : `${W}×${H}`}${isVideo ? ` · ${fps}fps · ${fmtDur(finalExportDuration)} · ${!includeAudio ? "Mudo" : "Com áudio"}` : ""}`,
         }
       );
     } catch (e) {
@@ -256,6 +284,44 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           {/* CATEGORIA: VÍDEO */}
           {category === "video" && (
             <>
+              {/* Duração & Ajuste Inteligente ao Vídeo */}
+              <div className="rounded-lg border border-[#232d3d] bg-[#0e1320] p-3 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-400 flex items-center gap-1.5 font-medium">
+                    <Clock className="h-3.5 w-3.5 text-emerald-400" />
+                    Duração da Exportação:
+                  </span>
+                  <span className="font-mono text-emerald-300 font-semibold text-sm">
+                    {fmtDur(finalExportDuration)} ({finalExportDuration.toFixed(1)}s)
+                  </span>
+                </div>
+
+                {audioHasExtra && (
+                  <div className="pt-2 border-t border-[#1c2430] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="trim-video-opt" className="text-[11px] text-zinc-300 font-medium cursor-pointer flex items-center gap-2">
+                        <input
+                          id="trim-video-opt"
+                          type="checkbox"
+                          checked={trimToVideo}
+                          onChange={(e) => setTrimToVideo(e.target.checked)}
+                          className="rounded border-[#2a3546] bg-[#121722] text-emerald-500 focus:ring-0 cursor-pointer h-3.5 w-3.5"
+                        />
+                        Cortar no final do último vídeo ({videoDuration.toFixed(1)}s)
+                      </label>
+                      <span className="text-[10px] text-amber-400 font-mono">
+                        {trimToVideo ? "Sem tela preta" : `Trilha até ${totalDuration.toFixed(1)}s`}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 leading-relaxed">
+                      {trimToVideo
+                        ? `A música dura ${fmtDur(totalDuration)}, mas o vídeo termina aos ${fmtDur(videoDuration)}. O vídeo exportado terminará certinho aos ${fmtDur(videoDuration)} evitando tela preta no final.`
+                        : `A exportação continuará até ${fmtDur(totalDuration)} com tela preta enquanto a música toca.`}
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Formato de Vídeo */}
               <div>
                 <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.format")}</p>

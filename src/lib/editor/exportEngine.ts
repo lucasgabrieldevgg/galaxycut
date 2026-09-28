@@ -33,6 +33,7 @@ export interface OfflineOptions {
   bitrate: number;
   format: "mp4" | "webm9" | "webm8";
   includeAudio?: boolean;
+  duration?: number;
   onProgress: (p: number, info?: OfflineProgressInfo) => void;
   /** objeto vivo: setar cancelled=true aborta o render o quanto antes */
   cancel?: { cancelled: boolean };
@@ -275,7 +276,8 @@ function seekVideo(v: HTMLVideoElement, time: number): Promise<void> {
 export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult> {
   if (!offlineSupported()) throw new Error("WebCodecs indisponível");
   const { project, tracks, clips } = useProject.getState();
-  const duration = usePlayback.getState().duration;
+  const effectiveDur = computeEffectiveDuration(clips, tracks);
+  const duration = opts.duration && opts.duration > 0 ? opts.duration : effectiveDur;
   if (duration <= 0) throw new Error("Timeline vazia — adicione mídia antes de exportar.");
 
   const cancelled = () => !!opts.cancel?.cancelled;
@@ -359,7 +361,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     try {
       audioBuffer = await renderAudioMix(duration, (p) => onProgress0(opts, 0.09 + 0.06 * p, { stage: "prepare" }));
     } catch {
-      audioBuffer = null; // sem áudio tocável → exporta vídeo mudo
+      audioBuffer = null;
     }
   }
 
@@ -368,22 +370,29 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
   const isMp4 = opts.format === "mp4";
 
   let audioEncoder: any = null;
-  let audioConfigured = false;
+  let audioCodecPick: string | null = null;
   if (audioBuffer && wantAudio) {
-    const aCodec = isMp4 ? "mp4a.40.2" : "opus";
-    try {
-      const support = await WC.AudioEncoder.isConfigSupported({
-        codec: aCodec,
-        sampleRate: 48000,
-        numberOfChannels: 2,
-        bitrate: 160000,
-      });
-      if (support?.supported) {
-        audioConfigured = true;
-      }
-    } catch {
-      audioConfigured = false;
+    const candidateAudioCodecs = isMp4 ? ["mp4a.40.2", "mp4a.40.02", "mp4a.67"] : ["opus", "vorbis"];
+    for (const cand of candidateAudioCodecs) {
+      try {
+        const support = await WC.AudioEncoder.isConfigSupported({
+          codec: cand,
+          sampleRate: 48000,
+          numberOfChannels: 2,
+          bitrate: 160000,
+        });
+        if (support?.supported) {
+          audioCodecPick = cand;
+          break;
+        }
+      } catch {}
     }
+  }
+
+  // Se o usuário pediu áudio e há faixas com som, mas o AudioEncoder não suporta na plataforma:
+  // lança no-offline-codec para cair no MediaRecorder (exportRealtime) com áudio 100% garantido
+  if (wantAudio && audioBuffer && !audioCodecPick) {
+    throw new Error("no-offline-codec");
   }
 
   let muxer: any;
@@ -391,7 +400,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     muxer = new Mp4Muxer({
       target: new Mp4Target(),
       video: { codec: vPick.muxer as "avc", width: W, height: H, frameRate: fps },
-      audio: audioConfigured
+      audio: audioCodecPick
         ? { codec: "aac", numberOfChannels: 2, sampleRate: 48000 }
         : undefined,
       fastStart: "in-memory",
@@ -401,7 +410,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     muxer = new WebmMuxer({
       target: new WebmTarget(),
       video: { codec: vPick.muxer, width: W, height: H, frameRate: fps },
-      audio: audioConfigured
+      audio: audioCodecPick
         ? { codec: "A_OPUS", numberOfChannels: 2, sampleRate: 48000 }
         : undefined,
       firstTimestampBehavior: "permissive",
@@ -423,21 +432,21 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     latencyMode: "quality",
   });
 
-  if (audioConfigured && audioBuffer) {
+  if (audioCodecPick && audioBuffer) {
     try {
-      const aCodec = isMp4 ? "mp4a.40.2" : "opus";
       audioEncoder = new WC.AudioEncoder({
         output: (chunk: any, meta: any) => muxer.addAudioChunk(chunk, meta),
         error: (err: any) => console.warn("AudioEncoder error:", err),
       });
       audioEncoder.configure({
-        codec: aCodec,
+        codec: audioCodecPick,
         sampleRate: 48000,
         numberOfChannels: 2,
         bitrate: 160000,
       });
     } catch {
       audioEncoder = null;
+      if (wantAudio) throw new Error("no-offline-codec");
     }
   }
   if (!audioEncoder) noAudio = true;

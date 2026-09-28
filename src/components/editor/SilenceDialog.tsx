@@ -31,7 +31,7 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const [busy, setBusy] = useState(false);
   /** trechos no tempo do ARQUIVO (converto pra cada clipe na hora de aplicar) */
   const [spans, setSpans] = useState<(SilenceSpan & { on: boolean })[] | null>(null);
-  const [mode, setMode] = useState<Mode>("both");
+  const [mode, setMode] = useState<Mode>("delaudio");
   const t = useT();
 
   // fonte: clipe selecionado (vídeo/áudio) ou o primeiro com áudio
@@ -112,16 +112,16 @@ export function SilenceDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
   const modes: { id: Mode; label: string; hint: string; icon: React.ReactNode }[] = [
     {
-      id: "both",
-      label: isVideo ? t("sd.modeBoth") : t("sd.modeBothAudio"),
-      hint: t("sd.modeBothHint"),
-      icon: <Trash2 className="h-3.5 w-3.5" />,
-    },
-    {
       id: "delaudio",
       label: t("sd.modeDelaudio"),
       hint: t("sd.modeDelaudioHint"),
       icon: <AudioLinesOff className="h-3.5 w-3.5 text-red-400" />,
+    },
+    {
+      id: "both",
+      label: isVideo ? t("sd.modeBoth") : t("sd.modeBothAudio"),
+      hint: t("sd.modeBothHint"),
+      icon: <Trash2 className="h-3.5 w-3.5" />,
     },
     {
       id: "audio",

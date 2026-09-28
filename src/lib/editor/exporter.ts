@@ -22,6 +22,7 @@ export interface ExportOptions {
   bitrate: number; // bits/s
   format: VideoFormat;
   includeAudio?: boolean;
+  duration?: number;
   /** v7.3: cancelamento — setar cancelled=true aborta o render na hora */
   cancel?: { cancelled: boolean };
 }
@@ -131,6 +132,7 @@ export async function exportVideo(
         bitrate: opts.bitrate,
         format: formatKey,
         includeAudio: opts.includeAudio,
+        duration: opts.duration,
         onProgress,
         cancel: opts.cancel,
       });
@@ -156,7 +158,8 @@ async function exportRealtime(
   onProgress: ExportProgress
 ): Promise<ExportResult> {
   const { project, tracks, clips } = useProject.getState();
-  const duration = usePlayback.getState().duration;
+  const effectiveDur = (clips ?? []).reduce((acc, c) => Math.max(acc, c.start + c.duration), 0);
+  const duration = opts.duration && opts.duration > 0 ? opts.duration : effectiveDur;
   const picked = pickMime(opts.format === "webm8" ? "webm8" : opts.format === "webm9" ? "webm9" : "mp4");
   if (!picked) throw new Error("Seu navegador não suporta gravação de vídeo (MediaRecorder). Use Chrome/Edge atualizado.");
 
