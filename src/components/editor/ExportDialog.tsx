@@ -53,7 +53,6 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [includeAudio, setIncludeAudio] = useState(true);
   const [photoFormat, setPhotoFormat] = useState<"png" | "jpg">("png");
   const [audioFormat, setAudioFormat] = useState<"wav" | "mp3">("wav");
-  const [showMore, setShowMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progInfo, setProgInfo] = useState<{ frame?: number; frames?: number; etaSec?: number; speed?: number }>({});
@@ -205,7 +204,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <MonitorPlay className="h-4 w-4 text-[var(--gc-accent)]" /> {t("ex.title")}
           </DialogTitle>
           <DialogDescription className="text-zinc-500">
-            {t("ex.desc", { more: t("ex.more") })}
+            {t("ex.descSimple")}
           </DialogDescription>
         </DialogHeader>
 
@@ -322,17 +321,15 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
               {/* Resolução */}
               <div>
-                <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.resolution")}</p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {showMore
-                    ? RESOLUTIONS.map((r) => resBtn(r.id, r.label, t(r.hintKey)))
-                    : [720, 1080].map((id) => resBtn(id, id === 1080 ? "1080p" : "720p", t(id === 1080 ? "ex.hint1080" : "ex.hint720b")))}
+                <div className="mb-1.5 flex items-center justify-between">
+                  <p className="text-xs font-medium text-zinc-400">{t("ex.resolution")}</p>
+                  <span className="text-[10px] text-zinc-500">
+                    {W}×{H} ({project.width >= project.height ? t("ex.horizontal") : project.width === project.height ? t("ex.square") : t("ex.vertical")})
+                  </span>
                 </div>
-                {!showMore && (
-                  <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">
-                    {t("ex.moreResHint", { more: t("ex.more") })}
-                  </p>
-                )}
+                <div className="grid grid-cols-4 gap-1.5">
+                  {RESOLUTIONS.map((r) => resBtn(r.id, r.label, t(r.hintKey)))}
+                </div>
                 {shortSide >= 2160 && (
                   <p className="mt-1 text-[10px] text-amber-400/80">
                     {t("ex.hugeWarn", { k: shortSide === 4320 ? "8K" : "4K" })}
@@ -343,8 +340,8 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               {/* Taxa de Quadros (FPS) */}
               <div>
                 <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.fps")}</p>
-                <div className={`grid gap-1.5 ${showMore ? "grid-cols-5" : "grid-cols-2"}`}>
-                  {(showMore ? FPS_OPTIONS : [30, 60]).map((f) => (
+                <div className="grid grid-cols-5 gap-1.5">
+                  {FPS_OPTIONS.map((f) => (
                     <button
                       key={f}
                       onClick={() => setFps(f)}
@@ -353,7 +350,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         fps === f ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                       }`}
                     >
-                      {f} fps {f === 30 && <span className="text-[8px] opacity-70">({t("ex.default")})</span>}
+                      {f} fps {f === 30 && <span className="block text-[8px] opacity-70">({t("ex.default")})</span>}
                     </button>
                   ))}
                 </div>
@@ -380,16 +377,6 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   {t("ex.qualityNote", { q: quality === "alta" ? t("ex.qhigh") : quality === "media" ? t("ex.qmid") : t("ex.qlow"), mbps: (bitrate / 1_000_000).toFixed(1) })}
                 </p>
               </div>
-
-              {/* Botão de Mais/Menos Opções */}
-              <button
-                type="button"
-                onClick={() => setShowMore((v) => !v)}
-                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-[#232d3d] bg-[#0e1320] px-2 py-1.5 text-[11px] text-zinc-400 transition hover:border[var(--gc-accent-40)] hover:text-[var(--gc-accent)]"
-              >
-                {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                {showMore ? t("ex.less") : t("ex.more")}
-              </button>
             </>
           )}
 

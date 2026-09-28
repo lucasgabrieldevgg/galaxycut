@@ -381,6 +381,7 @@ const PT: Dict = {
   // export
   "ex.title": "Exportar vídeo",
   "ex.desc": "Padrão 1080p em 30fps — sem marca d'água. Toque em “{more}” pra revelar de 240p a 8K, outros fps e formatos.",
+  "ex.descSimple": "Exportação em alta qualidade (240p até 8K), com taxa de quadros e áudio configuráveis — 100% sem marca d'água.",
   "ex.catVideo": "Vídeo",
   "ex.catAudio": "Áudio",
   "ex.catPhoto": "Foto da cena",
@@ -1144,6 +1145,7 @@ const EN: Dict = {
   "ss.cat.signs": "Signs",
   "ex.title": "Export video",
   "ex.desc": "Defaults to 1080p at 30fps — no watermark. Tap “{more}” to reveal 240p to 8K, other fps and formats.",
+  "ex.descSimple": "High quality export (240p to 8K), with customizable frame rate and audio — 100% watermark-free.",
   "ex.catVideo": "Video",
   "ex.catAudio": "Audio",
   "ex.catPhoto": "Scene photo",
@@ -1893,6 +1895,7 @@ const ES: Dict = {
   "ss.cat.signs": "Señales",
   "ex.title": "Exportar vídeo",
   "ex.desc": "Por defecto 1080p a 30fps — sin marca de agua. Toca “{more}” para revelar de 240p a 8K, outros fps y formatos.",
+  "ex.descSimple": "Exportación en alta calidad (240p hasta 8K), con fotogramas y audio configurables — 100% sin marca de agua.",
   "ex.catVideo": "Vídeo",
   "ex.catAudio": "Audio",
   "ex.catPhoto": "Foto de escena",
