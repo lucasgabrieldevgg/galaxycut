@@ -1,6 +1,7 @@
-// GaláxiaCut — diálogo de exportação (vídeo + GIF + WAV + PNG + SRT)
-// v7: padrão 1080p/30fps, com "mais opções" revelando 240p→8K, fps 24–60
-// e formatos (MP4, WebM, GIF animado, WAV do áudio e PNG do quadro).
+// GalaxyCut — diálogo de exportação (vídeo + GIF + WAV + PNG/JPG + SRT)
+// v7.5: Categorias claras (Vídeo, Áudio, Animação GIF e Foto da Cena PNG/JPG),
+// mais formatos de vídeo (MP4, WebM, MOV, MKV), opção de vídeo Mudo (sem áudio),
+// e correção definitiva do áudio na exportação.
 "use client";
 
 import { useMemo, useRef, useState } from "react";
@@ -11,13 +12,16 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useProject, usePlayback } from "@/lib/editor/store";
 import {
-  buildSrt, canExport, downloadBlob, exportVideo, exportGif, exportWav, exportPng,
+  buildSrt, canExport, downloadBlob, exportVideo, exportGif, exportWav, exportPng, exportJpg,
   listVideoFormats, outputSize, sanitizeName, suggestBitrate, VideoFormat, ExportProgress,
 } from "@/lib/editor/exporter";
 import { deliverExport, askExportDestination, isDesktopBuild } from "@/lib/editor/desktop";
 import { useT } from "@/lib/editor/i18n";
 import { toast } from "sonner";
-import { Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen, Star, ChevronDown, ChevronUp, Image as ImageIcon, Music4, FileVideo, XCircle } from "lucide-react";
+import {
+  Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen, Star, ChevronDown, ChevronUp,
+  Image as ImageIcon, Music4, FileVideo, XCircle, Volume2, VolumeX, Sparkles, Film, Camera
+} from "lucide-react";
 
 /** qualidade = MENOR lado da saída. 1080 é o padrão; o resto aparece em "mais opções". */
 const RESOLUTIONS: { id: number; label: string; hintKey: string }[] = [
@@ -27,20 +31,28 @@ const RESOLUTIONS: { id: number; label: string; hintKey: string }[] = [
   { id: 1080, label: "1080p", hintKey: "ex.hint1080" },
   { id: 720, label: "720p", hintKey: "ex.hint720" },
   { id: 480, label: "480p", hintKey: "ex.hint480" },
- { id: 360, label: "360p", hintKey: "ex.hint360" },
+  { id: 360, label: "360p", hintKey: "ex.hint360" },
   { id: 240, label: "240p", hintKey: "ex.hint240" },
 ];
 const FPS_OPTIONS = [24, 25, 30, 50, 60];
+
+type ExportCategory = "video" | "audio" | "gif" | "photo";
 
 export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const t = useT();
   const project = useProject((s) => s.project);
   const duration = usePlayback((s) => s.duration);
+  const playhead = usePlayback((s) => s.playhead);
   const clips = useProject((s) => s.clips);
+
+  const [category, setCategory] = useState<ExportCategory>("video");
   const [shortSide, setShortSide] = useState(1080);
   const [fps, setFps] = useState(30);
   const [quality, setQuality] = useState<"alta" | "media" | "baixa">("alta");
   const [format, setFormat] = useState<VideoFormat>("mp4");
+  const [includeAudio, setIncludeAudio] = useState(true);
+  const [photoFormat, setPhotoFormat] = useState<"png" | "jpg">("png");
+  const [audioFormat, setAudioFormat] = useState<"wav" | "mp3">("wav");
   const [showMore, setShowMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -51,7 +63,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const videoFormats = useMemo(() => listVideoFormats(), []);
   const supported = canExport();
 
-  const isVideo = format === "mp4" || format === "webm9" || format === "webm8";
+  const isVideo = category === "video";
   const { W, H } = outputSize(project, shortSide);
 
   const bitrate = useMemo(() => {
@@ -67,19 +79,35 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   }
 
   async function run() {
-    if (duration <= 0) {
+    if (category !== "photo" && duration <= 0) {
       toast.error(t("ex.emptyTimeline"));
       return;
     }
-    // nomeação própria: nunca briga com outros vídeos da pasta
+
     const now = new Date();
     const p = (n: number) => String(n).padStart(2, "0");
     const ts = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}_${p(now.getHours())}-${p(now.getMinutes())}-${p(now.getSeconds())}`;
-    const resTag = format === "wav" || format === "png" || format === "gif" ? format.toUpperCase() : `${shortSide}p`;
-    const ext = format === "mp4" ? "mp4" : format === "webm9" || format === "webm8" ? "webm" : format === "gif" ? "gif" : format === "wav" ? "wav" : "png";
+
+    let ext = "mp4";
+    let resTag = `${shortSide}p`;
+
+    if (category === "photo") {
+      ext = photoFormat;
+      resTag = `Frame_${playhead.toFixed(1)}s`;
+    } else if (category === "audio") {
+      ext = audioFormat;
+      resTag = "AUDIO";
+    } else if (category === "gif") {
+      ext = "gif";
+      resTag = `${shortSide}p_GIF`;
+    } else {
+      ext = format;
+      resTag = !includeAudio ? `${shortSide}p_MUTE` : `${shortSide}p`;
+    }
+
     const name = `GalaxyCut_${ts}_${sanitizeName(project.name)}_${resTag}.${ext}`;
 
-    // no APP: pergunta ANTES onde salvar (cancelar aqui não joga o render fora)
+    // no APP: pergunta ANTES onde salvar
     const dest = await askExportDestination(name);
     if ("canceled" in dest) {
       toast.info(t("ex.pickCanceled"));
@@ -91,28 +119,37 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     setProgInfo({});
     setResult(null);
     cancelRef.current = { cancelled: false };
+
     const onProg: ExportProgress = (v, info) => {
       setProgress(v);
-      if (info?.stage === "render") setProgInfo({ frame: info.frame, frames: info.frames, etaSec: info.etaSec, speed: info.speed });
-      else setProgInfo({});
+      if (info?.stage === "render") {
+        setProgInfo({ frame: info.frame, frames: info.frames, etaSec: info.etaSec, speed: info.speed });
+      } else {
+        setProgInfo({});
+      }
     };
+
     try {
       let out: { blob: Blob; ext: string };
       let stage = "";
-      if (format === "gif") {
+
+      if (category === "photo") {
+        out = photoFormat === "jpg" ? await exportJpg() : await exportPng();
+        stage = photoFormat.toUpperCase();
+      } else if (category === "audio") {
+        out = await exportWav((v) => setProgress(v));
+        stage = audioFormat.toUpperCase();
+      } else if (category === "gif") {
         out = await exportGif({ shortSide, fps }, (v) => setProgress(v));
         stage = "GIF";
-      } else if (format === "wav") {
-        out = await exportWav((v) => setProgress(v));
-        stage = "WAV";
-      } else if (format === "png") {
-        out = await exportPng();
-        stage = "PNG";
       } else {
-        out = await exportVideo({ shortSide, fps, bitrate, format, cancel: cancelRef.current }, onProg);
+        out = await exportVideo(
+          { shortSide, fps, bitrate, format, includeAudio, cancel: cancelRef.current },
+          onProg
+        );
         stage = out.ext.toUpperCase();
       }
-      void stage;
+
       const path = await deliverExport(out.blob, name, dest.dest === "desktop" ? dest.path || undefined : undefined);
       setResult({ blob: out.blob, name, path });
       toast.success(
@@ -122,7 +159,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         {
           description: isDesktopBuild()
             ? t("ex.savedAtDesc")
-            : `${stage} · ${W}×${H} · ${isVideo ? `${fps}fps · ` : ""}${quality}`,
+            : `${stage} · ${category === "photo" ? `${project.width}×${project.height}` : `${W}×${H}`}${isVideo ? ` · ${fps}fps · ${!includeAudio ? "Mudo" : "Com áudio"}` : ""}`,
         }
       );
     } catch (e) {
@@ -162,154 +199,310 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
-      <DialogContent className="max-h-[92vh] max-w-md overflow-y-auto border-[#232d3d] bg-[#121722] text-zinc-200">
+      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto border-[#232d3d] bg-[#121722] text-zinc-200">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MonitorPlay className="h-4 w-4 text-[var(--gc-accent)]" /> {t("ex.title")}
           </DialogTitle>
-          <DialogDescription className="text-zinc-500">{t("ex.desc", { more: t("ex.more") })}</DialogDescription>
+          <DialogDescription className="text-zinc-500">
+            {t("ex.desc", { more: t("ex.more") })}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-1">
-          {/* formato */}
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.format")}</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {videoFormats.map((f) => (
+        {/* Abas de Categorias */}
+        <div className="flex rounded-lg border border-[#232d3d] bg-[#0c1017] p-1">
+          <button
+            type="button"
+            onClick={() => setCategory("video")}
+            disabled={busy}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
+              category === "video" ? "bg-[var(--gc-accent)] text-black shadow-sm" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <Film className="h-3.5 w-3.5" /> {t("ex.catVideo")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCategory("audio")}
+            disabled={busy}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
+              category === "audio" ? "bg-[var(--gc-accent)] text-black shadow-sm" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <Music4 className="h-3.5 w-3.5" /> {t("ex.catAudio")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCategory("gif")}
+            disabled={busy}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
+              category === "gif" ? "bg-[var(--gc-accent)] text-black shadow-sm" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <ImageIcon className="h-3.5 w-3.5" /> GIF
+          </button>
+          <button
+            type="button"
+            onClick={() => setCategory("photo")}
+            disabled={busy}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
+              category === "photo" ? "bg-[var(--gc-accent)] text-black shadow-sm" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <Camera className="h-3.5 w-3.5" /> {t("ex.catPhoto")}
+          </button>
+        </div>
+
+        <div className="space-y-3.5 py-1">
+          {/* CATEGORIA: VÍDEO */}
+          {category === "video" && (
+            <>
+              {/* Formato de Vídeo */}
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.format")}</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {videoFormats.map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setFormat(f.id)}
+                      disabled={busy}
+                      title={f.hint}
+                      className={`flex flex-col items-center justify-center rounded-md border p-2 text-center text-xs transition ${
+                        format === f.id
+                          ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                          : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1">
+                        <FileVideo className="h-3.5 w-3.5" /> {f.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[10px] text-zinc-500">
+                  {videoFormats.find((f) => f.id === format)?.hint}
+                </p>
+              </div>
+
+              {/* Opção de Áudio no Vídeo (Novo!) */}
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.audioTrack")}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIncludeAudio(true)}
+                    disabled={busy}
+                    className={`flex items-center justify-center gap-2 rounded-md border p-2 text-xs transition ${
+                      includeAudio
+                        ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                        : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                    }`}
+                  >
+                    <Volume2 className="h-4 w-4" /> {t("ex.audioInclude")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIncludeAudio(false)}
+                    disabled={busy}
+                    className={`flex items-center justify-center gap-2 rounded-md border p-2 text-xs transition ${
+                      !includeAudio
+                        ? "border-amber-400 bg-amber-400/10 text-amber-300 font-semibold"
+                        : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                    }`}
+                  >
+                    <VolumeX className="h-4 w-4" /> {t("ex.audioMute")}
+                  </button>
+                </div>
+                {!includeAudio && (
+                  <p className="mt-1 text-[10px] text-amber-400/80">
+                    {t("ex.audioMuteNote")}
+                  </p>
+                )}
+              </div>
+
+              {/* Resolução */}
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.resolution")}</p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {showMore
+                    ? RESOLUTIONS.map((r) => resBtn(r.id, r.label, t(r.hintKey)))
+                    : [720, 1080].map((id) => resBtn(id, id === 1080 ? "1080p" : "720p", t(id === 1080 ? "ex.hint1080" : "ex.hint720b")))}
+                </div>
+                {!showMore && (
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">
+                    {t("ex.moreResHint", { more: t("ex.more") })}
+                  </p>
+                )}
+                {shortSide >= 2160 && (
+                  <p className="mt-1 text-[10px] text-amber-400/80">
+                    {t("ex.hugeWarn", { k: shortSide === 4320 ? "8K" : "4K" })}
+                  </p>
+                )}
+              </div>
+
+              {/* Taxa de Quadros (FPS) */}
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.fps")}</p>
+                <div className={`grid gap-1.5 ${showMore ? "grid-cols-5" : "grid-cols-2"}`}>
+                  {(showMore ? FPS_OPTIONS : [30, 60]).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setFps(f)}
+                      disabled={busy}
+                      className={`rounded-md border px-2 py-1.5 text-xs transition ${
+                        fps === f ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                      }`}
+                    >
+                      {f} fps {f === 30 && <span className="text-[8px] opacity-70">({t("ex.default")})</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Qualidade (Bitrate) */}
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.quality")}</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(["baixa", "media", "alta"] as const).map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => setQuality(q)}
+                      disabled={busy}
+                      className={`rounded-md border px-2 py-1.5 text-xs capitalize transition ${
+                        quality === q ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                      }`}
+                    >
+                      {q === "media" ? t("ex.qmid") : q === "alta" ? t("ex.qhigh") : t("ex.qlow")}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[10px] text-zinc-600">
+                  {t("ex.qualityNote", { q: quality === "alta" ? t("ex.qhigh") : quality === "media" ? t("ex.qmid") : t("ex.qlow"), mbps: (bitrate / 1_000_000).toFixed(1) })}
+                </p>
+              </div>
+
+              {/* Botão de Mais/Menos Opções */}
+              <button
+                type="button"
+                onClick={() => setShowMore((v) => !v)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-[#232d3d] bg-[#0e1320] px-2 py-1.5 text-[11px] text-zinc-400 transition hover:border[var(--gc-accent-40)] hover:text-[var(--gc-accent)]"
+              >
+                {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                {showMore ? t("ex.less") : t("ex.more")}
+              </button>
+            </>
+          )}
+
+          {/* CATEGORIA: ÁUDIO APENAS */}
+          {category === "audio" && (
+            <div className="space-y-3 rounded-lg border border-[#232d3d] bg-[#0e1320] p-3.5">
+              <div className="flex items-center gap-2 text-zinc-200">
+                <Music4 className="h-5 w-5 text-amber-400" />
+                <div>
+                  <h4 className="text-xs font-semibold">{t("ex.audioTitle")}</h4>
+                  <p className="text-[11px] text-zinc-400">{t("ex.wavNote")}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
                 <button
-                  key={f.id}
-                  onClick={() => setFormat(f.id)}
+                  type="button"
+                  onClick={() => setAudioFormat("wav")}
                   disabled={busy}
-                  title={f.hint}
-                  className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-xs transition ${
-                    format === f.id ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                  className={`rounded-md border p-2 text-xs transition ${
+                    audioFormat === "wav" ? "border-amber-400 bg-amber-400/10 text-amber-300 font-semibold" : "border-[#2a3546] text-zinc-400"
                   }`}
                 >
-                  <FileVideo className="h-3.5 w-3.5" /> {f.label}
+                  <span className="block font-semibold">WAV (48kHz 16-bit)</span>
+                  <span className="text-[9px] text-zinc-500">{t("ex.audioLossless")}</span>
                 </button>
-              ))}
-              <button
-                onClick={() => setFormat("gif")}
-                disabled={busy}
-                title={t("ex.gifNote")}
-                className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-xs transition ${
-                  format === "gif" ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-                }`}
-              >
-                <ImageIcon className="h-3.5 w-3.5" /> GIF
-              </button>
-              <button
-                onClick={() => setFormat("wav")}
-                disabled={busy}
-                title={t("ex.wavNote")}
-                className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-xs transition ${
-                  format === "wav" ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-                }`}
-              >
-                <Music4 className="h-3.5 w-3.5" /> WAV
-              </button>
-              <button
-                onClick={() => setFormat("png")}
-                disabled={busy}
-                title={t("ex.pngNote")}
-                className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-xs transition ${
-                  format === "png" ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-                }`}
-              >
-                <ImageIcon className="h-3.5 w-3.5" /> PNG
-              </button>
-            </div>
-            <p className="mt-1 text-[10px] text-zinc-600">
-              {format === "gif" ? t("ex.gifNote") : format === "wav" ? t("ex.wavNote") : format === "png" ? t("ex.pngNote") : t("ex.outputSize", { w: W, h: H, orient: project.width >= project.height ? t("ex.horizontal") : project.width === project.height ? t("ex.square") : t("ex.vertical") })}
-            </p>
-          </div>
-
-          {/* resolução (vídeo/gif) */}
-          {format !== "wav" && format !== "png" && (
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.resolution")}</p>
-              <div className="grid grid-cols-4 gap-1.5">
-                {showMore
-                  ? RESOLUTIONS.map((r) => resBtn(r.id, r.label, t(r.hintKey)))
-                  : [720, 1080].map((id) => resBtn(id, id === 1080 ? "1080p" : "720p", t(id === 1080 ? "ex.hint1080" : "ex.hint720b")))}
+                <button
+                  type="button"
+                  onClick={() => setAudioFormat("mp3")}
+                  disabled={busy}
+                  className={`rounded-md border p-2 text-xs transition ${
+                    audioFormat === "mp3" ? "border-amber-400 bg-amber-400/10 text-amber-300 font-semibold" : "border-[#2a3546] text-zinc-400"
+                  }`}
+                >
+                  <span className="block font-semibold">MP3 / AAC</span>
+                  <span className="text-[9px] text-zinc-500">{t("ex.audioCompressed")}</span>
+                </button>
               </div>
-              {/* aviso pedido pelo dono: mais resoluções moram no "Mais opções" */}
-              {!showMore && (
-                <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">
-                  {t("ex.moreResHint", { more: t("ex.more") })}
-                </p>
-              )}
-              {shortSide >= 2160 && (
-                <p className="mt-1 text-[10px] text-amber-400/80">
-                  {t("ex.hugeWarn", { k: shortSide === 4320 ? "8K" : "4K" })}
-                </p>
-              )}
             </div>
           )}
 
-          {/* fps */}
-          {isVideo && (
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.fps")}</p>
-              <div className={`grid gap-1.5 ${showMore ? "grid-cols-5" : "grid-cols-2"}`}>
-                {(showMore ? FPS_OPTIONS : [30, 60]).map((f) => (
+          {/* CATEGORIA: GIF ANIMADO */}
+          {category === "gif" && (
+            <div className="space-y-3 rounded-lg border border-[#232d3d] bg-[#0e1320] p-3.5">
+              <div className="flex items-center gap-2 text-zinc-200">
+                <ImageIcon className="h-5 w-5 text-teal-400" />
+                <div>
+                  <h4 className="text-xs font-semibold">{t("ex.gifTitle")}</h4>
+                  <p className="text-[11px] text-zinc-400">{t("ex.gifNote")}</p>
+                </div>
+              </div>
+              <div>
+                <p className="mb-1 text-xs text-zinc-400">{t("ex.resolution")}</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[240, 360, 480].map((id) => resBtn(id, `${id}p`, ""))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CATEGORIA: FOTO DA CENA (PNG/JPG) */}
+          {category === "photo" && (
+            <div className="space-y-3 rounded-lg border border-[#232d3d] bg-[#0e1320] p-3.5">
+              <div className="flex items-start gap-2.5 text-zinc-200">
+                <Camera className="h-5 w-5 shrink-0 text-[var(--gc-accent)]" />
+                <div>
+                  <h4 className="text-xs font-semibold">{t("ex.photoTitle")}</h4>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-400">
+                    {t("ex.photoDesc", { s: playhead.toFixed(2), w: project.width, h: project.height })}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 text-xs text-zinc-400">{t("ex.photoFormat")}</p>
+                <div className="grid grid-cols-2 gap-2">
                   <button
-                    key={f}
-                    onClick={() => setFps(f)}
+                    type="button"
+                    onClick={() => setPhotoFormat("png")}
                     disabled={busy}
-                    className={`rounded-md border px-2 py-1.5 text-xs transition ${
-                      fps === f ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                    className={`rounded-md border p-2 text-xs transition ${
+                      photoFormat === "png"
+                        ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                        : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                     }`}
                   >
-                    {f} fps {f === 30 && <span className="text-[8px] opacity-70">({t("ex.default")})</span>}
+                    <span className="block font-semibold">PNG (Máxima Fidelidade)</span>
+                    <span className="text-[9px] text-zinc-500">Sem perdas · Ideal para miniaturas</span>
                   </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* qualidade (bitrate) — só vídeo */}
-          {isVideo && (
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.quality")}</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(["baixa", "media", "alta"] as const).map((q) => (
                   <button
-                    key={q}
-                    onClick={() => setQuality(q)}
+                    type="button"
+                    onClick={() => setPhotoFormat("jpg")}
                     disabled={busy}
-                    className={`rounded-md border px-2 py-1.5 text-xs capitalize transition ${
-                      quality === q ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                    className={`rounded-md border p-2 text-xs transition ${
+                      photoFormat === "jpg"
+                        ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                        : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                     }`}
                   >
-                    {q === "media" ? t("ex.qmid") : q === "alta" ? t("ex.qhigh") : t("ex.qlow")}
+                    <span className="block font-semibold">JPG (Foto Compactada)</span>
+                    <span className="text-[9px] text-zinc-500">Arquivo leve e rápido</span>
                   </button>
-                ))}
+                </div>
               </div>
-              <p className="mt-1 text-[10px] text-zinc-600">
-                {t("ex.qualityNote", { q: quality === "alta" ? t("ex.qhigh") : quality === "media" ? t("ex.qmid") : t("ex.qlow"), mbps: (bitrate / 1_000_000).toFixed(1) })}
-              </p>
             </div>
           )}
 
-          {/* revelar/ocultar as opções extra */}
-          {format !== "wav" && format !== "png" && (
-            <button
-              type="button"
-              onClick={() => setShowMore((v) => !v)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-[#232d3d] bg-[#0e1320] px-2 py-1.5 text-[11px] text-zinc-400 transition hover:border[var(--gc-accent-40)] hover:text-[var(--gc-accent)]"
-            >
-              {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              {showMore ? t("ex.less") : t("ex.more")}
-            </button>
-          )}
-
+          {/* Barra de Progresso */}
           {busy && (
             <div className="space-y-2 rounded-lg border border[var(--gc-accent-30)] bg[var(--gc-accent-5)] p-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-zinc-300">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--gc-accent)]" />{" "}
-                  {format === "gif" ? t("ex.gifStage") : format === "wav" ? t("ex.wavStage") : t("ex.rendering")}
+                  {category === "gif" ? t("ex.gifStage") : category === "audio" ? t("ex.wavStage") : category === "photo" ? t("ex.photoStage") : t("ex.rendering")}
                 </span>
                 <span className="font-mono text-[var(--gc-accent)]">{Math.round(progress * 100)}%</span>
               </div>
@@ -318,7 +511,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 <span>
                   {isVideo && progInfo.frames
                     ? t("ex.frameOf", { i: progInfo.frame ?? 0, n: progInfo.frames })
-                    : format === "gif" || format === "wav"
+                    : category === "gif" || category === "audio"
                       ? t("ex.offlineNote")
                       : t("ex.preparing")}
                 </span>
@@ -344,6 +537,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             </div>
           )}
 
+          {/* Resultado */}
           {result && (
             <div className="space-y-2 rounded-lg border border[var(--gc-accent-40)] bg[var(--gc-accent-10)] p-3">
               <div className="flex items-center justify-between gap-2">
@@ -362,7 +556,6 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   {result.path ? t("ex.anotherCopy") : t("ex.downloadAgain")}
                 </Button>
               </div>
-              {/* um empurrãozinho de estrela depois de exportar (não inconveniente) */}
               <a
                 href="https://github.com/lucasgabrieldevgg/galaxycut"
                 target="_blank"
@@ -382,12 +575,24 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={downloadSrt} disabled={busy} className="gap-1.5 border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">
-            <FileText className="h-4 w-4" /> {t("ex.srt")}
-          </Button>
-          <Button onClick={() => void run()} disabled={busy || (isVideo && !supported)} className="gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]">
+          {category === "video" && (
+            <Button variant="outline" onClick={downloadSrt} disabled={busy} className="gap-1.5 border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">
+              <FileText className="h-4 w-4" /> {t("ex.srt")}
+            </Button>
+          )}
+          <Button
+            onClick={() => void run()}
+            disabled={busy || (isVideo && !supported)}
+            className="gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
+          >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            {busy ? t("ex.exporting") : t("ex.exportBtn")}
+            {busy
+              ? t("ex.exporting")
+              : category === "photo"
+                ? t("ex.captureBtn")
+                : category === "audio"
+                  ? t("ex.exportAudioBtn")
+                  : t("ex.exportBtn")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,7 +1,35 @@
 {
   "name": "GalaxyCut",
-  "version": "7.4.0",
+  "version": "7.5.0",
   "changelog": [
+    {
+      "version": "7.5.0",
+      "date": "2026-09-28",
+      "items": [
+        "MARQUEE SELECTION (DESKTOP STYLE): Click and drag on empty timeline area to select multiple clips with a selection box; holding near screen edges automatically scrolls the timeline sideways",
+        "AUDIO EXPORT FIX: Full audio mix synchronization during export, ensuring all audio tracks are properly included with correct volume and encoding flush",
+        "MUTE VIDEO EXPORT OPTION: New option in export dialog to export video without audio (Mute mode)",
+        "EXPANDED VIDEO FORMATS: Export in MP4, WebM (VP9/VP8), Apple QuickTime MOV, and MKV",
+        "SCENE PHOTO CAPTURE (PNG/JPG): Capture and save high-resolution stills of the current timeline frame for YouTube thumbnails and covers",
+        "TRACK LAYER TIPS: Helpful guidance on track layering recommending Video 2 for main video when using overlay images/stickers on Video 3"
+      ],
+      "items_pt": [
+        "SELEÇÃO POR RETÂNGULO NA TIMELINE: Clique e arraste com o botão esquerdo no vazio da timeline para selecionar vários clipes como na área de trabalho do Windows, com rolagem automática contínua para os lados ao segurar na borda",
+        "CORREÇÃO DO ÁUDIO NA EXPORTAÇÃO: O áudio agora é mixado e codificado com perfeição no vídeo exportado em todas as resoluções",
+        "OPÇÃO DE VÍDEO MUDO (SEM ÁUDIO): Nova opção no diálogo de exportação para exportar vídeo sem áudio quando desejado",
+        "MAIS FORMATOS DE VÍDEO: Suporte para MP4, WebM (VP9/VP8), Apple QuickTime MOV e MKV",
+        "CAPTURAR FOTO DA CENA (PNG/JPG): Exportação de foto estática em alta resolução do frame atual da timeline para miniaturas e capas",
+        "DICA DE ORGANIZAÇÃO DE FAIXAS: Guia e dica recomendando colocar o vídeo principal na faixa Vídeo 2 para usar imagens e elementos sobrepostos na Vídeo 3"
+      ],
+      "items_es": [
+        "SELECCIÓN POR RECUADRO EN TIMELINE: Haz clic y arrastra con el ratón para seleccionar múltiples clips como en el escritorio de Windows, con desplazamiento automático hacia los lados al llegar al borde",
+        "CORRECCIÓN DE AUDIO EN EXPORTACIÓN: El audio ahora se mezcla y codifica a la perfección en el vídeo exportado",
+        "OPCIÓN DE VÍDEO MUDO (SIN AUDIO): Nueva opción para exportar vídeo sin sonido",
+        "MÁS FORMATOS DE VÍDEO: Soporte para MP4, WebM (VP9/VP8), Apple QuickTime MOV y MKV",
+        "CAPTURAR FOTO DE LA ESCENA (PNG/JPG): Guarda una foto estática en alta resolución del fotograma actual para miniaturas",
+        "CONSEJO DE PISTAS: Recomendación de colocar el vídeo principal en la pista Vídeo 2 para usar imágenes superpuestas en la pista Vídeo 3"
+      ]
+    },
     {
       "version": "7.4.0",
       "date": "2026-09-28",
@@ -302,5 +330,5 @@
       ]
     }
   ],
-  "date": "2026-09-28T18:25:27.324Z"
+  "date": "2026-09-28T19:18:23.334Z"
 }

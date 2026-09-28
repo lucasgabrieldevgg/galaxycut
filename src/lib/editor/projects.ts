@@ -125,13 +125,13 @@ export function getSavedAt(id: string): number | null {
 
 function defaultTracks(): Track[] {
   return [
-    { id: "T-texto", kind: "text", name: "Texto", muted: false, hidden: false },
-    { id: "V3", kind: "video", name: "Vídeo 3", muted: false, hidden: false },
-    { id: "V2", kind: "video", name: "Vídeo 2", muted: false, hidden: false },
-    { id: "V1", kind: "video", name: "Vídeo 1 (principal)", muted: false, hidden: false },
-    { id: "A3", kind: "audio", name: "Áudio 3", muted: false, hidden: false },
-    { id: "A2", kind: "audio", name: "Áudio 2", muted: false, hidden: false },
-    { id: "A1", kind: "audio", name: "Áudio 1 (música)", muted: false, hidden: false },
+    { id: "T-texto", kind: "text", name: "Texto / Legendas", muted: false, hidden: false },
+    { id: "V3", kind: "video", name: "Vídeo 3 (Sobreposição / Imagens)", muted: false, hidden: false },
+    { id: "V2", kind: "video", name: "Vídeo 2 (Vídeo Principal)", muted: false, hidden: false },
+    { id: "V1", kind: "video", name: "Vídeo 1 (Fundo / Base)", muted: false, hidden: false },
+    { id: "A3", kind: "audio", name: "Áudio 3 (Efeitos sonoros)", muted: false, hidden: false },
+    { id: "A2", kind: "audio", name: "Áudio 2 (Música / Trilha)", muted: false, hidden: false },
+    { id: "A1", kind: "audio", name: "Áudio 1 (Voz / Principal)", muted: false, hidden: false },
   ];
 }
 

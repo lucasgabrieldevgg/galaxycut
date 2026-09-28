@@ -90,6 +90,8 @@ interface ProjectState extends Snapshot {
   duplicateClip: (id: string) => void;
   splitAt: (t: number) => void;
   select: (id: string | null) => void;
+  /** Seleciona múltiplos clipes de uma vez (arraste tipo área de trabalho do Windows) */
+  selectMultiple: (ids: string[]) => void;
   /** Ctrl+clique: liga/desliga um clipe da seleção múltipla */
   toggleSelect: (id: string) => void;
   /** Ctrl+A: seleciona todas as cenas (áudio e vídeo, inclusive as escondidas) */
@@ -186,13 +188,13 @@ function buildSilencePieces(clip: Clip, ranges: { a: number; b: number }[], mode
 export const useProject = create<ProjectState>((set, get) => ({
   project: { name: "Nova edição", width: 1080, height: 1920, fps: 30 },
   tracks: [
-    { id: "T-texto", kind: "text", name: "Texto", muted: false, hidden: false },
-    { id: "V3", kind: "video", name: "Vídeo 3", muted: false, hidden: false },
-    { id: "V2", kind: "video", name: "Vídeo 2", muted: false, hidden: false },
-    { id: "V1", kind: "video", name: "Vídeo 1 (principal)", muted: false, hidden: false },
-    { id: "A3", kind: "audio", name: "Áudio 3", muted: false, hidden: false },
-    { id: "A2", kind: "audio", name: "Áudio 2", muted: false, hidden: false },
-    { id: "A1", kind: "audio", name: "Áudio 1 (música)", muted: false, hidden: false },
+    { id: "T-texto", kind: "text", name: "Texto / Legendas", muted: false, hidden: false },
+    { id: "V3", kind: "video", name: "Vídeo 3 (Sobreposição / Imagens)", muted: false, hidden: false },
+    { id: "V2", kind: "video", name: "Vídeo 2 (Vídeo Principal)", muted: false, hidden: false },
+    { id: "V1", kind: "video", name: "Vídeo 1 (Fundo / Base)", muted: false, hidden: false },
+    { id: "A3", kind: "audio", name: "Áudio 3 (Efeitos sonoros)", muted: false, hidden: false },
+    { id: "A2", kind: "audio", name: "Áudio 2 (Música / Trilha)", muted: false, hidden: false },
+    { id: "A1", kind: "audio", name: "Áudio 1 (Voz / Principal)", muted: false, hidden: false },
   ],
   clips: [],
   media: [],
@@ -229,13 +231,13 @@ export const useProject = create<ProjectState>((set, get) => ({
     set({
       project: { name: "Nova edição", width: 1080, height: 1920, fps: 30 },
       tracks: [
-        { id: "T-texto", kind: "text", name: "Texto", muted: false, hidden: false },
-        { id: "V3", kind: "video", name: "Vídeo 3", muted: false, hidden: false },
-        { id: "V2", kind: "video", name: "Vídeo 2", muted: false, hidden: false },
-        { id: "V1", kind: "video", name: "Vídeo 1 (principal)", muted: false, hidden: false },
-        { id: "A3", kind: "audio", name: "Áudio 3", muted: false, hidden: false },
-        { id: "A2", kind: "audio", name: "Áudio 2", muted: false, hidden: false },
-        { id: "A1", kind: "audio", name: "Áudio 1 (música)", muted: false, hidden: false },
+        { id: "T-texto", kind: "text", name: "Texto / Legendas", muted: false, hidden: false },
+        { id: "V3", kind: "video", name: "Vídeo 3 (Sobreposição / Imagens)", muted: false, hidden: false },
+        { id: "V2", kind: "video", name: "Vídeo 2 (Vídeo Principal)", muted: false, hidden: false },
+        { id: "V1", kind: "video", name: "Vídeo 1 (Fundo / Base)", muted: false, hidden: false },
+        { id: "A3", kind: "audio", name: "Áudio 3 (Efeitos sonoros)", muted: false, hidden: false },
+        { id: "A2", kind: "audio", name: "Áudio 2 (Música / Trilha)", muted: false, hidden: false },
+        { id: "A1", kind: "audio", name: "Áudio 1 (Voz / Principal)", muted: false, hidden: false },
       ],
       clips: [],
       media: [],
@@ -722,6 +724,7 @@ export const useProject = create<ProjectState>((set, get) => ({
     });
   },
   select: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
+  selectMultiple: (ids) => set({ selectedIds: ids, selectedId: ids[0] ?? null }),
   toggleSelect: (id) =>
     set((s) => {
       const has = s.selectedIds.includes(id);

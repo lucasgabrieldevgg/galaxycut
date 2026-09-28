@@ -32,6 +32,7 @@ export interface OfflineOptions {
   fps: number;
   bitrate: number;
   format: "mp4" | "webm9" | "webm8";
+  includeAudio?: boolean;
   onProgress: (p: number, info?: OfflineProgressInfo) => void;
   /** objeto vivo: setar cancelled=true aborta o render o quanto antes */
   cancel?: { cancelled: boolean };
@@ -124,7 +125,7 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
   const withSound = clips.filter((c) => c.kind === "video" || c.kind === "audio");
   const audible = withSound.filter((c) => {
     const track = tracks.find((t) => t.id === c.trackId);
-    return !c.muted && !track?.muted && c.volume > 0;
+    return !c.muted && !track?.muted && (c.volume ?? 1) > 0.001;
   });
   if (!audible.length) return null;
 
@@ -143,9 +144,23 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
       continue;
     }
     try {
-      decoded.set(mediaId, await probe.decodeAudioData(await blob.slice(0).arrayBuffer()));
+      const arr = await blob.slice(0).arrayBuffer();
+      const buf = await probe.decodeAudioData(arr);
+      decoded.set(mediaId, buf);
     } catch {
-      decoded.set(mediaId, null);
+      // Fallback: se for vídeo e decodeAudioData direto falhar em containers complexos, tenta extrair via elemento de mídia
+      try {
+        const url = registry.getUrl(mediaId);
+        if (url) {
+          const resp = await fetch(url);
+          const buf = await probe.decodeAudioData(await resp.arrayBuffer());
+          decoded.set(mediaId, buf);
+        } else {
+          decoded.set(mediaId, null);
+        }
+      } catch {
+        decoded.set(mediaId, null);
+      }
     }
     done++;
     onProgress?.(done / uniqueIds.length);
@@ -157,10 +172,11 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
     if (!buf) continue;
     const src = off.createBufferSource();
     src.buffer = buf;
-    src.playbackRate.value = Math.max(0.0625, Math.min(16, c.speed || 1));
+    const speed = Math.max(0.0625, Math.min(16, c.speed || 1));
+    src.playbackRate.value = speed;
     const gain = off.createGain();
     const g0 = Math.max(0.0001, c.volume ?? 1);
-    const start = c.start;
+    const start = Math.max(0, c.start);
     const end = clipEnd(c);
     gain.gain.setValueAtTime(c.fadeIn > 0 ? 0.0001 : g0, start);
     if (c.fadeIn > 0) gain.gain.linearRampToValueAtTime(g0, start + Math.min(c.fadeIn, c.duration));
@@ -169,7 +185,9 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
       gain.gain.linearRampToValueAtTime(0.0001, end);
     }
     src.connect(gain).connect(off.destination);
-    src.start(start, c.inPoint, Math.min(c.duration, (buf.duration - c.inPoint) / (c.speed || 1)));
+    const offsetInBuf = Math.max(0, Math.min(buf.duration - 0.01, c.inPoint || 0));
+    const durInBuf = Math.max(0.01, Math.min(buf.duration - offsetInBuf, c.duration * speed));
+    src.start(start, offsetInBuf, durInBuf);
   }
   return off.startRendering();
 }
@@ -336,21 +354,44 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
   // ---- 3) áudio offline (mix determinístico) ----
   onProgress0(opts, 0.09, { stage: "prepare" });
   let audioBuffer: AudioBuffer | null = null;
-  try {
-    audioBuffer = await renderAudioMix(duration, (p) => onProgress0(opts, 0.09 + 0.06 * p, { stage: "prepare" }));
-  } catch {
-    audioBuffer = null; // sem áudio tocável → exporta vídeo mudo
+  const wantAudio = opts.includeAudio !== false;
+  if (wantAudio) {
+    try {
+      audioBuffer = await renderAudioMix(duration, (p) => onProgress0(opts, 0.09 + 0.06 * p, { stage: "prepare" }));
+    } catch {
+      audioBuffer = null; // sem áudio tocável → exporta vídeo mudo
+    }
   }
 
   // ---- 4) muxer + codificadores ----
   let noAudio = false;
   const isMp4 = opts.format === "mp4";
+
+  let audioEncoder: any = null;
+  let audioConfigured = false;
+  if (audioBuffer && wantAudio) {
+    const aCodec = isMp4 ? "mp4a.40.2" : "opus";
+    try {
+      const support = await WC.AudioEncoder.isConfigSupported({
+        codec: aCodec,
+        sampleRate: 48000,
+        numberOfChannels: 2,
+        bitrate: 160000,
+      });
+      if (support?.supported) {
+        audioConfigured = true;
+      }
+    } catch {
+      audioConfigured = false;
+    }
+  }
+
   let muxer: any;
   if (isMp4) {
     muxer = new Mp4Muxer({
       target: new Mp4Target(),
       video: { codec: vPick.muxer as "avc", width: W, height: H, frameRate: fps },
-      audio: audioBuffer
+      audio: audioConfigured
         ? { codec: "aac", numberOfChannels: 2, sampleRate: 48000 }
         : undefined,
       fastStart: "in-memory",
@@ -360,7 +401,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     muxer = new WebmMuxer({
       target: new WebmTarget(),
       video: { codec: vPick.muxer, width: W, height: H, frameRate: fps },
-      audio: audioBuffer
+      audio: audioConfigured
         ? { codec: "A_OPUS", numberOfChannels: 2, sampleRate: 48000 }
         : undefined,
       firstTimestampBehavior: "permissive",
@@ -382,33 +423,24 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     latencyMode: "quality",
   });
 
-  let audioEncoder: any = null;
-  if (audioBuffer) {
-    const aCodec = isMp4 ? "mp4a.40.2" : "opus";
+  if (audioConfigured && audioBuffer) {
     try {
-      const support = await WC.AudioEncoder.isConfigSupported({
+      const aCodec = isMp4 ? "mp4a.40.2" : "opus";
+      audioEncoder = new WC.AudioEncoder({
+        output: (chunk: any, meta: any) => muxer.addAudioChunk(chunk, meta),
+        error: (err: any) => console.warn("AudioEncoder error:", err),
+      });
+      audioEncoder.configure({
         codec: aCodec,
         sampleRate: 48000,
         numberOfChannels: 2,
         bitrate: 160000,
       });
-      if (support?.supported) {
-        audioEncoder = new WC.AudioEncoder({
-          output: (chunk: any, meta: any) => muxer.addAudioChunk(chunk, meta),
-          error: () => undefined,
-        });
-        audioEncoder.configure({
-          codec: aCodec,
-          sampleRate: 48000,
-          numberOfChannels: 2,
-          bitrate: 160000,
-        });
-      }
     } catch {
       audioEncoder = null;
     }
-    if (!audioEncoder) noAudio = true;
   }
+  if (!audioEncoder) noAudio = true;
 
   // ---- 5) render quadro a quadro ----
   const canvas = document.createElement("canvas");
@@ -515,6 +547,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
       ad.close();
       if (off % 245760 === 0) await new Promise((r) => setTimeout(r, 0)); // fôlego
     }
+    await audioEncoder.flush();
     audioEncoder.close();
   }
 

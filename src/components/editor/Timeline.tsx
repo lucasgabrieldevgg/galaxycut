@@ -174,6 +174,11 @@ export function Timeline() {
   const [dropHint, setDropHint] = useState<{ t: number; trackId: string; occupied: boolean } | null>(null);
   const [silenceOpen, setSilenceOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [showTrackTip, setShowTrackTip] = useState(true);
+  /** Retângulo de seleção múltipla (estilo área de trabalho do Windows) */
+  const [marquee, setMarquee] = useState<{ startX: number; startY: number; currentX: number; currentY: number; clientX: number; clientY: number } | null>(null);
+  const marqueeRef = useRef<{ startX: number; startY: number; currentX: number; currentY: number; clientX: number; clientY: number } | null>(null);
+  const autoScrollRef = useRef<number | null>(null);
   /** proporção do vídeo difere da do projeto → pergunta se muda o formato */
   const [askAspect, setAskAspect] = useState<{ w: number; h: number; name: string } | null>(null);
   const batchMode = useProject((s) => s.batchMode);
@@ -372,6 +377,139 @@ export function Timeline() {
     }
   }
 
+  // ---------- Seleção com arrastar do mouse (estilo Windows) + auto-rolagem ----------
+  const handleTrackAreaPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    // se clicou num clipe, menu de contexto ou botão, não abre caixa de seleção
+    if (target.closest("[role='button']") || target.closest("button") || target.closest(".cursor-context-menu") || target.closest("[data-no-marquee]")) {
+      return;
+    }
+
+    const contentEl = contentRef.current;
+    const scrollEl = scrollRef.current;
+    if (!contentEl || !scrollEl) return;
+
+    const cRect = contentEl.getBoundingClientRect();
+    const startX = Math.max(0, e.clientX - cRect.left - HEADER_W);
+    const startY = Math.max(0, e.clientY - cRect.top);
+
+    const initial = {
+      startX,
+      startY,
+      currentX: startX,
+      currentY: startY,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    };
+    marqueeRef.current = initial;
+    setMarquee(initial);
+
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      useProject.getState().select(null);
+    }
+
+    const updateSelection = (curX: number, curY: number) => {
+      const m = marqueeRef.current;
+      if (!m) return;
+      const boxL = Math.min(m.startX, curX);
+      const boxR = Math.max(m.startX, curX);
+      const boxT = Math.min(m.startY, curY);
+      const boxB = Math.max(m.startY, curY);
+
+      if (Math.abs(curX - m.startX) < 4 && Math.abs(curY - m.startY) < 4) return;
+
+      const curClips = useProject.getState().clips;
+      const curTracks = useProject.getState().tracks;
+      const hitIds: string[] = [];
+
+      for (const c of curClips) {
+        const clipL = c.start * zoomRef.current;
+        const clipR = (c.start + c.duration) * zoomRef.current;
+        const trk = curTracks.find((t) => t.id === c.trackId);
+        const trackTop = rowTop[c.trackId] ?? 0;
+        const trackH = TRACK_H[trk?.kind ?? "video"] ?? 56;
+        const clipT = trackTop;
+        const clipB = trackTop + trackH;
+
+        if (clipR >= boxL && clipL <= boxR && clipB >= boxT && clipT <= boxB) {
+          hitIds.push(c.id);
+        }
+      }
+      useProject.getState().selectMultiple(hitIds);
+    };
+
+    const stepAutoScroll = () => {
+      const m = marqueeRef.current;
+      const sEl = scrollRef.current;
+      const cEl = contentRef.current;
+      if (!m || !sEl || !cEl) return;
+
+      const viewRect = sEl.getBoundingClientRect();
+      let scrollDelta = 0;
+
+      // Perto da borda direita -> rola suavemente pra frente
+      if (m.clientX > viewRect.right - 50) {
+        const intensity = Math.min(30, (m.clientX - (viewRect.right - 50)) * 0.5);
+        scrollDelta = Math.max(4, intensity);
+      }
+      // Perto da borda esquerda -> rola suavemente pra trás
+      else if (m.clientX < viewRect.left + HEADER_W + 50) {
+        const intensity = Math.min(30, (viewRect.left + HEADER_W + 50 - m.clientX) * 0.5);
+        scrollDelta = -Math.max(4, intensity);
+      }
+
+      if (scrollDelta !== 0) {
+        sEl.scrollLeft += scrollDelta;
+        const newCurX = Math.max(0, m.clientX - cEl.getBoundingClientRect().left - HEADER_W);
+        m.currentX = newCurX;
+        setMarquee({ ...m });
+        updateSelection(newCurX, m.currentY);
+      }
+      autoScrollRef.current = requestAnimationFrame(stepAutoScroll);
+    };
+
+    autoScrollRef.current = requestAnimationFrame(stepAutoScroll);
+
+    const onMove = (ev: PointerEvent) => {
+      const m = marqueeRef.current;
+      const cEl = contentRef.current;
+      if (!m || !cEl) return;
+
+      const curX = Math.max(0, ev.clientX - cEl.getBoundingClientRect().left - HEADER_W);
+      const curY = Math.max(0, ev.clientY - cEl.getBoundingClientRect().top);
+      m.currentX = curX;
+      m.currentY = curY;
+      m.clientX = ev.clientX;
+      m.clientY = ev.clientY;
+
+      setMarquee({ ...m });
+      updateSelection(curX, curY);
+    };
+
+    const onUp = (ev: PointerEvent) => {
+      if (autoScrollRef.current) {
+        cancelAnimationFrame(autoScrollRef.current);
+        autoScrollRef.current = null;
+      }
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+
+      const m = marqueeRef.current;
+      if (m) {
+        if (Math.abs(m.currentX - m.startX) < 4 && Math.abs(m.currentY - m.startY) < 4) {
+          useProject.getState().select(null);
+          scrubTo(ev.clientX);
+        }
+      }
+      marqueeRef.current = null;
+      setMarquee(null);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   // ---------- render ----------
   const steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
   let step = steps.find((s) => s * zoom >= 64) ?? 600;
@@ -518,6 +656,19 @@ export function Timeline() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* botão da dica de faixas */}
+          {!showTrackTip && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs text-amber-400 hover:bg-amber-400/10"
+              onClick={() => setShowTrackTip(true)}
+              title={t("tl.tipTitle")}
+            >
+              <Sparkles className="h-3.5 w-3.5" /> {t("tl.tipBtn")}
+            </Button>
+          )}
+
           <div className="ml-auto flex items-center gap-1.5">
             <div className="mx-0.5 h-4 w-px bg-[#1c2430]" />
             <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400" onClick={() => setZoom((z) => Math.max(8, z / 1.4))} aria-label={t("tl.zoomOut")}>
@@ -545,6 +696,25 @@ export function Timeline() {
           </div>
         </TooltipProvider>
       </div>
+
+      {/* Dica de Organização das Faixas */}
+      {showTrackTip && (
+        <div className="flex shrink-0 items-center justify-between border-b border-[#1c2430] bg-[#121824] px-3 py-1.5 text-[11px] text-zinc-300">
+          <div className="flex items-center gap-2 truncate">
+            <Sparkles className="h-4 w-4 shrink-0 text-amber-400" />
+            <span className="truncate">
+              <strong className="font-semibold text-amber-300">{t("tl.tipTitle")}:</strong> {t("tl.tipDesc")}
+            </span>
+          </div>
+          <button
+            onClick={() => setShowTrackTip(false)}
+            className="ml-2 rounded p-1 text-zinc-500 hover:bg-[#1c2430] hover:text-zinc-300"
+            title={t("tl.closeTip")}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* área de rolagem */}
       <div
@@ -608,130 +778,136 @@ export function Timeline() {
           </div>
 
           {/* faixas */}
-          {tracks.map((track) => {
-            const rowClips = clips.filter((c) => c.trackId === track.id);
-            return (
-              <div
-                key={track.id}
-                className="flex border-b border-[#141a24]"
-                style={{ height: TRACK_H[track.kind] ?? 56 }}
-                onPointerDown={(e) => {
-                  // clique no vazio: desseleciona e move a setinha
-                  if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.empty === "1") {
-                    useProject.getState().select(null);
-                    scrubTo(e.clientX);
-                  }
-                }}
-              >
-                {/* cabeçalho da faixa — com menu de botão direito */}
-                <FloatMenu
-                  items={[
-                    { label: track.muted ? t("tm.unmute") : t("tm.mute"), icon: <VolumeX className="h-3.5 w-3.5" />, onClick: () => useProject.getState().toggleTrack(track.id, "muted") },
-                    ...(track.kind !== "audio"
-                      ? [{ label: track.hidden ? t("tm.show") : t("tm.hide"), icon: track.hidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />, onClick: () => useProject.getState().toggleTrack(track.id, "hidden") }]
-                      : []),
-                    { type: "sep" },
-                    { label: t("tm.addVideo"), icon: <Film className="h-3.5 w-3.5 text-emerald-400" />, onClick: () => useProject.getState().addTrack("video") },
-                    { label: t("tm.addAudio"), icon: <AudioLines className="h-3.5 w-3.5 text-amber-400" />, onClick: () => useProject.getState().addTrack("audio") },
-                    ...(rowClips.length > 1
-                      ? [
-                          { type: "sep" },
-                          {
-                            label: t("tm.closeGaps"),
-                            icon: <UnfoldHorizontal className="h-3.5 w-3.5 text-sky-400" />,
-                            title: t("tm.closeGapsHint"),
-                            onClick: () => {
-                              useProject.getState().closeTrackGaps(track.id);
-                              engine.markDirty();
-                              toast.success(t("tm.gapsClosed"));
-                            },
-                          },
-                        ]
-                      : []),
-                    ...(!rowClips.length && tracks.filter((x) => x.kind === track.kind).length > 1
-                      ? [
-                          { type: "sep" },
-                          { label: t("tm.remove"), icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => useProject.getState().removeTrack(track.id) },
-                        ]
-                      : []),
-                  ] as MenuItem[]}
-                >
-                  <div
-                    className="sticky left-0 z-40 flex shrink-0 cursor-context-menu items-center gap-1 border-r border-[#1c2430] bg-[#0e1320] px-2"
-                    style={{ width: HEADER_W }}
-                    title={t("tm.options")}
-                  >
-                    <span className="flex-1 truncate text-[10px] font-medium text-zinc-400">{track.name}</span>
-                    {track.kind !== "text" && (
-                      <button
-                        className={`rounded p-0.5 ${track.muted ? "text-amber-500" : "text-zinc-600 hover:text-zinc-400"}`}
-                        onClick={() => useProject.getState().toggleTrack(track.id, "muted")}
-                        title={track.muted ? t("tm.unmuteShort") : t("tm.muteShort")}
-                      >
-                        {track.muted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
-                      </button>
-                    )}
-                    {track.kind !== "audio" && (
-                      <button
-                        className={`rounded p-0.5 ${track.hidden ? "text-red-500" : "text-zinc-600 hover:text-zinc-400"}`}
-                        onClick={() => useProject.getState().toggleTrack(track.id, "hidden")}
-                        title={track.hidden ? t("tm.show") : t("tm.hide")}
-                      >
-                        {track.hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                      </button>
-                    )}
-                  </div>
-                </FloatMenu>
-
-                {/* corpo da faixa — aceita soltar mídia/arquivo/pasta */}
+          <div onPointerDown={handleTrackAreaPointerDown} className="relative">
+            {tracks.map((track) => {
+              const rowClips = clips.filter((c) => c.trackId === track.id);
+              return (
                 <div
-                  className={`relative flex-1 transition-colors ${dropHint?.trackId === track.id ? "bg[var(--gc-accent-7)]" : ""}`}
-                  data-empty="1"
-                  onDragOver={(e) => {
-                    if (e.dataTransfer.types.includes("Files") || e.dataTransfer.types.includes(MEDIA_DND_TYPE)) {
-                      e.preventDefault();
-                      // resolve ANTECIPADO onde o clipe vai cair (vão livre mais próximo) —
-                      // o indicador já mostra o lugar de verdade, inclusive o desvio
-                      const want = dropTimeAt(e.clientX);
-                      const st = useProject.getState();
-                      const gm = gcDrag.mediaId ? st.media.find((m) => m.id === gcDrag.mediaId) : null;
-                      if (gm) {
-                        const okTrack =
-                          (track.kind === "video" && gm.kind !== "audio") ||
-                          (track.kind === "audio" && gm.kind === "audio");
-                        const tid = okTrack
-                          ? track.id
-                          : gm.kind === "audio"
-                            ? (st.tracks.find((x) => x.kind === "audio")?.id ?? track.id)
-                            : (st.tracks.find((x) => x.kind === "video")?.id ?? track.id);
-                        const dur = gm.kind === "image" ? 4.8 : gm.duration;
-                        const slot = findFreeSlot(st.clips, tid, want, dur);
-                        setDropHint({ t: slot.start, trackId: tid, occupied: slot.moved || Math.abs(slot.start - want) > 0.01 });
-                      } else {
-                        setDropHint({ t: want, trackId: track.id, occupied: false }); // arquivo do PC: duração desconhecida
-                      }
-                    }
-                  }}
-                  onDragLeave={() => setDropHint((d) => (d?.trackId === track.id ? null : d))}
-                  onDrop={(e) => void handleDrop(e, track)}
+                  key={track.id}
+                  className="flex border-b border-[#141a24]"
+                  style={{ height: TRACK_H[track.kind] ?? 56 }}
                 >
-                  {rowClips.map((c) => (
-                    <ClipBlock
-                      key={c.id}
-                      clip={c}
-                      zoom={zoom}
-                      selected={selectedIds.includes(c.id)}
-                      missing={!!c.mediaId && !media.some((m) => m.id === c.mediaId && !m.missing)}
-                      showWave={track.kind !== "audio" ? showWaveOnVideo : true}
-                      onDown={onDownStable}
-                    />
-                  ))}
-                  {/* junções de transição entre clipes encostados */}
-                  <Junctions rowClips={rowClips} zoom={zoom} />
+                  {/* cabeçalho da faixa — com menu de botão direito */}
+                  <FloatMenu
+                    items={[
+                      { label: track.muted ? t("tm.unmute") : t("tm.mute"), icon: <VolumeX className="h-3.5 w-3.5" />, onClick: () => useProject.getState().toggleTrack(track.id, "muted") },
+                      ...(track.kind !== "audio"
+                        ? [{ label: track.hidden ? t("tm.show") : t("tm.hide"), icon: track.hidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />, onClick: () => useProject.getState().toggleTrack(track.id, "hidden") }]
+                        : []),
+                      { type: "sep" },
+                      { label: t("tm.addVideo"), icon: <Film className="h-3.5 w-3.5 text-emerald-400" />, onClick: () => useProject.getState().addTrack("video") },
+                      { label: t("tm.addAudio"), icon: <AudioLines className="h-3.5 w-3.5 text-amber-400" />, onClick: () => useProject.getState().addTrack("audio") },
+                      ...(rowClips.length > 1
+                        ? [
+                            { type: "sep" },
+                            {
+                              label: t("tm.closeGaps"),
+                              icon: <UnfoldHorizontal className="h-3.5 w-3.5 text-sky-400" />,
+                              title: t("tm.closeGapsHint"),
+                              onClick: () => {
+                                useProject.getState().closeTrackGaps(track.id);
+                                engine.markDirty();
+                                toast.success(t("tm.gapsClosed"));
+                              },
+                            },
+                          ]
+                        : []),
+                      ...(!rowClips.length && tracks.filter((x) => x.kind === track.kind).length > 1
+                        ? [
+                            { type: "sep" },
+                            { label: t("tm.remove"), icon: <Trash2 className="h-3.5 w-3.5" />, danger: true, onClick: () => useProject.getState().removeTrack(track.id) },
+                          ]
+                        : []),
+                    ] as MenuItem[]}
+                  >
+                    <div
+                      className="sticky left-0 z-40 flex shrink-0 cursor-context-menu items-center gap-1 border-r border-[#1c2430] bg-[#0e1320] px-2"
+                      style={{ width: HEADER_W }}
+                      title={t("tm.options")}
+                    >
+                      <span className="flex-1 truncate text-[10px] font-medium text-zinc-400">{track.name}</span>
+                      {track.kind !== "text" && (
+                        <button
+                          className={`rounded p-0.5 ${track.muted ? "text-amber-500" : "text-zinc-600 hover:text-zinc-400"}`}
+                          onClick={() => useProject.getState().toggleTrack(track.id, "muted")}
+                          title={track.muted ? t("tm.unmuteShort") : t("tm.muteShort")}
+                        >
+                          {track.muted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+                        </button>
+                      )}
+                      {track.kind !== "audio" && (
+                        <button
+                          className={`rounded p-0.5 ${track.hidden ? "text-red-500" : "text-zinc-600 hover:text-zinc-400"}`}
+                          onClick={() => useProject.getState().toggleTrack(track.id, "hidden")}
+                          title={track.hidden ? t("tm.show") : t("tm.hide")}
+                        >
+                          {track.hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                        </button>
+                      )}
+                    </div>
+                  </FloatMenu>
+
+                  {/* corpo da faixa — aceita soltar mídia/arquivo/pasta */}
+                  <div
+                    className={`relative flex-1 transition-colors ${dropHint?.trackId === track.id ? "bg[var(--gc-accent-7)]" : ""}`}
+                    data-empty="1"
+                    onDragOver={(e) => {
+                      if (e.dataTransfer.types.includes("Files") || e.dataTransfer.types.includes(MEDIA_DND_TYPE)) {
+                        e.preventDefault();
+                        const want = dropTimeAt(e.clientX);
+                        const st = useProject.getState();
+                        const gm = gcDrag.mediaId ? st.media.find((m) => m.id === gcDrag.mediaId) : null;
+                        if (gm) {
+                          const okTrack =
+                            (track.kind === "video" && gm.kind !== "audio") ||
+                            (track.kind === "audio" && gm.kind === "audio");
+                          const tid = okTrack
+                            ? track.id
+                            : gm.kind === "audio"
+                              ? (st.tracks.find((x) => x.kind === "audio")?.id ?? track.id)
+                              : (st.tracks.find((x) => x.kind === "video")?.id ?? track.id);
+                          const dur = gm.kind === "image" ? 4.8 : gm.duration;
+                          const slot = findFreeSlot(st.clips, tid, want, dur);
+                          setDropHint({ t: slot.start, trackId: tid, occupied: slot.moved || Math.abs(slot.start - want) > 0.01 });
+                        } else {
+                          setDropHint({ t: want, trackId: track.id, occupied: false });
+                        }
+                      }
+                    }}
+                    onDragLeave={() => setDropHint((d) => (d?.trackId === track.id ? null : d))}
+                    onDrop={(e) => void handleDrop(e, track)}
+                  >
+                    {rowClips.map((c) => (
+                      <ClipBlock
+                        key={c.id}
+                        clip={c}
+                        zoom={zoom}
+                        selected={selectedIds.includes(c.id)}
+                        missing={!!c.mediaId && !media.some((m) => m.id === c.mediaId && !m.missing)}
+                        showWave={track.kind !== "audio" ? showWaveOnVideo : true}
+                        onDown={onDownStable}
+                      />
+                    ))}
+                    {/* junções de transição entre clipes encostados */}
+                    <Junctions rowClips={rowClips} zoom={zoom} />
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          {/* Retângulo de Seleção em Bloco (Estilo Área de Trabalho do Windows) */}
+          {marquee && (
+            <div
+              className="pointer-events-none absolute z-30 rounded border border-[var(--gc-accent)] bg-[var(--gc-accent)]/20 shadow-[0_0_12px_var(--gc-accent-25)]"
+              style={{
+                left: HEADER_W + Math.min(marquee.startX, marquee.currentX),
+                top: Math.min(marquee.startY, marquee.currentY),
+                width: Math.max(2, Math.abs(marquee.currentX - marquee.startX)),
+                height: Math.max(2, Math.abs(marquee.currentY - marquee.startY)),
+              }}
+            />
+          )}
 
           {/* guia de encaixe (linha laranja) */}
           {snapX !== null && (

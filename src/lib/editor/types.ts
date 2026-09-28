@@ -113,6 +113,8 @@ export interface Track {
   hidden: boolean;
 }
 
+export type VideoFormat = "mp4" | "webm9" | "webm8" | "mov" | "mkv" | "gif" | "wav" | "mp3" | "png" | "jpg";
+
 export interface ProjectMeta {
   name: string;
   width: number;

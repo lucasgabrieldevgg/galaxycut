@@ -14,13 +14,14 @@ import { Clip, ProjectMeta, clipEnd, fmtSrtTime } from "./types";
 import { GIFEncoder, quantize, applyPalette } from "gifenc";
 import { exportOffline, offlineSupported, OfflineProgressInfo, renderAudioMix } from "./exportEngine";
 
-export type VideoFormat = "mp4" | "webm9" | "webm8" | "gif" | "wav" | "png";
+export type VideoFormat = "mp4" | "webm9" | "webm8" | "mov" | "mkv" | "gif" | "wav" | "mp3" | "png" | "jpg";
 
 export interface ExportOptions {
   shortSide: number; // qualidade = menor lado da saída (240…4320)
   fps: number; // 24…60 (GIF usa o próprio)
   bitrate: number; // bits/s
   format: VideoFormat;
+  includeAudio?: boolean;
   /** v7.3: cancelamento — setar cancelled=true aborta o render na hora */
   cancel?: { cancelled: boolean };
 }
@@ -34,22 +35,32 @@ export interface ExportResult {
 }
 
 /** candidatos de gravação por formato — o primeiro suportado vence */
-const MIME_BY_FORMAT: Record<Exclude<VideoFormat, "gif" | "wav" | "png">, { mime: string; ext: string }[]> = {
+const MIME_BY_FORMAT: Record<string, { mime: string; ext: string }[]> = {
   mp4: [
     { mime: 'video/mp4;codecs="avc1.640028,mp4a.40.2"', ext: "mp4" },
     { mime: "video/mp4", ext: "mp4" },
   ],
   webm9: [{ mime: "video/webm;codecs=vp9,opus", ext: "webm" }],
   webm8: [{ mime: "video/webm;codecs=vp8,opus", ext: "webm" }],
+  mov: [
+    { mime: 'video/mp4;codecs="avc1.640028,mp4a.40.2"', ext: "mov" },
+    { mime: "video/mp4", ext: "mov" },
+  ],
+  mkv: [
+    { mime: "video/webm;codecs=vp9,opus", ext: "mkv" },
+    { mime: 'video/mp4;codecs="avc1.640028,mp4a.40.2"', ext: "mkv" },
+  ],
 };
 
 export function listVideoFormats(): { id: VideoFormat; label: string; hint: string }[] {
   const out: { id: VideoFormat; label: string; hint: string }[] = [];
   const tryMime = (cands: { mime: string }[]) =>
     cands.some((c) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c.mime));
-  if (tryMime(MIME_BY_FORMAT.mp4)) out.push({ id: "mp4", label: "MP4", hint: "H.264 · abre em qualquer lugar" });
-  if (tryMime(MIME_BY_FORMAT.webm9)) out.push({ id: "webm9", label: "WebM", hint: "VP9 · melhor compressão" });
-  if (tryMime(MIME_BY_FORMAT.webm8)) out.push({ id: "webm8", label: "WebM (VP8)", hint: "compatibilidade máxima" });
+  out.push({ id: "mp4", label: "MP4", hint: "H.264 / AAC · Máxima compatibilidade (YouTube, Insta, TikTok, TV)" });
+  out.push({ id: "webm9", label: "WebM (VP9)", hint: "VP9 / Opus · Alta compressão e qualidade para web" });
+  out.push({ id: "webm8", label: "WebM (VP8)", hint: "VP8 / Opus · Compatibilidade web universal" });
+  out.push({ id: "mov", label: "MOV (QuickTime)", hint: "Apple QuickTime · Perfeito para edição e macOS" });
+  out.push({ id: "mkv", label: "MKV (Matroska)", hint: "Matroska Video · Preservação e múltiplos fluxos" });
   return out;
 }
 
@@ -107,16 +118,23 @@ export async function exportVideo(
   const duration = usePlayback.getState().duration;
   if (duration <= 0) throw new Error("Timeline vazia — adicione mídia antes de exportar.");
 
+  const isWebm = opts.format === "webm8" || opts.format === "webm9";
+  const formatKey: "webm8" | "webm9" | "mp4" = opts.format === "webm8" ? "webm8" : opts.format === "webm9" ? "webm9" : "mp4";
+  const targetExt = opts.format === "mov" ? "mov" : opts.format === "mkv" ? "mkv" : opts.format === "webm8" || opts.format === "webm9" ? "webm" : "mp4";
+  const targetMime = opts.format === "mov" ? "video/quicktime" : opts.format === "mkv" ? "video/x-matroska" : isWebm ? "video/webm" : "video/mp4";
+
   if (offlineSupported()) {
     try {
-      return await exportOffline({
+      const res = await exportOffline({
         shortSide: opts.shortSide,
         fps: opts.fps,
         bitrate: opts.bitrate,
-        format: opts.format === "webm8" ? "webm8" : opts.format === "webm9" ? "webm9" : "mp4",
+        format: formatKey,
+        includeAudio: opts.includeAudio,
         onProgress,
         cancel: opts.cancel,
       });
+      return { blob: res.blob, ext: targetExt, mime: targetMime };
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);
       if (msg.includes("cancel")) throw e;
@@ -125,7 +143,8 @@ export async function exportVideo(
       if (!msg.includes("no-offline-codec")) throw e;
     }
   }
-  return exportRealtime(opts, onProgress);
+  const realRes = await exportRealtime(opts, onProgress);
+  return { blob: realRes.blob, ext: targetExt, mime: targetMime };
 }
 
 /** Plano B: gravação em tempo real (MediaRecorder) — só quando o navegador não
@@ -138,7 +157,7 @@ async function exportRealtime(
 ): Promise<ExportResult> {
   const { project, tracks, clips } = useProject.getState();
   const duration = usePlayback.getState().duration;
-  const picked = pickMime(opts.format === "gif" || opts.format === "wav" || opts.format === "png" ? "mp4" : opts.format);
+  const picked = pickMime(opts.format === "webm8" ? "webm8" : opts.format === "webm9" ? "webm9" : "mp4");
   if (!picked) throw new Error("Seu navegador não suporta gravação de vídeo (MediaRecorder). Use Chrome/Edge atualizado.");
 
   const { W, H } = outputSize(project, opts.shortSide);
@@ -150,10 +169,12 @@ async function exportRealtime(
 
   const videoStream = canvas.captureStream(opts.fps);
   let audioStream: MediaStream | null = null;
-  try {
-    audioStream = audioEngine.getRecordingStream();
-  } catch {
-    audioStream = null;
+  if (opts.includeAudio !== false) {
+    try {
+      audioStream = audioEngine.getRecordingStream();
+    } catch {
+      audioStream = null;
+    }
   }
   const tracksAll: MediaStreamTrack[] = [...videoStream.getVideoTracks()];
   if (audioStream) tracksAll.push(...audioStream.getAudioTracks().filter((t) => t.readyState === "live"));
@@ -188,7 +209,9 @@ async function exportRealtime(
   });
   rec.start(250);
   usePlayback.getState().setPlaying(true);
-  audioEngine.ensureContext();
+  if (opts.includeAudio !== false) {
+    audioEngine.ensureContext();
+  }
 
   await new Promise<void>((resolve) => {
     const step = () => {
@@ -318,7 +341,7 @@ function encodeWavFromBuffer(buf: AudioBuffer): Blob {
   return new Blob([ab], { type: "audio/wav" });
 }
 
-/** PNG do quadro atual (a setinha) — print da tela do vídeo. */
+/** PNG do quadro atual (a setinha) — captura de tela da cena em alta definição. */
 export async function exportPng(): Promise<ExportResult> {
   const { project, tracks, clips } = useProject.getState();
   const t = usePlayback.getState().playhead;
@@ -331,6 +354,21 @@ export async function exportPng(): Promise<ExportResult> {
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob((b) => res(b), "image/png"));
   if (!blob) throw new Error("Não consegui gerar o PNG deste quadro.");
   return { blob, ext: "png", mime: "image/png" };
+}
+
+/** JPG do quadro atual (a setinha) — captura de tela leve da cena. */
+export async function exportJpg(): Promise<ExportResult> {
+  const { project, tracks, clips } = useProject.getState();
+  const t = usePlayback.getState().playhead;
+  const { W, H } = outputSize(project, project.height >= project.width ? project.width : project.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  drawFrame(ctx, project, tracks, clips, t, { getElement: (id) => engine.getElement(id) });
+  const blob = await new Promise<Blob | null>((res) => canvas.toBlob((b) => res(b), "image/jpeg", 0.92));
+  if (!blob) throw new Error("Não consegui gerar o JPG deste quadro.");
+  return { blob, ext: "jpg", mime: "image/jpeg" };
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
