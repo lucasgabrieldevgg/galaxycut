@@ -1,7 +1,38 @@
 {
   "name": "GalaxyCut",
-  "version": "7.3.0",
+  "version": "7.4.0",
   "changelog": [
+    {
+      "version": "7.4.0",
+      "date": "2026-09-28",
+      "items": [
+        "NEW MEDIA FOLDERS: Full folder organization inside the Media tab — create, rename, and delete folders, with intuitive navigation and a Back button",
+        "FOLDER UPLOAD: Uploading a folder automatically creates a corresponding folder in Media and places all containing files inside it",
+        "CUT, COPY & PASTE FOR MEDIA: Move files between folders cleanly with Cut (removes from old folder) or duplicate them with Copy (keeps original intact)",
+        "FIX: Preview never gets stuck in 'Loading media 99%' — smooth playback synchronization without destructive seek loops, eliminating black frames and audio flickering",
+        "FIX: AI Subtitles no longer stall at 88% — proper Whisper model loading, single-thread WASM isolation to avoid worker lockup, smooth progress animation, and subtitle generation enabled on Web",
+        "FIX: Persistent settings on Desktop — settings, onboarding, language, and shortcuts are saved directly to disk (settings.json) and never reset on restart",
+        "FIX: Desktop projects saved on disk are instantly visible on the home screen upon launch"
+      ],
+      "items_pt": [
+        "NOVO GERENCIADOR DE PASTAS NA MÍDIA: Organização completa com pastas na aba Mídia — crie, renomeie e exclua pastas, com navegação e botão Voltar",
+        "UPLOAD DE PASTAS: Ao importar uma pasta, ela é criada automaticamente na aba Mídia e todos os arquivos entram organizados dentro dela",
+        "RECORTAR, COPIAR E COLAR MÍDIAS: Mova arquivos entre pastas com Recortar (some da pasta anterior e vai pra nova) ou duplique com Copiar (mantém o original intacto)",
+        "CORRIGIDO: A prévia nunca mais fica presa em 'Mídia carregando 99%' — sincronização contínua de reprodução sem seeks destrutivos, acabando com telas pretas e falhas de áudio",
+        "CORRIGIDO: As legendas com IA não travam mais em 88% — carregamento correto do modelo Whisper, isolamento WASM no worker, avanço suave de progresso e geração ativada também na Web",
+        "CORRIGIDO: Configurações persistentes no desktop — configurações, assistente inicial, idioma e atalhos são gravados em disco e nunca mais resetam ao reiniciar o app",
+        "CORRIGIDO: Projetos salvos em disco no desktop aparecem imediatamente na tela inicial ao abrir o app"
+      ],
+      "items_es": [
+        "NUEVAS CARPETAS DE MEDIOS: Organización completa con carpetas en la pestaña Medios — crea, renombra y elimina carpetas con navegación y botón Volver",
+        "SUBIDA DE CARPETAS: Al importar una carpeta, se crea automáticamente en la pestaña Medios con todos los archivos dentro",
+        "CORTAR, COPIAR Y PEGAR MEDIOS: Mueve archivos entre carpetas con Cortar o duplica con Copiar (manteniendo el original)",
+        "CORREGIDO: La preview ya no se queda atascada en 'Cargando el medio 99%' — sincronización fluida sin bucles de seek, acabando con pantallas negras y cortes de audio",
+        "CORREGIDO: Los subtítulos con IA ya no se congelan en el 88% — carga correcta del modelo Whisper, aislamiento WASM y generación habilitada también en Web",
+        "CORREGIDO: Ajustes persistentes en escritorio — configuración, idioma y atajos guardados en disco sin reiniciarse",
+        "CORREGIDO: Los proyectos guardados en disco aparecen de inmediato en la pantalla de inicio"
+      ]
+    },
     {
       "version": "7.3.0",
       "date": "2026-09-28",
@@ -271,5 +302,5 @@
       ]
     }
   ],
-  "date": "2026-09-28T04:39:37.075Z"
+  "date": "2026-09-28T18:25:27.324Z"
 }

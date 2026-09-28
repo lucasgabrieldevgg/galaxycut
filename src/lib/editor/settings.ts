@@ -3,6 +3,7 @@
 
 import { create } from "zustand";
 import { applyAccent } from "./theme";
+import { desktop } from "./desktop";
 
 export type PlayheadMode = "free" | "smooth" | "frames" | "magnet";
 
@@ -111,13 +112,27 @@ export const useSettings = create<AppSettings>((set, get) => ({
   ...boot,
   set: (patch) => {
     set(patch as AppSettings);
-    persist(get());
+    const updated = get();
+    persist(updated);
+    if (desktop?.settingsSave) {
+      void desktop.settingsSave(updated);
+    }
     // a cor do app aplica na hora (as vars CSS mudam e tudo acompanha)
     if (patch.accent !== undefined) applyAccent(patch.accent);
   },
 }));
 
-// aplica a cor salva já no boot (antes de qualquer tela pintar de verde fixo)
+// aplica a cor salva já no boot e sincroniza com disco no desktop
 if (typeof window !== "undefined") {
   applyAccent(useSettings.getState().accent);
+  if (desktop?.settingsLoad) {
+    void desktop.settingsLoad().then((saved) => {
+      if (saved && typeof saved === "object") {
+        useSettings.setState((s) => ({ ...s, ...saved }));
+        if (saved.accent && typeof saved.accent === "string") {
+          applyAccent(saved.accent);
+        }
+      }
+    });
+  }
 }

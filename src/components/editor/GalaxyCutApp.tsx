@@ -90,6 +90,7 @@ export function GalaxyCutApp() {
             tracks: disk.tracks ?? [],
             clips: disk.clips ?? [],
             media: disk.media ?? [],
+            folders: disk.folders ?? [],
             past: disk.past,
             future: disk.future,
           } as typeof snap;

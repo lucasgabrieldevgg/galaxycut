@@ -198,7 +198,9 @@ function drawVisualClip(
 function drawableSize(el: HTMLVideoElement | HTMLAudioElement | HTMLImageElement | undefined): { el: CanvasImageSource; sw: number; sh: number } | null {
   if (!el) return null;
   if (el instanceof HTMLVideoElement) {
-    if (el.readyState >= 2) return { el, sw: el.videoWidth, sh: el.videoHeight };
+    if ((el.readyState >= 1 || el.videoWidth > 0) && el.videoWidth > 0 && el.videoHeight > 0) {
+      return { el, sw: el.videoWidth, sh: el.videoHeight };
+    }
   } else if (el instanceof HTMLImageElement) {
     if (el.complete && el.naturalWidth > 0) return { el, sw: el.naturalWidth, sh: el.naturalHeight };
   }

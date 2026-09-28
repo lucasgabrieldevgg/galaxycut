@@ -22,7 +22,7 @@ import { useLang } from "@/lib/editor/i18n";
 import { checkForUpdate, startAutoCheck } from "@/lib/editor/updater";
 import { APP_VERSION } from "@/lib/editor/version";
 import { desktop, isDesktopBuild } from "@/lib/editor/desktop";
-import { deleteDiskProject } from "@/lib/editor/diskProjects";
+import { deleteDiskProject, listDiskProjects } from "@/lib/editor/diskProjects";
 import { useT } from "@/lib/editor/i18n";
 import { SettingsDialog } from "./SettingsDialog";
 import { UpdateDialog, useUpdatePrompt } from "./UpdateDialog";
@@ -49,10 +49,35 @@ export function HomeScreen({ onOpen, onNew }: { onOpen: (id: string) => void; on
   const t = useT();
   const lang = useLang((s) => s.lang);
   const editRef = useRef<HTMLInputElement>(null);
-  const refresh = () => setCards(projects.listProjects());
+
+  const refresh = async () => {
+    let list = projects.listProjects();
+    if (desktop) {
+      try {
+        const disk = await listDiskProjects();
+        for (const d of disk) {
+          const cur = list.find((c) => c.id === d.id);
+          if (!cur || d.savedAt > cur.savedAt) {
+            projects.upsertCard({
+              id: d.id,
+              name: d.name,
+              createdAt: cur?.createdAt ?? d.savedAt,
+              savedAt: d.savedAt,
+              duration: d.duration,
+              clipCount: d.clipCount,
+            });
+          }
+        }
+        list = projects.listProjects();
+      } catch {
+        /* noop */
+      }
+    }
+    setCards(list);
+  };
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, []);
   // verificador rápido de atualização (boot + a cada 30 min, se ligado nas configs)
   useEffect(() => {

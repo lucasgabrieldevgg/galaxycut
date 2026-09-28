@@ -80,11 +80,6 @@ export function SubtitleDialog() {
 
   async function generate() {
     if (!source?.mediaId) return;
-    // no navegador a IA local trava a aba — a função fica só no app baixado
-    if (!isDesktopBuild()) {
-      toast.info(t("sub.webToast"), { description: t("sub.webToastDesc") });
-      return;
-    }
     job.start();
     try {
       const segs = await transcribe(source.mediaId!, lang, (p: WhisperProgress) => useSubtitleJob.getState().setProg(p), model, maxWords);
@@ -348,8 +343,7 @@ export function SubtitleDialog() {
           ) : (
             <Button
               onClick={() => void generate()}
-              disabled={!source || onWeb}
-              title={onWeb ? t("misc.desktopOnly") : undefined}
+              disabled={!source}
               className="gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
             >
               <CheckCircle2 className="h-4 w-4" />

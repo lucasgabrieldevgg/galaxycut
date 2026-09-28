@@ -55,6 +55,9 @@ export interface DesktopApi {
   projectLoad(id: string): Promise<{ snapshot: Record<string, unknown>; media: DesktopSavedMedia[] } | null>;
   projectDelete(id: string): Promise<boolean>;
   openProjectsFolder(): void;
+  // ---- configurações em disco ----
+  settingsLoad?(): Promise<Record<string, unknown> | null>;
+  settingsSave?(data: unknown): Promise<boolean>;
 }
 
 export const desktop: DesktopApi | undefined =

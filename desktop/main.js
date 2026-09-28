@@ -157,7 +157,20 @@ function startServer(root) {
       res.end("error");
     }
   });
-  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
+  return new Promise((resolve) => {
+    // Porta determinística 39871: mantém a mesma origem e preserva localStorage/IndexedDB
+    const tryPort = (port) => {
+      server.listen(port, "127.0.0.1", () => resolve(server));
+      server.once("error", (err) => {
+        if (err.code === "EADDRINUSE" && port < 39885) {
+          tryPort(port + 1);
+        } else {
+          server.listen(0, "127.0.0.1", () => resolve(server));
+        }
+      });
+    };
+    tryPort(39871);
+  });
 }
 
 // ---------- atualizações ----------
@@ -629,3 +642,27 @@ ipcMain.handle("show-in-folder", (_ev, p) => {
 ipcMain.handle("open-external", (_ev, url) => {
   if (typeof url === "string" && /^https:\/\/(github\.com|galaxycut\.vercel\.app|lucasgabrieldevgg\.github\.io)/.test(url)) shell.openExternal(url);
 });
+
+// ---- configurações persistentes no disco (sobrevivem a qualquer reinício/atualização) ----
+const settingsFile = path.join(userData, "settings.json");
+
+ipcMain.handle("settings:load", async () => {
+  try {
+    const raw = await fsp.readFile(settingsFile, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.handle("settings:save", async (_ev, data) => {
+  try {
+    await fsp.writeFile(settingsFile, JSON.stringify(data, null, 2), "utf8");
+    log("configurações salvas em disco");
+    return true;
+  } catch (e) {
+    log("settings:save erro:", String(e));
+    return false;
+  }
+});
+

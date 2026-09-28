@@ -3,7 +3,7 @@
 // os ARQUIVOS em si continuam no IndexedDB (mediaDB), sobrevivem ao F5.
 "use client";
 
-import { Clip, MediaMeta, ProjectMeta, Track, uid } from "./types";
+import { Clip, MediaFolder, MediaMeta, ProjectMeta, Track, uid } from "./types";
 import { registry } from "./media";
 
 export interface ProjectCard {
@@ -21,6 +21,7 @@ export interface ProjectSnapshot {
   tracks: Track[];
   clips: Clip[];
   media: MediaMeta[];
+  folders?: MediaFolder[];
 }
 
 const IDX_KEY = "galaxycut_projects_v1";
@@ -163,7 +164,7 @@ export function loadProject(id: string): ProjectSnapshot | null {
     if (!raw) return null;
     const data = JSON.parse(raw) as ProjectSnapshot;
     if (!data?.project) return null;
-    return { project: data.project, tracks: data.tracks ?? [], clips: data.clips ?? [], media: data.media ?? [] };
+    return { project: data.project, tracks: data.tracks ?? [], clips: data.clips ?? [], media: data.media ?? [], folders: data.folders ?? [] };
   } catch {
     return null;
   }

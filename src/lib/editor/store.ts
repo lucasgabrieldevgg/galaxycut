@@ -4,6 +4,8 @@
 import { create } from "zustand";
 import {
   Clip,
+  MediaClipboard,
+  MediaFolder,
   MediaMeta,
   ProjectMeta,
   Track,
@@ -23,9 +25,11 @@ interface Snapshot {
   tracks: Track[];
   clips: Clip[];
   media: MediaMeta[];
+  folders?: MediaFolder[];
 }
 
 interface ProjectState extends Snapshot {
+  folders: MediaFolder[];
   selectedId: string | null;
   /** seleção múltipla (Ctrl+clique / Ctrl+A) — selectedId é o principal */
   selectedIds: string[];
@@ -38,7 +42,18 @@ interface ProjectState extends Snapshot {
   // projeto
   setProject: (patch: Partial<ProjectMeta>) => void;
   clearProject: () => void;
-  loadSnapshot: (s: { project: ProjectMeta; tracks: Track[]; clips: Clip[]; media: MediaMeta[] }) => void;
+  loadSnapshot: (s: { project: ProjectMeta; tracks: Track[]; clips: Clip[]; media: MediaMeta[]; folders?: MediaFolder[]; past?: Snapshot[]; future?: Snapshot[] }) => void;
+  // pastas de mídia
+  createFolder: (name: string, parentId?: string | null) => MediaFolder;
+  renameFolder: (id: string, name: string) => void;
+  deleteFolder: (id: string) => void;
+  moveMediaToFolder: (mediaIds: string[], folderId: string | null) => void;
+  // clipboard de mídia (recortar/copiar/colar)
+  mediaClipboard: MediaClipboard | null;
+  cutMedia: (mediaId: string) => void;
+  copyMedia: (mediaId: string) => void;
+  pasteMedia: (targetFolderId: string | null) => MediaMeta | null;
+  clearMediaClipboard: () => void;
   // mídia
   addMedia: (meta: MediaMeta) => void;
   updateMedia: (id: string, patch: Partial<MediaMeta>) => void;
@@ -99,7 +114,7 @@ interface ProjectState extends Snapshot {
 }
 
 function snap(s: ProjectState): Snapshot {
-  return JSON.parse(JSON.stringify({ project: s.project, tracks: s.tracks, clips: s.clips, media: s.media })) as Snapshot;
+  return JSON.parse(JSON.stringify({ project: s.project, tracks: s.tracks, clips: s.clips, media: s.media, folders: s.folders })) as Snapshot;
 }
 
 /** clipboard de clipe (copiar/colar) */
@@ -181,6 +196,8 @@ export const useProject = create<ProjectState>((set, get) => ({
   ],
   clips: [],
   media: [],
+  folders: [],
+  mediaClipboard: null,
   selectedId: null,
   selectedIds: [],
   past: [],
@@ -222,6 +239,8 @@ export const useProject = create<ProjectState>((set, get) => ({
       ],
       clips: [],
       media: [],
+      folders: [],
+      mediaClipboard: null,
       selectedId: null,
       selectedIds: [],
     });
@@ -231,6 +250,7 @@ export const useProject = create<ProjectState>((set, get) => ({
     tracks: Track[];
     clips: Clip[];
     media: MediaMeta[];
+    folders?: MediaFolder[];
     /** histórico salvo em disco (desktop): restaura o Ctrl+Z depois de fechar o app */
     past?: Snapshot[];
     future?: Snapshot[];
@@ -239,11 +259,95 @@ export const useProject = create<ProjectState>((set, get) => ({
     tracks: s.tracks,
     clips: s.clips,
     media: s.media,
+    folders: s.folders ?? [],
+    mediaClipboard: null,
     selectedId: null,
     selectedIds: [],
     past: (s.past ?? []).slice(-30),
     future: (s.future ?? []).slice(0, 30),
   }),
+
+  createFolder: (name: string, parentId = null) => {
+    const cleanName = name.trim() || "Nova pasta";
+    const folder: MediaFolder = {
+      id: uid(),
+      name: cleanName,
+      parentId: parentId ?? null,
+      createdAt: Date.now(),
+    };
+    get().pushHistory();
+    set((s) => ({ folders: [...s.folders, folder] }));
+    return folder;
+  },
+
+  renameFolder: (id: string, name: string) => {
+    const cleanName = name.trim() || "Pasta";
+    get().pushHistory();
+    set((s) => ({ folders: s.folders.map((f) => (f.id === id ? { ...f, name: cleanName } : f)) }));
+  },
+
+  deleteFolder: (id: string) => {
+    const s = get();
+    const folder = s.folders.find((f) => f.id === id);
+    if (!folder) return;
+    const parent = folder.parentId ?? null;
+    get().pushHistory();
+    set((st) => ({
+      folders: st.folders.filter((f) => f.id !== id).map((f) => (f.parentId === id ? { ...f, parentId: parent } : f)),
+      media: st.media.map((m) => (m.folderId === id ? { ...m, folderId: parent } : m)),
+    }));
+  },
+
+  moveMediaToFolder: (mediaIds: string[], folderId: string | null) => {
+    const idSet = new Set(mediaIds);
+    get().pushHistory();
+    set((s) => ({
+      media: s.media.map((m) => (idSet.has(m.id) ? { ...m, folderId: folderId ?? null } : m)),
+    }));
+  },
+
+  cutMedia: (mediaId: string) => {
+    const m = get().media.find((x) => x.id === mediaId);
+    if (!m) return;
+    set({ mediaClipboard: { mode: "cut", mediaId, sourceFolderId: m.folderId ?? null } });
+  },
+
+  copyMedia: (mediaId: string) => {
+    const m = get().media.find((x) => x.id === mediaId);
+    if (!m) return;
+    set({ mediaClipboard: { mode: "copy", mediaId, sourceFolderId: m.folderId ?? null } });
+  },
+
+  pasteMedia: (targetFolderId: string | null) => {
+    const cb = get().mediaClipboard;
+    if (!cb) return null;
+    const src = get().media.find((x) => x.id === cb.mediaId);
+    if (!src) return null;
+    get().pushHistory();
+    if (cb.mode === "cut") {
+      const updated: MediaMeta = { ...src, folderId: targetFolderId ?? null };
+      set((s) => ({
+        media: s.media.map((m) => (m.id === cb.mediaId ? updated : m)),
+        mediaClipboard: null,
+      }));
+      return updated;
+    } else {
+      const newId = uid();
+      registry.duplicate(src.id, newId);
+      const newMeta: MediaMeta = {
+        ...src,
+        id: newId,
+        name: `${src.name} (cópia)`,
+        folderId: targetFolderId ?? null,
+      };
+      set((s) => ({
+        media: [...s.media, newMeta],
+      }));
+      return newMeta;
+    }
+  },
+
+  clearMediaClipboard: () => set({ mediaClipboard: null }),
 
   addMedia: (meta) => set((s) => ({ media: [...s.media, meta] })),
   updateMedia: (id, patch) => set((s) => ({ media: s.media.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
@@ -795,6 +899,7 @@ export function saveToStorage() {
       ...m,
       missing: !registry.hasBlob(m.id),
     })),
+    folders: s.folders,
   });
 }
 

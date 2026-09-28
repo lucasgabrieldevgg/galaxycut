@@ -204,6 +204,7 @@ class PlaybackEngine {
         continue;
       }
       if (!(el instanceof HTMLMediaElement)) continue;
+      if (el.readyState >= 2) continue; // já tem frame pronto
       const dur = isFinite(el.duration) ? el.duration : 0;
       if (dur <= 0) return false; // metadado nem chegou
       let buf = 0;
@@ -212,7 +213,7 @@ class PlaybackEngine {
       } catch {
         buf = 0;
       }
-      if (buf < Math.min(dur - 0.15, dur * 0.985)) return false;
+      if (buf < Math.min(dur - 0.3, dur * 0.90) && el.readyState < 2) return false;
     }
     return true;
   }
@@ -315,15 +316,7 @@ class PlaybackEngine {
     const el = this.elements.get(this.bindings.get(clipId) ?? "");
     if (!el) return "loading";
     if (el instanceof HTMLVideoElement) {
-      if (el.readyState >= 2) return "ok";
-      // buffer quase inteiro? o decode tá chegando (era o piscar de
-      // "carregando" a cada seek no navegador) — conta como pronto
-      const dur = isFinite(el.duration) ? el.duration : 0;
-      try {
-        if (dur > 0 && el.buffered.length && el.buffered.end(el.buffered.length - 1) >= dur * 0.97) return "ok";
-      } catch {
-        /* noop */
-      }
+      if (el.readyState >= 1 || el.videoWidth > 0) return "ok";
       return "loading";
     }
     if (el instanceof HTMLImageElement) return el.complete && el.naturalWidth > 0 ? "ok" : "loading";
@@ -404,22 +397,35 @@ class PlaybackEngine {
       const clip = useProject.getState().clips.find((c) => c.id === ownerId);
       if (!clip) continue;
       const expected = clip.inPoint + (t - clip.start) * clip.speed;
-      el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed));
       if (playing) {
-        if (Math.abs(el.currentTime - expected) > 0.26) {
+        const drift = Math.abs(el.currentTime - expected);
+        if (el.paused) {
           try {
             el.currentTime = expected;
           } catch {
-            /* ainda não seekable */
+            /* noop */
           }
-        }
-        if (el.paused) {
-          el.currentTime = expected;
+          el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed));
           void el.play().catch(() => undefined);
+        } else {
+          // drift grande (>0.6s) faz seek direto
+          if (drift > 0.6 && !el.seeking) {
+            try {
+              el.currentTime = expected;
+            } catch {
+              /* noop */
+            }
+          } else if (drift > 0.08) {
+            // drift leve: ajusta velocidade suavemente (+-5%) pra convergir sem pausar/engasgar
+            const rateAdjust = expected > el.currentTime ? 1.05 : 0.95;
+            el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed * rateAdjust));
+          } else {
+            el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed));
+          }
         }
       } else {
         if (!el.paused) el.pause();
-        if (Math.abs(el.currentTime - expected) > 0.05) {
+        if (Math.abs(el.currentTime - expected) > 0.04) {
           try {
             el.currentTime = expected;
           } catch {

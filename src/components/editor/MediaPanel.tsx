@@ -1,7 +1,7 @@
-// GalaxyCut — painel esquerdo: mídia (com gravação de voz!), texto/legendas e busca online
+// GalaxyCut — painel esquerdo: mídia (com pastas, recortar/copiar/colar, gravação de voz!), texto/legendas e busca online
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,17 +10,21 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { useProject, usePlayback } from "@/lib/editor/store";
 import { registry } from "@/lib/editor/media";
 import { isDesktopBuild } from "@/lib/editor/desktop";
 import { useSubtitleJob } from "@/lib/editor/subtitles";
-import { CAPTION_PRESETS, LICENSE_STYLE, licenseLevel, MediaMeta } from "@/lib/editor/types";
+import { CAPTION_PRESETS, LICENSE_STYLE, licenseLevel, MediaFolder, MediaMeta } from "@/lib/editor/types";
 import { gcDrag } from "@/lib/editor/dnd";
 import { useLibPlayer } from "@/lib/editor/libPlayer";
 import { toast } from "sonner";
 import {
-  Upload, FolderOpen, Trash2, Plus, Type, Sparkles, Search, Film, ImageIcon, Music2, FileWarning,
-  Loader2, PlusCircle, Mic, Play as PlayIcon,
+  Upload, FolderOpen, FolderPlus, Folder, ChevronRight, ArrowLeft, Trash2, Plus, Type, Sparkles,
+  Search, Film, ImageIcon, Music2, FileWarning, Loader2, PlusCircle, Mic, Play as PlayIcon,
+  Scissors, Copy, ClipboardPaste, MoreVertical, Pencil, Check, X,
 } from "lucide-react";
 import { SubtitleDialog } from "./SubtitleDialog";
 import { StockSearch } from "./StockSearch";
@@ -50,14 +54,36 @@ function fmtDur(d: number) {
 export function MediaPanel() {
   const t = useT();
   const media = useProject((s) => s.media);
+  const folders = useProject((s) => s.folders);
   const addMedia = useProject((s) => s.addMedia);
   const removeMedia = useProject((s) => s.removeMedia);
   const relinkMedia = useProject((s) => s.relinkMedia);
   const addClipFromMedia = useProject((s) => s.addClipFromMedia);
   const addTextClip = useProject((s) => s.addTextClip);
+  const createFolder = useProject((s) => s.createFolder);
+  const renameFolder = useProject((s) => s.renameFolder);
+  const deleteFolder = useProject((s) => s.deleteFolder);
+  const moveMediaToFolder = useProject((s) => s.moveMediaToFolder);
+  const mediaClipboard = useProject((s) => s.mediaClipboard);
+  const cutMedia = useProject((s) => s.cutMedia);
+  const copyMedia = useProject((s) => s.copyMedia);
+  const pasteMedia = useProject((s) => s.pasteMedia);
+  const clearMediaClipboard = useProject((s) => s.clearMediaClipboard);
+
   const playhead = usePlayback((s) => s.playhead);
   const [importing, setImporting] = useState(0);
   const [confirmRemove, setConfirmRemove] = useState<MediaMeta | null>(null);
+  const [confirmDeleteFolder, setConfirmDeleteFolder] = useState<MediaFolder | null>(null);
+
+  /** navegação de pastas: null = raiz */
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  /** diálogo de criar pasta */
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  /** renomeando pasta */
+  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
+  const [renamingFolderName, setRenamingFolderName] = useState("");
+
   /** mídia selecionada no painel (o Delete do teclado apaga ela) */
   const [selMedia, setSelMedia] = useState<string | null>(null);
   /** filtro da aba Mídia: tudo/vídeos/áudios/imagens */
@@ -66,6 +92,18 @@ export function MediaPanel() {
   const fileRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
 
+  const currentFolder = useMemo(
+    () => folders.find((f) => f.id === currentFolderId) ?? null,
+    [folders, currentFolderId]
+  );
+
+  // se a pasta atual for excluída, volta pra raiz
+  useEffect(() => {
+    if (currentFolderId && !folders.some((f) => f.id === currentFolderId)) {
+      setCurrentFolderId(null);
+    }
+  }, [folders, currentFolderId]);
+
   /** Remove mídia — pede confirmação quando ela tá sendo usada na timeline */
   function askRemove(m: MediaMeta) {
     const used = useProject.getState().clips.filter((c) => c.mediaId === m.id).length;
@@ -73,7 +111,7 @@ export function MediaPanel() {
     else removeMedia(m.id);
   }
 
-  // o atalho "delete" (editável) dispara este evento quando a seleção tá no painel de mídia
+  // atalhos de teclado (Delete, Ctrl+C, Ctrl+X, Ctrl+V) no painel de mídia
   useEffect(() => {
     const del = () => {
       if (!selMedia) return;
@@ -82,10 +120,9 @@ export function MediaPanel() {
     };
     window.addEventListener("galaxiacut:delmedia", del);
     return () => window.removeEventListener("galaxiacut:delmedia", del);
-     
   }, [selMedia]);
 
-  async function handleFiles(files: FileList | File[]) {
+  async function handleFiles(files: FileList | File[], targetFolderId: string | null = currentFolderId) {
     const arr = Array.from(files).filter(
       (f) => /^(video|audio|image)\//.test(f.type) || /\.(mp4|webm|mov|mkv|m4v|avi|png|jpe?g|webp|gif|avif|bmp|mp3|wav|ogg|m4a|aac|flac|opus)$/i.test(f.name)
     );
@@ -99,7 +136,7 @@ export function MediaPanel() {
     for (const f of arr) {
       try {
         const meta = await registry.importFile(f);
-        addMedia(meta);
+        addMedia({ ...meta, folderId: targetFolderId });
         ok++;
       } catch (e) {
         fail++;
@@ -114,6 +151,36 @@ export function MediaPanel() {
           ? t("mp.importedPartial", { ok, n: arr.length, fail })
           : t("mp.importedN", { n: ok })
       );
+    }
+  }
+
+  /** Upload de PASTA inteira: cria a pasta correspondente e guarda os arquivos dentro dela */
+  async function handleFolderUpload(files: FileList | File[]) {
+    const arr = Array.from(files).filter(
+      (f) => /^(video|audio|image)\//.test(f.type) || /\.(mp4|webm|mov|mkv|m4v|avi|png|jpe?g|webp|gif|avif|bmp|mp3|wav|ogg|m4a|aac|flac|opus)$/i.test(f.name)
+    );
+    if (!arr.length) {
+      toast.info(t("mp.noFiles"));
+      return;
+    }
+
+    // agrupa por subpastas relativas
+    const folderMap = new Map<string, File[]>();
+    for (const f of arr) {
+      const relPath = (f as File & { webkitRelativePath?: string }).webkitRelativePath || "";
+      const parts = relPath.split("/").filter(Boolean);
+      const topDir = parts.length > 1 ? parts[0] : "Nova pasta";
+      if (!folderMap.has(topDir)) folderMap.set(topDir, []);
+      folderMap.get(topDir)!.push(f);
+    }
+
+    for (const [folderName, folderFiles] of folderMap) {
+      // cria a pasta no nível atual
+      const created = createFolder(folderName, currentFolderId);
+      await handleFiles(folderFiles, created.id);
+      toast.success(t("mp.folderImported", { name: folderName, n: folderFiles.length }));
+      // entra na pasta recém-importada
+      setCurrentFolderId(created.id);
     }
   }
 
@@ -133,6 +200,42 @@ export function MediaPanel() {
       toast.error(t("mp.relinkFail"), { description: String((e as Error).message ?? e) });
     }
   }
+
+  function handleCreateFolder() {
+    if (!newFolderName.trim()) return;
+    const f = createFolder(newFolderName.trim(), currentFolderId);
+    setNewFolderName("");
+    setNewFolderOpen(false);
+    toast.success(t("mp.newFolder") + `: ${f.name}`);
+  }
+
+  function handleRenameFolder() {
+    if (renamingFolderId && renamingFolderName.trim()) {
+      renameFolder(renamingFolderId, renamingFolderName.trim());
+      setRenamingFolderId(null);
+      setRenamingFolderName("");
+      toast.success(t("mp.renameFolder"));
+    }
+  }
+
+  function handlePaste() {
+    const res = pasteMedia(currentFolderId);
+    if (res) {
+      toast.success(t("mp.pasted") + `: ${res.name}`);
+    }
+  }
+
+  // pastas e mídias do nível atual
+  const currentFolders = useMemo(
+    () => folders.filter((f) => (f.parentId ?? null) === currentFolderId),
+    [folders, currentFolderId]
+  );
+
+  const currentMedia = useMemo(() => {
+    let list = media.filter((m) => (m.folderId ?? null) === currentFolderId);
+    if (kindFilter !== "all") list = list.filter((m) => m.kind === kindFilter);
+    return list;
+  }, [media, currentFolderId, kindFilter]);
 
   const job = useSubtitleJob();
 
@@ -156,6 +259,7 @@ export function MediaPanel() {
         {/* ---------- MÍDIA ---------- */}
         <TabsContent value="media" className="min-h-0 flex-1 overflow-hidden pt-0">
           <div className="flex h-full min-h-0 flex-col">
+            {/* botões de importação e gravação */}
             <div className="grid shrink-0 grid-cols-[1fr_auto_auto] gap-1.5 p-2.5">
               <button
                 onClick={() => fileRef.current?.click()}
@@ -164,7 +268,7 @@ export function MediaPanel() {
                   e.preventDefault();
                   if (e.dataTransfer.files.length) void handleFiles(e.dataTransfer.files);
                 }}
-                className="flex w-full flex-col items-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-3 py-3.5 text-zinc-500 transition hover:border[var(--gc-accent-60)] hover:text-[var(--gc-accent)]"
+                className="flex w-full flex-col items-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-3 py-3 text-zinc-500 transition hover:border[var(--gc-accent-60)] hover:text-[var(--gc-accent)]"
               >
                 {importing > 0 ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
                 <span className="text-xs font-medium">{t("mp.importFiles")}</span>
@@ -173,18 +277,18 @@ export function MediaPanel() {
               <button
                 onClick={() => folderRef.current?.click()}
                 title={t("mp.importFolderHint")}
-                className="flex w-[74px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-1 py-3.5 text-zinc-500 transition hover:border[var(--gc-accent-60)] hover:text-[var(--gc-accent)]"
+                className="flex w-[74px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-1 py-3 text-zinc-500 transition hover:border[var(--gc-accent-60)] hover:text-[var(--gc-accent)]"
               >
                 <FolderOpen className="h-5 w-5" />
-                <span className="text-[10px] font-medium leading-tight">{t("mp.importFolder").split(" ")[0]}<br />{t("mp.importFolder").split(" ").slice(1).join(" ")}</span>
+                <span className="text-[10px] font-medium leading-tight text-center">{t("mp.importFolder").split(" ")[0]}<br />{t("mp.importFolder").split(" ").slice(1).join(" ")}</span>
               </button>
               <button
                 onClick={() => setRecordOpen(true)}
                 title={t("mp.recordHint")}
-                className="flex w-[74px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-1 py-3.5 text-zinc-500 transition hover:border-red-400/60 hover:text-red-400"
+                className="flex w-[74px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-1 py-3 text-zinc-500 transition hover:border-red-400/60 hover:text-red-400"
               >
                 <Mic className="h-5 w-5" />
-                <span className="text-[10px] font-medium leading-tight">{t("mp.record").split(" ")[0]}<br />{t("mp.record").split(" ").slice(1).join(" ")}</span>
+                <span className="text-[10px] font-medium leading-tight text-center">{t("mp.record").split(" ")[0]}<br />{t("mp.record").split(" ").slice(1).join(" ")}</span>
               </button>
               <input
                 ref={fileRef}
@@ -202,92 +306,260 @@ export function MediaPanel() {
                 type="file"
                 multiple
                 className="hidden"
-                // @ts-expect-error atributo não padrão do navegador pra escolher PASTA
+                // @ts-expect-error atributo webkitdirectory para pastas
                 webkitdirectory=""
                 directory=""
                 onChange={(e) => {
-                  if (e.target.files?.length) void handleFiles(e.target.files);
+                  if (e.target.files?.length) void handleFolderUpload(e.target.files);
                   e.target.value = "";
                 }}
               />
             </div>
-            {/* filtros: achar vídeo/áudio/imagem num projeto cheio */}
+
+            {/* barra de navegação de pastas + botão nova pasta + colar */}
+            <div className="flex shrink-0 items-center justify-between gap-1.5 border-b border-[#1c2430] bg-[#0e1320] px-2.5 py-1.5">
+              <div className="flex min-w-0 items-center gap-1">
+                {currentFolderId !== null ? (
+                  <button
+                    onClick={() => setCurrentFolderId(currentFolder?.parentId ?? null)}
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold text-[var(--gc-accent)] transition hover:bg[var(--gc-accent-10)]"
+                    title={t("mp.back")}
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>{t("mp.back")}</span>
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs font-medium text-zinc-400">
+                    <Folder className="h-3.5 w-3.5 text-zinc-500" />
+                    <span>{t("mp.root")}</span>
+                  </span>
+                )}
+                {currentFolder && (
+                  <div className="flex min-w-0 items-center gap-1 text-xs text-zinc-300">
+                    <ChevronRight className="h-3 w-3 shrink-0 text-zinc-600" />
+                    <span className="truncate font-semibold text-zinc-200" title={currentFolder.name}>
+                      {currentFolder.name}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1">
+                {/* botão criar pasta */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setNewFolderOpen(true)}
+                  className="h-7 gap-1 px-2 text-[11px] text-zinc-300 hover:bg-[#1c2430] hover:text-zinc-100"
+                  title={t("mp.createFolder")}
+                >
+                  <FolderPlus className="h-3.5 w-3.5 text-[var(--gc-accent)]" />
+                  <span>{t("mp.newFolder")}</span>
+                </Button>
+
+                {/* botão colar se houver item no clipboard */}
+                {mediaClipboard && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handlePaste}
+                    className="h-7 gap-1 border border[var(--gc-accent-40)] bg[var(--gc-accent-10)] px-2 text-[11px] font-semibold text-[var(--gc-accent)] hover:bg[var(--gc-accent-20)]"
+                    title={t("mp.paste")}
+                  >
+                    <ClipboardPaste className="h-3.5 w-3.5" />
+                    <span>{t("mp.paste")} ({mediaClipboard.mode === "cut" ? t("mp.cut") : t("mp.copy")})</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* filtros: tudo / vídeos / áudios / imagens */}
             {media.length > 0 && (
-              <div className="flex shrink-0 flex-wrap gap-1 px-2.5 pb-2">
+              <div className="flex shrink-0 flex-wrap gap-1 px-2.5 py-1.5">
                 {KIND_FILTERS.map((f) => {
                   const n = f.id === "all" ? media.length : media.filter((m) => m.kind === f.id).length;
                   return (
                     <button
                       key={f.id}
-                      type="button"
                       onClick={() => setKindFilter(f.id)}
-                      className={`rounded-full border px-2.5 py-0.5 text-[10px] transition ${
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
                         kindFilter === f.id
-                          ? "border-[var(--gc-accent)] bg[var(--gc-accent-15)] text-[var(--gc-accent)]"
-                          : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                          ? "bg-[var(--gc-accent)] text-black"
+                          : "bg-[#141a24] text-zinc-400 hover:bg-[#1c2430] hover:text-zinc-200"
                       }`}
                     >
-                      {t(f.key)} <span className="opacity-60">{n}</span>
+                      {t(f.key)} ({n})
                     </button>
                   );
                 })}
               </div>
             )}
-            <ScrollArea className="min-h-0 flex-1 px-2.5 pb-3">
-              {media.length === 0 ? (
-                <p className="px-2 py-6 text-center text-[11px] leading-relaxed text-zinc-600">{t("mp.empty")}</p>
-              ) : kindFilter === "all" || media.some((m) => m.kind === kindFilter) ? (
-                <div className="space-y-1.5">
-                  {media
-                    .filter((m) => kindFilter === "all" || m.kind === kindFilter)
-                    .map((m) => (
-                      <MediaRow
-                        key={m.id}
-                        m={m}
-                        sel={selMedia === m.id}
-                        onSelect={() => setSelMedia(selMedia === m.id ? null : m.id)}
-                        onRemove={() => askRemove(m)}
-                        onRelink={(f) => void relink(m.id, f)}
-                        onAdd={() => {
-                          const c = addClipFromMedia(m.id);
-                          if (c) toast.success(t("mp.addedAt", { t: fmtDur(c.start) }));
-                        }}
-                      />
-                    ))}
-                </div>
-              ) : (
-                <p className="px-2 py-6 text-center text-[11px] text-zinc-600">{t("mp.noneOfKind")}</p>
-              )}
+
+            {/* lista de pastas e mídias do diretório atual */}
+            <ScrollArea className="min-h-0 flex-1 px-2.5 pb-2">
+              <div className="space-y-1 pt-1">
+                {/* pastas do nível atual */}
+                {currentFolders.map((folder) => {
+                  const itemCount = media.filter((m) => m.folderId === folder.id).length;
+                  const isRenaming = renamingFolderId === folder.id;
+                  return (
+                    <div
+                      key={folder.id}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.add("border-[var(--gc-accent)]", "bg[var(--gc-accent-10)]");
+                      }}
+                      onDragLeave={(e) => {
+                        e.currentTarget.classList.remove("border-[var(--gc-accent)]", "bg[var(--gc-accent-10)]");
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove("border-[var(--gc-accent)]", "bg[var(--gc-accent-10)]");
+                        const mediaId = e.dataTransfer.getData(MEDIA_DND_TYPE) || e.dataTransfer.getData("text/plain");
+                        if (mediaId) {
+                          moveMediaToFolder([mediaId], folder.id);
+                          toast.success(t("mp.pasted") + `: ${folder.name}`);
+                        }
+                      }}
+                      onClick={() => {
+                        if (!isRenaming) setCurrentFolderId(folder.id);
+                      }}
+                      className="group flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-[#232d3d] bg-[#121722] p-2 transition hover:border-[#3a4759] hover:bg-[#161d2b]"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <Folder className="h-4 w-4 shrink-0 text-amber-400" />
+                        {isRenaming ? (
+                          <div className="flex flex-1 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Input
+                              autoFocus
+                              value={renamingFolderName}
+                              onChange={(e) => setRenamingFolderName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleRenameFolder();
+                                if (e.key === "Escape") setRenamingFolderId(null);
+                              }}
+                              className="h-6 border-[#2a3546] bg-[#0e1320] px-1.5 text-xs text-zinc-100"
+                            />
+                            <button onClick={handleRenameFolder} className="p-1 text-[var(--gc-accent)] hover:bg[var(--gc-accent-10)]">
+                              <Check className="h-3 w-3" />
+                            </button>
+                            <button onClick={() => setRenamingFolderId(null)} className="p-1 text-zinc-500 hover:bg-[#1c2430]">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[12px] font-semibold text-zinc-200">{folder.name}</p>
+                            <p className="text-[9px] text-zinc-500">{itemCount} {t("mp.itemsCount", { n: itemCount })}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {!isRenaming && (
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <FloatMenu
+                            items={[
+                              {
+                                label: tr("mp.renameFolder"),
+                                icon: <Pencil className="h-3.5 w-3.5" />,
+                                onClick: () => {
+                                  setRenamingFolderId(folder.id);
+                                  setRenamingFolderName(folder.name);
+                                },
+                              },
+                              { type: "sep" },
+                              {
+                                label: tr("mp.deleteFolder"),
+                                icon: <Trash2 className="h-3.5 w-3.5" />,
+                                danger: true,
+                                onClick: () => setConfirmDeleteFolder(folder),
+                              },
+                            ]}
+                          >
+                            <button className="rounded p-1 text-zinc-500 opacity-0 transition group-hover:opacity-100 hover:bg-[#1c2430] hover:text-zinc-200">
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                          </FloatMenu>
+                          <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-300" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* mídias do nível atual */}
+                {currentMedia.map((m) => {
+                  const isCut = mediaClipboard?.mode === "cut" && mediaClipboard.mediaId === m.id;
+                  return (
+                    <MediaRow
+                      key={m.id}
+                      m={m}
+                      sel={selMedia === m.id}
+                      isCut={isCut}
+                      onSelect={() => setSelMedia(m.id)}
+                      onRemove={() => askRemove(m)}
+                      onRelink={(f) => void relink(m.id, f)}
+                      onAdd={() => {
+                        const clip = addClipFromMedia(m.id);
+                        if (clip) toast.success(t("mp.addedAt", { t: fmtDur(clip.start) }));
+                      }}
+                      onCut={() => {
+                        cutMedia(m.id);
+                        toast.info(t("mp.cutDone"));
+                      }}
+                      onCopy={() => {
+                        copyMedia(m.id);
+                        toast.info(t("mp.copyDone"));
+                      }}
+                    />
+                  );
+                })}
+
+                {/* pasta vazia */}
+                {currentFolders.length === 0 && currentMedia.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-[#1c2430] p-6 text-center text-zinc-600">
+                    <p className="text-xs">{currentFolderId ? t("mp.emptyFolder") : t("mp.empty")}</p>
+                  </div>
+                )}
+              </div>
             </ScrollArea>
           </div>
         </TabsContent>
 
-        {/* ---------- TEXTO / LEGENDAS ---------- */}
-        <TabsContent value="text" className="min-h-0 flex-1 overflow-hidden pt-0">
-          <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-2.5">
+        {/* ---------- TEXTO & LEGENDAS ---------- */}
+        <TabsContent value="text" className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="space-y-4">
             <Button
               onClick={() => {
                 addTextClip(playhead);
                 toast.success(t("mp.textAdded"));
               }}
-              className="h-9 w-full shrink-0 gap-1.5 bg-[var(--gc-accent)] text-sm font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
+              className="w-full gap-2 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
             >
-              <Type className="h-4 w-4" /> {t("mp.addText")}
+              <Plus className="h-4 w-4" /> {t("mp.addText")}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                job.setMinimized(false);
-                job.setOpen(true);
-              }}
-              className="h-9 w-full shrink-0 gap-1.5 border-[#2a3546] bg-transparent text-sm text-zinc-200 hover:border[var(--gc-accent-50)] hover:text-[var(--gc-accent)]"
-            >
-              <Sparkles className="h-4 w-4 text-[var(--gc-accent)]" /> {t("mp.autoSubs")}
-            </Button>
-            <p className="rounded-md border border-[#2a3546] bg-[#0e1320] p-2.5 text-[10px] leading-relaxed text-zinc-500">
-              {isDesktopBuild() ? t("mp.subsNoteApp") : t("mp.subsNoteWeb")}
-            </p>
-            <div className="mt-1 min-h-0 flex-1">
+
+            {/* legendas com IA */}
+            <div className="space-y-2 rounded-xl border border-[#232d3d] bg-[#121722] p-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-200">
+                  <Sparkles className="h-3.5 w-3.5 text-[var(--gc-accent)]" /> {t("mp.autoSubs")}
+                </span>
+                <Button
+                  size="sm"
+                  onClick={() => job.setOpen(true)}
+                  className="h-7 bg-[var(--gc-accent)] px-2.5 text-xs font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
+                >
+                  {t("tb.export").slice(0, 0) || "Gerar"}
+                </Button>
+              </div>
+              <p className="text-[10px] leading-relaxed text-zinc-400">
+                {isDesktopBuild() ? t("mp.subsNoteApp") : t("mp.subsNoteApp")}
+              </p>
+            </div>
+
+            {/* presets de legenda */}
+            <div>
               <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{t("mp.captionStyles")}</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {CAPTION_PRESETS.map((p) => (
@@ -300,8 +572,6 @@ export function MediaPanel() {
                     className="flex flex-col items-center gap-1 rounded-lg border border-[#232d3d] bg-[#121722] px-2 py-2.5 transition hover:border-[#3a4759]"
                     title={`Adicionar texto com estilo ${p.name}`}
                   >
-                    {/* v7.3: preview em canvas com as cores REAIS (o contorno
-                        fica atrás da letra, como no vídeo) */}
                     <PresetPreview tp={p.props} />
                     <span className="text-[9px] text-zinc-500">{p.name}</span>
                   </button>
@@ -322,6 +592,63 @@ export function MediaPanel() {
 
       <SubtitleDialog />
       <RecordDialog open={recordOpen} onOpenChange={setRecordOpen} />
+
+      {/* modal nova pasta */}
+      <Dialog open={newFolderOpen} onOpenChange={setNewFolderOpen}>
+        <DialogContent className="border-[#232d3d] bg-[#121722] text-zinc-200">
+          <DialogHeader>
+            <DialogTitle>{t("mp.newFolder")}</DialogTitle>
+            <DialogDescription>{t("mp.createFolder")}</DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              autoFocus
+              placeholder={t("mp.folderName")}
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreateFolder();
+              }}
+              className="border-[#2a3546] bg-[#0e1320] text-zinc-100"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewFolderOpen(false)} className="border-[#2a3546] bg-transparent text-zinc-300">
+              {t("misc.cancel")}
+            </Button>
+            <Button onClick={handleCreateFolder} className="bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]">
+              {t("mp.createFolder")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* confirmação de exclusão de pasta */}
+      <AlertDialog open={!!confirmDeleteFolder} onOpenChange={(v) => !v && setConfirmDeleteFolder(null)}>
+        <AlertDialogContent className="border-[#232d3d] bg-[#121722] text-zinc-200">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("mp.deleteFolderTitle", { name: confirmDeleteFolder?.name ?? "" })}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("mp.deleteFolderHint")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">{t("misc.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-500"
+              onClick={() => {
+                if (confirmDeleteFolder) {
+                  deleteFolder(confirmDeleteFolder.id);
+                  toast.success(t("mp.deleteFolder"));
+                }
+                setConfirmDeleteFolder(null);
+              }}
+            >
+              {t("misc.delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* confirmação de remoção de mídia em uso */}
       <AlertDialog open={!!confirmRemove} onOpenChange={(v) => !v && setConfirmRemove(null)}>
@@ -358,17 +685,23 @@ export function MediaPanel() {
 function MediaRow({
   m,
   sel,
+  isCut,
   onSelect,
   onRemove,
   onRelink,
   onAdd,
+  onCut,
+  onCopy,
 }: {
   m: MediaMeta;
   sel: boolean;
+  isCut?: boolean;
   onSelect: () => void;
   onRemove: () => void;
   onRelink: (f: File) => void;
   onAdd: () => void;
+  onCut: () => void;
+  onCopy: () => void;
 }) {
   const openPlayer = useLibPlayer((s) => s.open);
   const lic = m.source === "stock" ? licenseLevel(m.license) : null;
@@ -377,6 +710,8 @@ function MediaRow({
 
   const items: MenuItem[] = [
     { label: tr("mp.addToTimeline"), icon: <PlusCircle className="h-3.5 w-3.5 text-[var(--gc-accent)]" />, onClick: onAdd },
+    { label: tr("mp.cut"), icon: <Scissors className="h-3.5 w-3.5" />, onClick: onCut },
+    { label: tr("mp.copy"), icon: <Copy className="h-3.5 w-3.5" />, onClick: onCopy },
     ...(m.kind !== "image" && url
       ? [{
           label: tr("mp.listen"),
@@ -399,15 +734,17 @@ function MediaRow({
           e.dataTransfer.setData(MEDIA_DND_TYPE, m.id);
           e.dataTransfer.setData("text/plain", m.id);
           e.dataTransfer.effectAllowed = "copy";
-          gcDrag.begin(m.id); // a timeline usa isso pra calcular o encaixe ANTES de soltar
+          gcDrag.begin(m.id);
         }}
         onDragEnd={() => gcDrag.end()}
         className={`group flex cursor-grab items-center gap-2 rounded-lg border p-1.5 transition active:cursor-grabbing ${
-          sel
-            ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)]"
-            : m.missing
-              ? "border-red-500/40 bg-red-500/5"
-              : "border-[#232d3d] bg-[#121722] hover:border-[#3a4759]"
+          isCut
+            ? "opacity-40 border-dashed border-amber-500/50 bg-[#121722]"
+            : sel
+              ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)]"
+              : m.missing
+                ? "border-red-500/40 bg-red-500/5"
+                : "border-[#232d3d] bg-[#121722] hover:border-[#3a4759]"
         }`}
         title={tr("mp.mediaHint")}
       >
@@ -419,7 +756,6 @@ function MediaRow({
           ) : (
             <ImageIcon className="absolute inset-0 m-auto h-4 w-4 text-zinc-600" />
           )}
-          {/* prévia de vídeo: passe o mouse e toca (mudo, em loop) — ANTES de colocar na timeline */}
           {m.kind === "video" && !m.missing && <LocalHoverVideo mediaId={m.id} />}
           {m.missing && <FileWarning className="absolute inset-0 m-auto h-4 w-4 text-red-500" />}
         </div>

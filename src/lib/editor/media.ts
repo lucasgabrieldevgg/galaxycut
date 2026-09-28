@@ -43,6 +43,13 @@ class MediaRegistry {
     idbDel(id);
   }
 
+  duplicate(id: string, newId = uid()): Blob | undefined {
+    const b = this.blobs.get(id);
+    if (!b) return undefined;
+    this.put(newId, b);
+    return b;
+  }
+
   guessKind(file: File | Blob, name: string): "video" | "image" | "audio" {
     if (file instanceof File) {
       if (file.type.startsWith("video/")) return "video";

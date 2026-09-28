@@ -6,13 +6,14 @@
 import { useProject, getActiveProjectId } from "./store";
 import { registry } from "./media";
 import { desktop } from "./desktop";
-import type { Clip, MediaMeta, ProjectMeta, Track } from "./types";
+import type { Clip, MediaFolder, MediaMeta, ProjectMeta, Track } from "./types";
 
 export interface DiskSnapshot {
   project: ProjectMeta;
   tracks: Track[];
   clips: Clip[];
   media: MediaMeta[];
+  folders?: MediaFolder[];
   past?: unknown[];
   future?: unknown[];
 }
@@ -58,6 +59,7 @@ export async function saveToDisk(autosave: boolean): Promise<string | null> {
       tracks: s.tracks,
       clips: s.clips,
       media: s.media.map((m) => ({ ...m, missing: !registry.hasBlob(m.id) })),
+      folders: s.folders,
       // histórico de desfazer (limitado — arquivo não explode)
       past: s.past.slice(-30),
       future: s.future.slice(0, 30),

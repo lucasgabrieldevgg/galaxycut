@@ -120,7 +120,7 @@ function markModelCached(repoId: string) {
  *  respirar e contar quanto tempo a janela levou DE VERDADE (recalibra). */
 function makeEstimatingProgress(onProgress: (p: WhisperProgress) => void, cached: boolean) {
   let timer: number | null = null;
-  let estPerWin = 20; // chute inicial em segundos — recalibrado com medidas reais
+  let estPerWin = 15; // chute inicial em segundos — recalibrado com medidas reais
   let lastPerWin = estPerWin;
   const stop = () => {
     if (timer != null) {
@@ -131,8 +131,6 @@ function makeEstimatingProgress(onProgress: (p: WhisperProgress) => void, cached
   const feed = (m: WorkerMsg) => {
     if (m.type === "stage" && m.stage) {
       stop();
-      // modelo já em cache: a fase de carga aparece como "preparando" (não
-      // assusta com "baixando o modelo" de quem já baixou)
       const stage = m.stage === "download" && cached ? "prepare" : m.stage;
       onProgress({ stage, pct: m.pct ?? 0 });
     } else if (m.type === "windowStart") {
@@ -144,9 +142,11 @@ function makeEstimatingProgress(onProgress: (p: WhisperProgress) => void, cached
       const t0 = performance.now();
       onProgress({ stage: "transcribe", pct: base, window: w, windows: n, perWinSec: Math.round(estPerWin) });
       timer = window.setInterval(() => {
-        const frac = Math.min(0.92, (performance.now() - t0) / (estPerWin * 1000));
+        const elapsed = (performance.now() - t0) / (estPerWin * 1000);
+        // avanço assintótico suave que não trava em 88%
+        const frac = Math.min(0.96, 1 - Math.exp(-elapsed * 1.4));
         onProgress({ stage: "transcribe", pct: base + range * frac, window: w, windows: n, perWinSec: Math.round(estPerWin) });
-      }, 400);
+      }, 300);
     } else if (m.type === "windowDone") {
       const measured = Math.max(1, m.secs ?? estPerWin);
       estPerWin = 0.4 * estPerWin + 0.6 * measured;
@@ -162,7 +162,15 @@ function makeEstimatingProgress(onProgress: (p: WhisperProgress) => void, cached
 // cache de pipelines e responde TUDO com a etiqueta do job (worker persistente
 // = várias transcrições na mesma sessão, modelo carregado 1× só)
 const WORKER_SRC = `
-import { pipeline } from "${TRANSFORMERS_URL}";
+import { pipeline, env } from "${TRANSFORMERS_URL}";
+
+// configurações seguras pro Web Worker (evita travamento com multi-threading)
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+if (env.backends && env.backends.onnx && env.backends.onnx.wasm) {
+  env.backends.onnx.wasm.numThreads = 1;
+}
+
 let asrCache = new Map();
 
 // progresso de download REAL: soma os bytes de TODOS os arquivos do modelo
@@ -198,9 +206,6 @@ async function loadAsr(msg, reply) {
       },
     });
     asrCache.set(msg.model, asr);
-    // v7.3: avisa a main thread que este modelo JÁ TÁ pronto (não baixa de novo
-    // na próxima transcrição — o worker agora é PERSISTENTE e sobrevive entre
-    // transcrições da mesma sessão; entre sessões vale o cache do navegador)
     reply({ type: "asrReady", model: msg.model });
   } else {
     reply({ type: "stage", stage: "prepare", pct: 1 });
@@ -215,16 +220,11 @@ self.onmessage = async (ev) => {
     const asr = await loadAsr(msg, reply);
 
     if (msg.type === "download") {
-      // só baixar o modelo (onboarding) — nada a transcrever
       reply({ type: "done", words: [] });
       return;
     }
     if (msg.type !== "run") return;
 
-    // janelas de 30s (o chunk NATIVO do whisper — janelas menores truncavam a
-    // transcrição no modelo tiny). O AVANÇO da barra é estimado pela MAIN
-    // THREAD: o WASM roda síncrono aqui e bloqueia este event loop (o
-    // heartbeat antigo nunca disparava — a barra congelava em 10%).
     const WIN = 30;
     const OVERLAP = 0.8;
     const sr = 16000;
@@ -249,7 +249,6 @@ self.onmessage = async (ev) => {
         return_timestamps: "word",
       });
       const secs = (performance.now() - t0) / 1000;
-      // o tempo REAL desta janela recalibra a estimativa da main thread
       reply({ type: "windowDone", pct: basePct + rangePct, window: w + 1, windows: n, secs });
       const chunks = out?.chunks ?? [];
       const winEnd = off + len;
@@ -396,7 +395,7 @@ async function transcribeInWorkerOnce(
         }
         est.feed(m);
       };
-      worker.postMessage({ job, type: "run", pcm, lang, model: repoId }, [pcm.buffer]);
+      worker.postMessage({ job, type: "run", pcm, lang, model: repoId });
     });
     onProgress({ stage: "transcribe", pct: 0.98, perWinSec: est.perWinSec });
     if (!words.length) return [];

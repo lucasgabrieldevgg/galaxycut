@@ -51,4 +51,7 @@ contextBridge.exposeInMainWorld("galaxyDesktop", {
   projectDelete: (id) => ipcRenderer.invoke("project:delete", id),
   /** abre a pasta dos projetos no gerenciador de arquivos */
   openProjectsFolder: () => ipcRenderer.invoke("open-projects-folder"),
+  // ---- configurações em disco (persistência garantida) ----
+  settingsLoad: () => ipcRenderer.invoke("settings:load"),
+  settingsSave: (data) => ipcRenderer.invoke("settings:save", data),
 });

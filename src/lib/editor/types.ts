@@ -120,6 +120,19 @@ export interface ProjectMeta {
   fps: number;
 }
 
+export interface MediaFolder {
+  id: string;
+  name: string;
+  parentId: string | null; // null = raiz
+  createdAt: number;
+}
+
+export interface MediaClipboard {
+  mode: "cut" | "copy";
+  mediaId: string;
+  sourceFolderId: string | null;
+}
+
 export interface MediaMeta {
   id: string;
   name: string;
@@ -133,6 +146,7 @@ export interface MediaMeta {
   decodeError?: boolean; // o navegador não consegue decodificar este arquivo (formato/exceção)
   source?: "local" | "stock";
   stockUrl?: string;
+  folderId?: string | null; // id da pasta onde esta mídia está guardada (null = raiz)
   // ---- licença / direitos autorais ----
   license?: string; // "cc0", "by", "by-nc", "pdm", "pexels", "unknown"...
   licenseLabel?: string; // texto curto p/ exibir
