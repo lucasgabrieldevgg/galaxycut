@@ -60,6 +60,13 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
     };
   }, [autosaveMin]);
 
+  // abrir diálogo de exportação por evento
+  useEffect(() => {
+    const openExport = () => setExportOpen(true);
+    window.addEventListener("galaxiacut:openexport", openExport);
+    return () => window.removeEventListener("galaxiacut:openexport", openExport);
+  }, []);
+
   // atalhos de teclado — EDITÁVEIS nas Configurações → Atalhos
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -100,6 +107,9 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
           saveToStorage();
           toast.success(t("ed.saved"));
           break;
+        case "export":
+          setExportOpen(true);
+          break;
         case "playPause":
           engine.toggle();
           break;
@@ -120,6 +130,44 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
             // sem clipe selecionado → apaga a MÍDIA selecionada no painel
             window.dispatchEvent(new CustomEvent("galaxiacut:delmedia"));
           }
+          break;
+        case "deleteClose":
+          if (st.selectedId) {
+            st.deleteClip(st.selectedId, true);
+            engine.markDirty();
+            toast.info(t("ed.deletedAndClosed"));
+          }
+          break;
+        case "closeGap":
+          if (st.selectedId) {
+            st.closeGapBefore(st.selectedId);
+            engine.markDirty();
+            toast.success(t("ed.gapClosed"));
+          }
+          break;
+        case "closeAllGaps": {
+          const moved = st.closeAllGaps();
+          engine.markDirty();
+          if (moved > 0) toast.success(t("ed.allGapsClosed", { n: moved }));
+          break;
+        }
+        case "broom": {
+          const n = st.deleteSilentClips();
+          engine.markDirty();
+          if (n > 0) toast.success(t("tl.broomDone", { n }));
+          break;
+        }
+        case "snapToggle": {
+          const nextSnap = !useSettings.getState().snapEnabled;
+          useSettings.getState().set({ snapEnabled: nextSnap });
+          toast.info(nextSnap ? t("ed.snapOn") : t("ed.snapOff"));
+          break;
+        }
+        case "silence":
+          window.dispatchEvent(new CustomEvent("galaxiacut:opensilence"));
+          break;
+        case "settings":
+          window.dispatchEvent(new CustomEvent("galaxiacut:opensettings"));
           break;
         case "selectAll":
           if (st.clips.length) {
@@ -150,7 +198,7 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [t]);
 
   // garante que as fontes bonitas (Anton, Bangers…) carregaram antes de desenhar no canvas
   useEffect(() => {

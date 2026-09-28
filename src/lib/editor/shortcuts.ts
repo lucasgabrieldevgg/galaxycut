@@ -14,24 +14,40 @@ export interface ShortcutDef {
 
 /** Todas as ações que dão pra redefinir. */
 export const SHORTCUT_DEFS: ShortcutDef[] = [
+  // ---- Reprodução ----
   { id: "playPause", label: "Tocar / pausar", group: "Reprodução", def: "space" },
   { id: "frameBack", label: "Andar 1 quadro pra trás (Shift = 10)", group: "Reprodução", def: "arrowleft" },
   { id: "frameFwd", label: "Andar 1 quadro pra frente (Shift = 10)", group: "Reprodução", def: "arrowright" },
-  { id: "goHome", label: "Ir pro começo", group: "Reprodução", def: "home" },
+  { id: "goHome", label: "Ir pro começo da timeline", group: "Reprodução", def: "home" },
   { id: "goEnd", label: "Ir pro fim do conteúdo", group: "Reprodução", def: "end" },
-  { id: "split", label: "Cortar (dividir) o clipe na setinha", group: "Edição", def: "s" },
-  { id: "delete", label: "Apagar selecionado (clipe na timeline OU mídia no painel)", group: "Edição", def: "delete" },
+
+  // ---- Edição ----
+  { id: "split", label: "Cortar (dividir) o clipe na agulha", group: "Edição", def: "s" },
+  { id: "delete", label: "Apagar selecionado (clipe ou mídia)", group: "Edição", def: "delete" },
+  { id: "deleteClose", label: "Apagar e fechar espaço (Ripple Delete)", group: "Edição", def: "shift+delete" },
   { id: "selectAll", label: "Selecionar todas as cenas (vídeo e áudio)", group: "Edição", def: "ctrl+a" },
   { id: "deselect", label: "Desselecionar tudo", group: "Edição", def: "escape" },
-  { id: "copy", label: "Copiar clipe", group: "Edição", def: "ctrl+c" },
-  { id: "cut", label: "Recortar clipe (copia e apaga)", group: "Edição", def: "ctrl+x" },
-  { id: "paste", label: "Colar na posição da setinha", group: "Edição", def: "ctrl+v" },
+  { id: "copy", label: "Copiar clipe / mídia", group: "Edição", def: "ctrl+c" },
+  { id: "cut", label: "Recortar clipe / mídia (copia e apaga)", group: "Edição", def: "ctrl+x" },
+  { id: "paste", label: "Colar na posição da agulha / pasta", group: "Edição", def: "ctrl+v" },
   { id: "duplicate", label: "Duplicar clipe", group: "Edição", def: "ctrl+d" },
   { id: "mute", label: "Silenciar / ativar som do clipe", group: "Edição", def: "m" },
-  { id: "undo", label: "Desfazer", group: "Edição", def: "ctrl+z" },
-  { id: "redo", label: "Refazer", group: "Edição", def: "ctrl+shift+z" },
+  { id: "closeGap", label: "Fechar espaço antes do clipe (encostar)", group: "Edição", def: "g" },
+  { id: "closeAllGaps", label: "Juntar todos os clipes da faixa", group: "Edição", def: "j" },
+  { id: "broom", label: "Vassoura: apagar áudios sem som", group: "Edição", def: "b" },
+  { id: "undo", label: "Desfazer última alteração", group: "Edição", def: "ctrl+z" },
+  { id: "redo", label: "Refazer alteração", group: "Edição", def: "ctrl+shift+z" },
+
+  // ---- Projeto & Ferramentas ----
+  { id: "snapToggle", label: "Ativar / desativar ímã (Snap)", group: "Timeline", def: "n" },
   { id: "save", label: "Salvar projeto agora", group: "Projeto", def: "ctrl+s" },
-  // ---- referência (não rebindáveis) ----
+  { id: "export", label: "Abrir exportação", group: "Projeto", def: "ctrl+e" },
+  { id: "silence", label: "Detector de silêncio", group: "Projeto", def: "ctrl+k" },
+  { id: "settings", label: "Abrir configurações", group: "Projeto", def: "ctrl+," },
+
+  // ---- referência do mouse (não rebindáveis) ----
+  { id: "marqueeSelect", label: "Seleção por retângulo: clicar e arrastar no vazio da timeline", group: "Timeline", def: "arrastar mouse", fixed: true },
+  { id: "autoScroll", label: "Rolagem automática: segurar arrastando perto das bordas", group: "Timeline", def: "arrastar na borda", fixed: true },
   { id: "dragPreview", label: "Arrastar clipe selecionado na tela (mover)", group: "Preview", def: "arrastar", fixed: true },
   { id: "scaleRotate", label: "Cantos da moldura na tela: tamanho · alça de cima: girar", group: "Preview", def: "arrastar", fixed: true },
   { id: "wheelZoom", label: "Zoom da timeline no ponteiro", group: "Timeline", def: "ctrl + roda", fixed: true },
@@ -45,7 +61,12 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
 
 const LS_KEY = "galaxiacut_shortcuts_v1";
 /** combos alternativos que executam a mesma ação */
-const ALIASES: Record<string, string> = { backspace: "delete", "ctrl+y": "ctrl+shift+z" };
+const ALIASES: Record<string, string> = {
+  backspace: "delete",
+  "shift+backspace": "shift+delete",
+  "ctrl+y": "ctrl+shift+z",
+  c: "split",
+};
 
 type ComboMap = Record<string, string>; // actionId -> combo ("" = sem tecla)
 
