@@ -543,6 +543,46 @@ ipcMain.handle("app-info", () => ({
   platform: process.platform,
 }));
 
+// v7.3: a pessoa ESCOLHE onde salvar (diálogo nativo). Pergunta o caminho
+// ANTES de a exportação começar — cancelar no diálogo não joga fora o render.
+ipcMain.handle("export:askpath", async (ev, name) => {
+  try {
+    const safe = String(name || "GalaxyCut.mp4").replace(/[\\/:*?"<>|]/g, "_").slice(0, 120);
+    const ext = (safe.split(".").pop() || "mp4").toLowerCase();
+    const win = BrowserWindow.fromWebContents(ev.sender);
+    const result = await dialog.showSaveDialog(win, {
+      title: "Salvar vídeo",
+      defaultPath: path.join(exportDir(), safe),
+      filters: [
+        { name: ext.toUpperCase() + " file", extensions: [ext] },
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
+    if (result.canceled || !result.filePath) return null;
+    return result.filePath;
+  } catch (e) {
+    log("export:askpath:", String(e));
+    return null;
+  }
+});
+
+ipcMain.handle("export:saveat", async (_ev, filePath, arrayBuffer) => {
+  try {
+    const file = String(filePath || "");
+    if (!file) throw new Error("caminho vazio");
+    await fsp.mkdir(path.dirname(file), { recursive: true });
+    const tmp = file + ".gctmp";
+    await fsp.writeFile(tmp, Buffer.from(arrayBuffer));
+    await fsp.rename(tmp, file); // gravação atômica: nunca sobra vídeo pela metade
+    log("exportado:", path.basename(file));
+    return file;
+  } catch (e) {
+    log("erro no export:", String(e));
+    throw new Error(String(e));
+  }
+});
+
+// legado (v7.2 e antes): salva direto na pasta Vídeos/GalaxyCut
 ipcMain.handle("save-export", async (_ev, arrayBuffer, ext) => {
   try {
     const safeExt = String(ext || "mp4").replace(/[^a-z0-9]/gi, "").slice(0, 4) || "mp4";

@@ -6,7 +6,11 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("galaxyDesktop", {
   isDesktop: true,
-  /** salva o vídeo exportado na pasta Vídeos/GalaxyCut com nomeação única */
+  /** v7.3: pergunta ONDE salvar (diálogo nativo) — caminho escolhido ou null */
+  askExportPath: (name) => ipcRenderer.invoke("export:askpath", name),
+  /** v7.3: grava no caminho escolhido (gravação atômica) */
+  saveExportAt: (filePath, arrayBuffer) => ipcRenderer.invoke("export:saveat", filePath, arrayBuffer),
+  /** legado: salva o vídeo exportado na pasta própria (Vídeos/GalaxyCut) com nomeação única */
   saveExport: (arrayBuffer, ext) => ipcRenderer.invoke("save-export", arrayBuffer, ext),
   /** pergunta ao processo principal se tem versão nova no GitHub */
   checkUpdates: () => ipcRenderer.invoke("check-updates"),

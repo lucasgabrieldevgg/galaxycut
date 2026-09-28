@@ -1,6 +1,42 @@
 {
-  "version": "7.2.0",
+  "version": "7.3.0",
   "entries": [
+    {
+      "version": "7.3.0",
+      "date": "2026-09-28",
+      "items": [
+        "NEW EXPORT ENGINE: renders frame by frame and encodes with your GPU/processor (WebCodecs) — a 30s short does NOT take 30s anymore, it finishes as fast as your PC can go, and a weak PC no longer drops frames (nothing is recorded in real time anymore)",
+        "FIX: the exported video always comes out in the project's aspect ratio at ANY resolution (before, exporting below the project size made the video overflow/stick out of the frame)",
+        "FIX: 'media not loaded' can never be burned into the exported file anymore — every frame is only encoded after the video finishes seeking for real",
+        "Export: you can CANCEL while it renders (button in the progress card), and it shows the current frame, the speed (x real time) and the estimated time left",
+        "Export (desktop app): a native Save dialog asks WHERE to save BEFORE rendering starts — pick any folder, cancel without wasting the render (no more dumping everything into the media folder)",
+        "Export: the dialog now tells you that more resolutions (480p to 8K), 60fps and other formats live under \"More options\"",
+        "FIX: AI captions froze at exactly 10% — the progress now runs on the main thread (the AI's engine blocks the worker's clock, so the old heartbeat never fired). The bar moves nonstop with an estimate of the time left",
+        "FIX: the AI model is loaded ONCE per session (persistent worker) and the app remembers it's already downloaded — no more \"downloading the model\" on every caption",
+        "FIX: the project menu (3 dots) on the home screen opens right next to the button (it used to fly to the top-left corner) — and clicking Rename/Duplicate/Delete no longer OPENS THE EDITOR by accident (clicks were leaking through the menu to the card)",
+        "FIX: the 'media not loaded' flash in the preview that kept appearing and disappearing is gone — the preloader no longer jumps around the file, and a frame that's still arriving shows a loading percentage instead of a scary error",
+        "Media that can't be decoded now shows ONE clear warning listing all the files at once (before: one error toast per file, 3 popups on startup)",
+        "Preview: TEXT clips get the same scale/rotate handles as video and images — resize adjusts the font size, rotate spins the text",
+        "Timeline: clips with effects applied now show an 'fx' badge, and clips with speed applied show a '2x' badge — you can see at a glance where things were applied",
+        "FIX: caption style samples (Amarelão, Karaokê verde…) are painted in their REAL colors now — they're drawn on a canvas exactly like the video renders them (yellow really looks yellow), with the second word in the karaoke highlight color"
+      ],
+      "items_pt": [
+        "NOVO MOTOR DE EXPORTAÇÃO: renderiza quadro a quadro e codifica com sua GPU/processador (WebCodecs) — um short de 30s NÃO leva mais 30s, termina na velocidade que o PC aguenta, e PC fraco não derruba mais quadros (nada de gravar em tempo real)",
+        "CORRIGIDO: o vídeo exportado sai SEMPRE na proporção do projeto em QUALQUER resolução (antes, exportar abaixo do tamanho do projeto estourava o vídeo pra fora do quadro)",
+        "CORRIGIDO: 'mídia não carregada' nunca mais é queimado no arquivo exportado — cada quadro só é codificado depois o seek do vídeo terminar DE VERDADE",
+        "Exportar: dá pra CANCELAR durante o render (botão no cartel de progresso), e mostra o quadro atual, a velocidade (× tempo real) e o tempo restante estimado",
+        "Exportar (app de desktop): um diálogo nativo de salvar pergunta ONDE gravar ANTES do render começar — escolha qualquer pasta, cancele sem desperdiçar o render (nada de tacar tudo na pasta de mídia)",
+        "Exportar: o diálogo agora avisa que mais resoluções (480p a 8K), 60fps e outros formatos ficam em \"Mais opções\"",
+        "CORRIGIDO: as legendas de IA congelavam exatamente em 10% — o progresso agora roda na thread principal (o motor de IA bloqueia o relógio do worker, então o heartbeat antigo nunca disparava). A barra anda sem parar com estimativa do que falta",
+        "CORRIGIDO: o modelo de IA é carregado UMA vez por sessão (worker persistente) e o app lembra que já foi baixado — chega de 'baixando o modelo' a cada legenda",
+        "CORRIGIDO: o menu do projeto (3 pontinhos) da home abre do lado do botão (voava pro canto superior esquerdo) — e clicar em Renomear/Duplicar/Excluir não ABRE MAIS O EDITOR por acidente (os cliques estavam vazando pelo menu pro card)",
+        "CORRIGIDO: o piscar de 'mídia não carregada' na prévia que vivia aparecer e sumir acabou — o pré-carregador não pula mais pelo arquivo, e um quadro que ainda está chegando mostra a porcentagem de carregamento em vez de um erro assustador",
+        "Mídia que não dá pra decodificar agora mostra UM aviso claro listando todos os arquivos de uma vez (antes: um toast de erro por arquivo, 3 avisos ao iniciar o app)",
+        "Prévia: clipes de TEXTO ganham as mesmas alças de escala/rotação de vídeo e imagem — esticar ajusta o tamanho da fonte, girar roda o texto",
+        "Timeline: clipe com efeito aplicado agora mostra um selo 'fx', e clipe com velocidade mostra o selo '2×' — dá pra ver de relance onde as coisas foram aplicadas",
+        "CORRIGIDO: os exemplos de estilo de legenda (Amarelão, Karaokê verde…) são pintados com as cores REAIS — desenhados em canvas exatamente como o vídeo renderiza (amarelo parece amarelo de verdade), com a segunda palavra na cor do karaokê"
+      ]
+    },
     {
       "version": "7.2.0",
       "date": "2026-09-28",

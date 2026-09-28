@@ -18,6 +18,7 @@ import { transcribe, SubSegment, useSubtitleJob, WhisperProgress, cancelTranscri
 import { CAPTION_PRESETS, CaptionPreset, makeClip, defaultTextProps } from "@/lib/editor/types";
 import { isDesktopBuild, desktop } from "@/lib/editor/desktop";
 import { useT } from "@/lib/editor/i18n";
+import { PresetPreview } from "./PresetPreview";
 import { toast } from "sonner";
 import { Sparkles, Loader2, CheckCircle2, TriangleAlert, Cpu, Palette, Layers, Minus, Download, XCircle } from "lucide-react";
 
@@ -242,17 +243,9 @@ export function SubtitleDialog() {
                   }`}
                   title={p.name}
                 >
-                  <span
-                    className="text-[13px] leading-none"
-                    style={{
-                      fontFamily: p.props.font,
-                      color: p.props.highlight ? p.props.highlightColor : p.props.color,
-                      WebkitTextStroke: (p.props.strokeW ?? 0) > 0 ? `1px ${p.props.strokeColor}` : undefined,
-                      textShadow: p.props.shadow ? "0 1px 3px rgba(0,0,0,.8)" : undefined,
-                    }}
-                  >
-                    AaBb
-                  </span>
+                  {/* v7.3: preview em canvas — contorno ATRÁS da cor (igual ao
+                      renderizador): o exemplo mostra a cor REAL do estilo */}
+                  <PresetPreview tp={p.props} />
                   <span className={`w-full truncate text-center text-[8.5px] ${presetId === p.id ? "text-[var(--gc-accent)]" : "text-zinc-500"}`}>
                     {p.name}
                   </span>
@@ -323,7 +316,9 @@ export function SubtitleDialog() {
               </div>
               <Progress value={pct} className="h-1.5 bg-[#0a0d14]" />
               <p className="text-[10px] text-zinc-500">
-                {t("sub.runningNote", { model: modelLabel(model), hint: modelHint(model) })}
+                {job.stage === "transcribe" && job.perWinSec
+                  ? t("sub.runningEta", { s: job.perWinSec, left: Math.max(0, (job.windows ?? 1) - (job.window ?? 1) + 1) })
+                  : t("sub.runningNote", { model: modelLabel(model), hint: modelHint(model) })}
               </p>
             </div>
           )}

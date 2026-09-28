@@ -28,6 +28,7 @@ import { LibraryPlayerBar } from "./LibraryPlayerBar";
 import { RecordDialog } from "./RecordDialog";
 import { FloatMenu, MenuItem } from "./ClipMenu";
 import { useT, t as tr } from "@/lib/editor/i18n";
+import { PresetPreview } from "./PresetPreview";
 
 const MEDIA_DND_TYPE = "application/x-galaxiacut-media";
 
@@ -299,17 +300,9 @@ export function MediaPanel() {
                     className="flex flex-col items-center gap-1 rounded-lg border border-[#232d3d] bg-[#121722] px-2 py-2.5 transition hover:border-[#3a4759]"
                     title={`Adicionar texto com estilo ${p.name}`}
                   >
-                    <span
-                      className="truncate text-[13px] leading-tight"
-                      style={{
-                        fontFamily: p.props.font,
-                        color: p.props.highlight ? p.props.highlightColor : p.props.color,
-                        WebkitTextStroke: (p.props.strokeW ?? 0) > 0 ? `1px ${p.props.strokeColor}` : undefined,
-                        textShadow: p.props.shadow ? "0 1px 3px rgba(0,0,0,.8)" : undefined,
-                      }}
-                    >
-                      AaBbCc
-                    </span>
+                    {/* v7.3: preview em canvas com as cores REAIS (o contorno
+                        fica atrás da letra, como no vídeo) */}
+                    <PresetPreview tp={p.props} />
                     <span className="text-[9px] text-zinc-500">{p.name}</span>
                   </button>
                 ))}

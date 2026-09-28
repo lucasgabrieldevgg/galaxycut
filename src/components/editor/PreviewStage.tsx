@@ -205,9 +205,14 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
   const el = selected ? engine.getElement(selected.id) : undefined;
   const sw = el instanceof HTMLVideoElement ? el.videoWidth : el instanceof HTMLImageElement ? el.naturalWidth : 0;
   const sh = el instanceof HTMLVideoElement ? el.videoHeight : el instanceof HTMLImageElement ? el.naturalHeight : 0;
+  // v7.3: TEXTO também ganha alças — a caixa é medida de verdade (textRect,
+  // com quebra de linha igual ao render). Escalar ajusta o TAMANHO DA FONTE
+  // (o que a pessoa espera: esticar o texto deixa as letras maiores).
+  const textBox = selected?.kind === "text" ? textRect(selected, project.width, project.height) : null;
   const showHandles =
-    editMode && !!selected && activeNow && (selected.kind === "video" || selected.kind === "image") && sw > 0 && sh > 0 && fit.w > 0;
-  const rect = showHandles && selected ? clipRect(selected, project, sw, sh) : null;
+    editMode && !!selected && activeNow && fit.w > 0 &&
+    ((selected.kind === "text" && !!textBox) || ((selected.kind === "video" || selected.kind === "image") && sw > 0 && sh > 0));
+  const rect = showHandles && selected ? (selected.kind === "text" ? textBox : clipRect(selected, project, sw, sh)) : null;
   const k = fit.w > 0 && rect ? fit.w / project.width : 1; // projeto → px exatos do quadro
 
   /** Quem tá debaixo do clique? (TEXTO primeiro — é desenhado por cima —
@@ -310,7 +315,8 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
     return msw && msh ? clipRect(clip, project, msw, msh) : null;
   }
 
-  /** inicia o arraste de ESCALA (cantos) ou ROTAÇÃO (alça de cima) — com rAF */
+  /** inicia o arraste de ESCALA (cantos) ou ROTAÇÃO (alça de cima) — com rAF.
+   *  v7.3: em TEXTO, escalar muda o tamanho da fonte (não há scale de clipe). */
   function onHandleDown(e: React.PointerEvent, mode: "scale" | "rotate") {
     if (!selected || !rect || e.button !== 0) return;
     e.preventDefault();
@@ -324,7 +330,9 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
     const cy = rect.cy;
     const startDist = Math.hypot(startX - (b.left + (cx / project.width) * b.width), startY - (b.top + (cy / project.height) * b.height)) || 1;
     const startAngle = Math.atan2(startY - (b.top + (cy / project.height) * b.height), startX - (b.left + (cx / project.width) * b.width));
+    const isText = selected.kind === "text";
     const scale0 = selected.scale;
+    const size0 = selected.text?.size ?? 64;
     const rot0 = selected.rotation;
     let moved = false;
     let raf = 0;
@@ -334,12 +342,21 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
       raf = 0;
       if (!latest) return;
       const s = useProject.getState();
+      const cur = s.clips.find((c) => c.id === selected.id);
+      if (!cur) return;
       const cX = b.left + (cx / project.width) * b.width;
       const cY = b.top + (cy / project.height) * b.height;
       if (mode === "scale") {
         const d = Math.hypot(latest.clientX - cX, latest.clientY - cY);
-        const next = Math.max(0.1, Math.min(4, scale0 * (d / startDist)));
-        s.updateClip(selected.id, { scale: Math.round(next * 100) / 100 }, { history: false });
+        const ratio = d / startDist;
+        if (isText && cur.text) {
+          // texto: alça de escala = tamanho da fonte (14…480)
+          const next = Math.max(14, Math.min(480, Math.round(size0 * ratio)));
+          s.updateClip(selected.id, { text: { ...cur.text, size: next } }, { history: false });
+        } else {
+          const next = Math.max(0.1, Math.min(4, scale0 * ratio));
+          s.updateClip(selected.id, { scale: Math.round(next * 100) / 100 }, { history: false });
+        }
       } else {
         const a = Math.atan2(latest.clientY - cY, latest.clientX - cX);
         let deg = rot0 + ((a - startAngle) * 180) / Math.PI;

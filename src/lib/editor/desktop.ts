@@ -30,6 +30,10 @@ export interface DesktopApi {
   isDesktop: true;
   appVersion: string;
   platform: string;
+  /** v7.3: pergunta ONDE salvar (diálogo nativo) — devolve caminho ou null se cancelou */
+  askExportPath?(name: string): Promise<string | null>;
+  /** v7.3: grava o arquivo no caminho escolhido (gravação atômica) */
+  saveExportAt?(path: string, buffer: ArrayBuffer): Promise<string>;
   /** salva o vídeo exportado na pasta própria (Vídeos/GalaxyCut) e devolve o caminho */
   saveExport(buf: ArrayBuffer, ext: string): Promise<string>;
   checkUpdates(): Promise<{ hasUpdate: boolean; version?: string; notes?: string[]; url?: string }>;
@@ -61,12 +65,36 @@ export function isDesktopBuild(): boolean {
 }
 
 /**
- * Entrega o vídeo exportado: no desktop salva na pasta própria com nomeação
- * única (GalaxyCut_…); no navegador baixa como sempre. Devolve o caminho salvo
- * (desktop) ou null (navegador).
+ * Pergunta ANTES de exportar onde o arquivo vai ser salvo (app de desktop).
+ * Devolve { dest: "desktop", path } com o caminho escolhido, { dest: "desktop",
+ * canceled: true } se a pessoa fechou o diálogo, ou { dest: "web" } no navegador.
+ * Perguntar antes evita renderizar um vídeo inteiro à toa.
  */
-export async function deliverExport(blob: Blob, filename: string): Promise<string | null> {
+export async function askExportDestination(filename: string): Promise<
+  { dest: "desktop"; path: string } | { dest: "desktop"; canceled: true } | { dest: "web" }
+> {
+  if (!desktop) return { dest: "web" };
+  if (desktop.askExportPath) {
+    const path = await desktop.askExportPath(filename);
+    if (!path) return { dest: "desktop", canceled: true };
+    return { dest: "desktop", path };
+  }
+  // app antigo (pré-v7.3): sem diálogo — cai no destino padrão
+  return { dest: "desktop", path: "" };
+}
+
+/**
+ * Entrega o vídeo exportado: no desktop grava no caminho escolhido no início
+ * (ou na pasta própria, num app antigo); no navegador baixa como sempre.
+ * Devolve o caminho salvo (desktop) ou null (navegador).
+ */
+export async function deliverExport(blob: Blob, filename: string, chosenPath?: string): Promise<string | null> {
   if (desktop) {
+    if (chosenPath && desktop.saveExportAt) {
+      const saved = await desktop.saveExportAt(chosenPath, await blob.arrayBuffer());
+      desktop.showInFolder(saved);
+      return saved;
+    }
     const ext = filename.split(".").pop() ?? "mp4";
     const path = await desktop.saveExport(await blob.arrayBuffer(), ext);
     desktop.showInFolder(path);

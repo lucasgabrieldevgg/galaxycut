@@ -229,9 +229,15 @@ function drawMediaLayer(
 ) {
   const d = drawableSize(assets.getElement(c.id));
   if (!d) {
-    // mídia ausente: só desenha o placeholder se for o clipe principal (não em transição)
-    if (opts.alpha >= 0.999)
-      drawPlaceholder(ctx, W, H, c, assets.statusOf?.(c.id) ?? (c.mediaId ? "loading" : "missing"), assets.progressOf?.(c.id) ?? null);
+    // mídia ainda sem quadro: só desenha o placeholder se for o clipe principal (não em transição)
+    if (opts.alpha >= 0.999) {
+      const st = assets.statusOf?.(c.id) ?? (c.mediaId ? "loading" : "missing");
+      // v7.3: status "ok" mas sem quadro = o frame tá chegando (seek/acabou de
+      // carregar) → mostra "carregando… N%" em vez de assustar com "mídia não
+      // carregada" piscando (era o bug do aparece-e-some no preview)
+      const eff: MediaStatus = st === "ok" ? "loading" : st;
+      drawPlaceholder(ctx, W, H, c, eff, assets.progressOf?.(c.id) ?? null);
+    }
     return;
   }
   const fade = opts.alpha >= 0.999 && opts.scaleMul === undefined && !opts.dx ? fadeEnvelope(c, t) : 1;

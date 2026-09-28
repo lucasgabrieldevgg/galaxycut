@@ -17,6 +17,7 @@ export interface WhisperProgress {
   pct: number; // 0..1
   window?: number; // janela atual (transcrição em pedaços)
   windows?: number; // total de janelas
+  perWinSec?: number; // v7.3: segundos estimados por janela (pro ~restante)
 }
 
 export type WhisperModelId = "tiny" | "base" | "small";
@@ -47,12 +48,119 @@ function fallbackChain(requested: WhisperModelId): string[] {
   return order.map((m) => MODEL_IDS[m]);
 }
 
-// ---------------- Web Worker: a transcrição NUNCA mais trava a interface ----------------
-// O modelo roda num worker próprio (blob module + import do CDN). O áudio é fatiado
-// em janelas de 30s com 0,8s de sobreposição (o chunk nativo do whisper) — cada
-// janela reporta progresso + um heartbeat estimado pra barra andar sempre,
-// dá pra cancelar (worker.terminate) e a UI continua fluida o tempo todo.
+// ---------------- Web Worker PERSISTENTE (v7.3) ----------------
+// Um worker só pra TODA a sessão: o modelo carrega UMA vez e o asrCache do
+// worker sobrevive entre transcrições (nada de "baixando o modelo" de novo a
+// cada legenda). Cancelar = matar o worker (a próxima transcrição recria e
+// pega o modelo do cache do navegador em segundos).
 
+interface WorkerMsg {
+  job?: number;
+  type: string;
+  stage?: string;
+  pct?: number;
+  range?: number;
+  window?: number;
+  windows?: number;
+  secs?: number;
+  words?: RawWord[];
+  message?: string;
+  model?: string;
+}
+
+let whisperWorker: Worker | null = null;
+let whisperJobSeq = 0;
+let workerListener: ((m: WorkerMsg) => void) | null = null;
+/** rejeição pendente do job atual (o botão Cancelar dispara isso) */
+let pendingCancel: ((reason: Error) => void) | null = null;
+
+function ensureWhisperWorker(): Worker {
+  if (whisperWorker) return whisperWorker;
+  const blob = new Blob([WORKER_SRC], { type: "text/javascript" });
+  const url = URL.createObjectURL(blob);
+  const w = new Worker(url, { type: "module" });
+  w.onmessage = (ev: MessageEvent) => workerListener?.(ev.data as WorkerMsg);
+  w.onerror = (e) => workerListener?.({ type: "error", message: e.message || "o worker de IA não abriu" });
+  whisperWorker = w;
+  return w;
+}
+
+/** Cancela a transcrição em andamento — o worker é morto na hora. */
+export function cancelTranscription() {
+  const reject = pendingCancel;
+  if (whisperWorker) {
+    whisperWorker.terminate();
+    whisperWorker = null;
+  }
+  workerListener = null;
+  pendingCancel = null;
+  if (reject) reject(new Error("cancelada pelo usuário"));
+}
+
+/** O modelo já foi baixado/carregado alguma vez? (guarda no localStorage) */
+function modelCached(repoId: string): boolean {
+  try {
+    return localStorage.getItem(`gc_whisper_ready:${repoId}`) === "1";
+  } catch {
+    return false;
+  }
+}
+function markModelCached(repoId: string) {
+  try {
+    localStorage.setItem(`gc_whisper_ready:${repoId}`, "1");
+  } catch {
+    /* noop */
+  }
+}
+
+/** v7.3: o AVANÇO da barra roda na THREAD PRINCIPAL. O WASM roda síncrono no
+ *  worker e bloqueia o event loop dele — o heartbeat antigo (setInterval lá)
+ *  nunca disparava e a barra congelava em 10% exatos. Aqui: cada janela
+ *  começa com uma base fixa e a estimativa anda aqui fora até o worker
+ *  respirar e contar quanto tempo a janela levou DE VERDADE (recalibra). */
+function makeEstimatingProgress(onProgress: (p: WhisperProgress) => void, cached: boolean) {
+  let timer: number | null = null;
+  let estPerWin = 20; // chute inicial em segundos — recalibrado com medidas reais
+  let lastPerWin = estPerWin;
+  const stop = () => {
+    if (timer != null) {
+      clearInterval(timer);
+      timer = null;
+    }
+  };
+  const feed = (m: WorkerMsg) => {
+    if (m.type === "stage" && m.stage) {
+      stop();
+      // modelo já em cache: a fase de carga aparece como "preparando" (não
+      // assusta com "baixando o modelo" de quem já baixou)
+      const stage = m.stage === "download" && cached ? "prepare" : m.stage;
+      onProgress({ stage, pct: m.pct ?? 0 });
+    } else if (m.type === "windowStart") {
+      stop();
+      const base = m.pct ?? 0;
+      const range = m.range ?? 0;
+      const w = m.window ?? 0;
+      const n = m.windows ?? 0;
+      const t0 = performance.now();
+      onProgress({ stage: "transcribe", pct: base, window: w, windows: n, perWinSec: Math.round(estPerWin) });
+      timer = window.setInterval(() => {
+        const frac = Math.min(0.92, (performance.now() - t0) / (estPerWin * 1000));
+        onProgress({ stage: "transcribe", pct: base + range * frac, window: w, windows: n, perWinSec: Math.round(estPerWin) });
+      }, 400);
+    } else if (m.type === "windowDone") {
+      const measured = Math.max(1, m.secs ?? estPerWin);
+      estPerWin = 0.4 * estPerWin + 0.6 * measured;
+      lastPerWin = estPerWin;
+      stop();
+      onProgress({ stage: "transcribe", pct: m.pct ?? 0, window: m.window, windows: m.windows, perWinSec: Math.round(estPerWin) });
+    }
+  };
+  return { feed, stop, get perWinSec() { return lastPerWin; } };
+}
+
+// código do worker (blob module): importa o transformers.js do CDN, mantém o
+// cache de pipelines e responde TUDO com a etiqueta do job (worker persistente
+// = várias transcrições na mesma sessão, modelo carregado 1× só)
 const WORKER_SRC = `
 import { pipeline } from "${TRANSFORMERS_URL}";
 let asrCache = new Map();
@@ -72,10 +180,10 @@ function downloadProgress() {
   };
 }
 
-async function loadAsr(msg, send) {
+async function loadAsr(msg, reply) {
   let asr = asrCache.get(msg.model);
   if (!asr) {
-    send({ type: "stage", stage: "download", pct: 0 });
+    reply({ type: "stage", stage: "download", pct: 0 });
     const prog = downloadProgress();
     asr = await pipeline("automatic-speech-recognition", msg.model, {
       dtype: "q8",
@@ -83,33 +191,40 @@ async function loadAsr(msg, send) {
       progress_callback: (p) => {
         if (p?.status === "progress") {
           const pct = prog(p);
-          if (pct != null) send({ type: "stage", stage: "download", pct });
+          if (pct != null) reply({ type: "stage", stage: "download", pct });
         } else if (p?.status === "ready" || p?.status === "done") {
-          send({ type: "stage", stage: "prepare", pct: 1 });
+          reply({ type: "stage", stage: "prepare", pct: 1 });
         }
       },
     });
     asrCache.set(msg.model, asr);
+    // v7.3: avisa a main thread que este modelo JÁ TÁ pronto (não baixa de novo
+    // na próxima transcrição — o worker agora é PERSISTENTE e sobrevive entre
+    // transcrições da mesma sessão; entre sessões vale o cache do navegador)
+    reply({ type: "asrReady", model: msg.model });
+  } else {
+    reply({ type: "stage", stage: "prepare", pct: 1 });
   }
   return asr;
 }
 
 self.onmessage = async (ev) => {
   const msg = ev.data;
+  const reply = (o) => self.postMessage({ ...o, job: msg.job });
   try {
-    const asr = await loadAsr(msg, self.postMessage);
+    const asr = await loadAsr(msg, reply);
 
     if (msg.type === "download") {
       // só baixar o modelo (onboarding) — nada a transcrever
-      send0(self, { type: "done", words: [] });
+      reply({ type: "done", words: [] });
       return;
     }
     if (msg.type !== "run") return;
-    const send = (o) => self.postMessage(o);
-    send({ type: "stage", stage: "prepare", pct: 1 });
 
-    // janelas de 30s (o chunk NATIVO do whisper — testado com áudio real:
-    // janelas menores faziam o modelo tiny truncar a transcrição)
+    // janelas de 30s (o chunk NATIVO do whisper — janelas menores truncavam a
+    // transcrição no modelo tiny). O AVANÇO da barra é estimado pela MAIN
+    // THREAD: o WASM roda síncrono aqui e bloqueia este event loop (o
+    // heartbeat antigo nunca disparava — a barra congelava em 10%).
     const WIN = 30;
     const OVERLAP = 0.8;
     const sr = 16000;
@@ -117,7 +232,6 @@ self.onmessage = async (ev) => {
     const n = Math.max(1, Math.ceil((total - OVERLAP) / (WIN - OVERLAP)));
     const allWords = [];
     let lastEnd = 0;
-    let estPerWin = 25; // chute inicial: 25s de processamento por janela (ajusta com a 1ª)
     for (let w = 0; w < n; w++) {
       const off = w * (WIN - OVERLAP);
       const len = Math.min(WIN, total - off);
@@ -125,14 +239,8 @@ self.onmessage = async (ev) => {
       const slice = msg.pcm.subarray(Math.round(off * sr), Math.round((off + len) * sr));
       const basePct = 0.1 + 0.85 * (w / n);
       const rangePct = 0.85 / n;
-      send({ type: "stage", stage: "transcribe", pct: basePct, window: w + 1, windows: n });
-      // heartbeat: a barra continua ANDANDO enquanto a janela processa
-      // (estimativa por tempo — não deixa o dono olhar uma barra congelada)
+      reply({ type: "windowStart", pct: basePct, range: rangePct, window: w + 1, windows: n });
       const t0 = performance.now();
-      const hb = setInterval(() => {
-        const frac = Math.min(0.9, (performance.now() - t0) / (estPerWin * 1000));
-        send({ type: "stage", stage: "transcribe", pct: basePct + rangePct * frac, window: w + 1, windows: n });
-      }, 3000);
       const out = await asr(slice, {
         language: msg.lang === "auto" ? null : msg.lang,
         task: "transcribe",
@@ -140,8 +248,9 @@ self.onmessage = async (ev) => {
         stride_chunk_s: 5,
         return_timestamps: "word",
       });
-      clearInterval(hb);
-      estPerWin = Math.max(3, (performance.now() - t0) / 1000);
+      const secs = (performance.now() - t0) / 1000;
+      // o tempo REAL desta janela recalibra a estimativa da main thread
+      reply({ type: "windowDone", pct: basePct + rangePct, window: w + 1, windows: n, secs });
       const chunks = out?.chunks ?? [];
       const winEnd = off + len;
       for (const c of chunks) {
@@ -156,33 +265,16 @@ self.onmessage = async (ev) => {
         allWords.push({ w: text, s, e: Math.max(s + 0.12, e) });
       }
     }
-    send({ type: "stage", stage: "transcribe", pct: 0.97, window: n, windows: n });
-    send({ type: "done", words: allWords });
+    reply({ type: "stage", stage: "transcribe", pct: 0.97, window: n, windows: n });
+    reply({ type: "done", words: allWords });
   } catch (err) {
-    self.postMessage({ type: "error", message: String((err && err.message) || err) });
+    reply({ type: "error", message: String((err && err.message) || err) });
   }
 };
-
-function send0(ctx, o) { ctx.postMessage(o); }
 `;
 
 /** Fallback SEM worker (navegadores que bloqueiam blob worker): o código antigo,
  *  só que com yield entre etapas. Usado só se o worker não abrir. */
-
-let activeWorker: Worker | null = null;
-/** rejeição pendente do worker atual (o botão Cancelar dispara isso) */
-let pendingCancel: ((reason: Error) => void) | null = null;
-
-/** Cancela a transcrição em andamento — o worker é morto na hora. */
-export function cancelTranscription() {
-  const reject = pendingCancel;
-  if (activeWorker) {
-    activeWorker.terminate();
-    activeWorker = null;
-  }
-  pendingCancel = null;
-  if (reject) reject(new Error("cancelada pelo usuário"));
-}
 
 let legacyCache = new Map<string, CallableFunction>();
 
@@ -243,40 +335,15 @@ async function extractPcm16k(blob: Blob): Promise<Float32Array> {
   }
 }
 
-let pipelineCache = new Map<string, CallableFunction>();
-
-function getAsr(modelId: string, onProgress: (p: WhisperProgress) => void): Promise<CallableFunction> {
-  const cached = pipelineCache.get(modelId);
-  if (cached) return Promise.resolve(cached);
-  return transcribeLegacyGetAsr(modelId, onProgress);
-}
-
-async function transcribeLegacyGetAsr(modelId: string, onProgress: (p: WhisperProgress) => void): Promise<CallableFunction> {
-  const mod: any = await dynImport(TRANSFORMERS_URL);
-  const pipeline = mod.pipeline as (t: string, m: string, o?: unknown) => Promise<unknown>;
-  const opts = {
-    dtype: "q8",
-    device: "wasm",
-    progress_callback: (p: any) => {
-      if (p?.status === "progress" && p.total) {
-        onProgress({ stage: "download", pct: p.loaded / p.total });
-      } else if (p?.status === "ready" || p?.status === "done") {
-        onProgress({ stage: "prepare", pct: 1 });
-      }
-    },
-  };
-  const asr = (await pipeline("automatic-speech-recognition", modelId, opts)) as CallableFunction;
-  pipelineCache.set(modelId, asr);
-  return asr;
-}
-
 interface RawWord {
   w: string;
   s: number;
   e: number;
 }
 
-/** Transcreve num worker novo pra CADA modelo da cadeia (fallback: pedido → base → tiny). */
+/** Transcreve tentando os modelos da cadeia no worker PERSISTENTE
+ *  (fallback: pedido → base → tiny). O pcm é clonado por tentativa porque o
+ *  postMessage TRANSFERE o buffer (que fica neutroizado). */
 async function transcribeInWorkerWithFallback(
   pcm: Float32Array,
   lang: string,
@@ -286,7 +353,6 @@ async function transcribeInWorkerWithFallback(
 ): Promise<SubSegment[]> {
   let lastErr: unknown = null;
   for (const repoId of fallbackChain(model)) {
-    // pcm é TRANSFERIDO pro worker (neutroizado) — clona pra poder tentar de novo
     const pass = pcm.slice();
     try {
       return await transcribeInWorkerOnce(pass, repoId, lang, onProgress, maxWords);
@@ -298,6 +364,8 @@ async function transcribeInWorkerWithFallback(
   throw lastErr instanceof Error ? lastErr : new Error("Não consegui carregar o modelo de IA");
 }
 
+/** Roda UMA transcrição no worker persistente com protocolo de jobs (as
+ *  mensagens voltam etiquetadas — nada de resposta cruzada entre tentativas). */
 async function transcribeInWorkerOnce(
   pcm: Float32Array,
   repoId: string,
@@ -305,62 +373,83 @@ async function transcribeInWorkerOnce(
   onProgress: (p: WhisperProgress) => void,
   maxWords: number
 ): Promise<SubSegment[]> {
-  const blob = new Blob([WORKER_SRC], { type: "text/javascript" });
-  const url = URL.createObjectURL(blob);
-  const worker = new Worker(url, { type: "module" });
-  activeWorker = worker;
+  const worker = ensureWhisperWorker();
+  const job = ++whisperJobSeq;
+  const cached = modelCached(repoId);
+  const est = makeEstimatingProgress(onProgress, cached);
   try {
     const words = await new Promise<RawWord[]>((resolve, reject) => {
       pendingCancel = reject; // o botão Cancelar dispara esta rejeição
-      worker.onmessage = (ev: MessageEvent) => {
-        const m = ev.data as { type: string; stage?: string; pct?: number; window?: number; windows?: number; words?: RawWord[]; message?: string };
-        if (m.type === "stage" && m.stage) onProgress({ stage: m.stage, pct: m.pct ?? 0, window: m.window, windows: m.windows });
-        else if (m.type === "done") resolve(m.words ?? []);
-        else if (m.type === "error") reject(new Error(m.message ?? "falha na transcrição"));
+      workerListener = (m) => {
+        if (m.job !== job) return; // resposta de outro job
+        if (m.type === "asrReady") {
+          markModelCached(String(m.model ?? repoId));
+          return;
+        }
+        if (m.type === "done") {
+          resolve(m.words ?? []);
+          return;
+        }
+        if (m.type === "error") {
+          reject(new Error(m.message ?? "falha na transcrição"));
+          return;
+        }
+        est.feed(m);
       };
-      worker.onerror = (e) => reject(new Error(e.message || "o worker de IA não abriu"));
-      worker.postMessage({ type: "run", pcm, lang, model: repoId }, [pcm.buffer]);
+      worker.postMessage({ job, type: "run", pcm, lang, model: repoId }, [pcm.buffer]);
     });
-    onProgress({ stage: "transcribe", pct: 0.98 });
+    onProgress({ stage: "transcribe", pct: 0.98, perWinSec: est.perWinSec });
     if (!words.length) return [];
     return groupWords(words, Math.max(2, Math.min(6, maxWords)));
   } finally {
+    est.stop();
     pendingCancel = null;
-    worker.terminate();
-    URL.revokeObjectURL(url);
-    if (activeWorker === worker) activeWorker = null;
+    workerListener = null;
   }
 }
 
 /**
- * Baixa um modelo de IA pra deixar pronto (onboarding). Baixa em 2º plano
- * (worker), com progresso REAL por arquivo — o app nunca trava.
+ * Baixa um modelo de IA pra deixar pronto (onboarding). Worker persistente com
+ * progresso REAL por arquivo — o app nunca trava, e o modelo fica em cache.
  */
 export async function downloadModel(
   model: WhisperModelId,
   onProgress: (p: WhisperProgress) => void
 ): Promise<void> {
-  const blob = new Blob([WORKER_SRC], { type: "text/javascript" });
-  const url = URL.createObjectURL(blob);
-  const worker = new Worker(url, { type: "module" });
-  activeWorker = worker;
+  const repoId = MODEL_IDS[model];
+  if (modelCached(repoId)) {
+    // já baixou outra vez: só esquenta o worker (a carga sai do cache em segundos)
+    onProgress({ stage: "prepare", pct: 0.02 });
+  }
+  const worker = ensureWhisperWorker();
+  const job = ++whisperJobSeq;
+  const cached = modelCached(repoId);
+  const est = makeEstimatingProgress(onProgress, cached);
   try {
     await new Promise<void>((resolve, reject) => {
       pendingCancel = reject;
-      worker.onmessage = (ev: MessageEvent) => {
-        const m = ev.data as { type: string; stage?: string; pct?: number; message?: string };
-        if (m.type === "stage" && m.stage) onProgress({ stage: m.stage, pct: m.pct ?? 0 });
-        else if (m.type === "done") resolve();
-        else if (m.type === "error") reject(new Error(m.message ?? "falha no download do modelo"));
+      workerListener = (m) => {
+        if (m.job !== job) return;
+        if (m.type === "asrReady") {
+          markModelCached(String(m.model ?? repoId));
+          return;
+        }
+        if (m.type === "done") {
+          resolve();
+          return;
+        }
+        if (m.type === "error") {
+          reject(new Error(m.message ?? "falha no download do modelo"));
+          return;
+        }
+        est.feed(m);
       };
-      worker.onerror = (e) => reject(new Error(e.message || "o worker de IA não abriu"));
-      worker.postMessage({ type: "download", model: MODEL_IDS[model] });
+      worker.postMessage({ job, type: "download", model: repoId });
     });
   } finally {
+    est.stop();
     pendingCancel = null;
-    worker.terminate();
-    URL.revokeObjectURL(url);
-    if (activeWorker === worker) activeWorker = null;
+    workerListener = null;
   }
 }
 
@@ -539,6 +628,7 @@ interface SubtitleJob {
   minimized: boolean; // rodando em 2º plano (barrinha em cima)?
   window?: number; // janela atual (progresso real da transcrição)
   windows?: number; // total de janelas
+  perWinSec?: number; // v7.3: segundos estimados por janela (pro ~restante)
   setProg: (p: WhisperProgress & { window?: number; windows?: number }) => void;
   setOpen: (v: boolean) => void;
   setMinimized: (v: boolean) => void;
@@ -552,9 +642,9 @@ export const useSubtitleJob = create<SubtitleJob>((set) => ({
   pct: 0,
   open: false,
   minimized: false,
-  setProg: (p) => set({ stage: p.stage, pct: p.pct, window: p.window, windows: p.windows }),
+  setProg: (p) => set({ stage: p.stage, pct: p.pct, window: p.window, windows: p.windows, perWinSec: p.perWinSec }),
   setOpen: (v) => set({ open: v }),
   setMinimized: (v) => set({ minimized: v }),
-  start: () => set({ running: true, stage: "prepare", pct: 0, window: undefined, windows: undefined }),
+  start: () => set({ running: true, stage: "prepare", pct: 0, window: undefined, windows: undefined, perWinSec: undefined }),
   finish: () => set({ running: false, pct: 1, minimized: false }),
 }));

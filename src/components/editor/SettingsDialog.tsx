@@ -25,6 +25,7 @@ import { checkForUpdate } from "@/lib/editor/updater";
 import { isDesktopBuild } from "@/lib/editor/desktop";
 import { LANGUAGES, useLang, t as tr } from "@/lib/editor/i18n";
 import { useT } from "@/lib/editor/i18n";
+import { PresetPreview } from "./PresetPreview";
 import { useUpdatePrompt } from "./UpdateDialog";
 import { toast } from "sonner";
 import {
@@ -106,7 +107,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                   <p className="mb-1.5 text-xs font-medium text-zinc-300">{t("st.captionStyle")}</p>
                   <div className="grid grid-cols-4 gap-1.5">
                     {CAPTION_PRESETS.map((p) => (
-                      <CaptionBtn key={p.id} id={p.id} name={p.name} font={p.props.font as string} highlight={p.props.highlight} color={(p.props.highlight ? p.props.highlightColor : p.props.color) as string} />
+                      <CaptionBtn key={p.id} id={p.id} name={p.name} props={p.props} />
                     ))}
                   </div>
                 </div>
@@ -325,7 +326,7 @@ function WhisperBtn({ id }: { id: WhisperModelId }) {
   );
 }
 
-function CaptionBtn({ id, name, font, highlight, color }: { id: string; name: string; font: string; highlight?: boolean; color: string }) {
+function CaptionBtn({ id, name, props }: { id: string; name: string; props: Record<string, unknown> }) {
   const cur = useSettings((s) => s.captionPreset);
   return (
     <button
@@ -333,11 +334,9 @@ function CaptionBtn({ id, name, font, highlight, color }: { id: string; name: st
       className={`flex flex-col items-center gap-1 rounded-lg border px-1 py-2 transition ${cur === id ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)]" : "border-[#2a3546] hover:border-[#3a4759]"}`}
       title={name}
     >
-      <span className="text-[13px] leading-none" style={{ fontFamily: font, color }}>
-        AaBb
-      </span>
+      {/* v7.3: preview em canvas com as cores reais (contorno atrás, como no vídeo) */}
+      <PresetPreview tp={props} height={30} />
       <span className={`w-full truncate text-center text-[8.5px] ${cur === id ? "text-[var(--gc-accent)]" : "text-zinc-500"}`}>{name}</span>
-      <span className="sr-only">{highlight ? "✦" : ""}</span>
     </button>
   );
 }

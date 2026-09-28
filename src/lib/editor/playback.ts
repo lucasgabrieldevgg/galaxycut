@@ -11,6 +11,7 @@ import { drawFrame, MediaStatus } from "./render";
 import { Clip, clipEnd, fadeEnvelope } from "./types";
 import type { PlayheadMode } from "./settings";
 import { toast } from "sonner";
+import { t } from "./i18n";
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
 
@@ -35,6 +36,10 @@ class PlaybackEngine {
   private disposed = false;
   /** deu play com mídia ainda carregando? segura e toca sozinho quando 100% chegar */
   private pendingPlay = false;
+  /** v7.3: mídias cujo pré-carregamento estourou o teto de tempo — o gate do
+   *  play NÃO segura mais por elas (senão o play ficava travado pra sempre
+   *  num arquivo remoto enorme; o vídeo carrega o resto durante a reprodução) */
+  private prewarmTimeouts = new Set<string>();
   // deslize suave da seta (modo "Suave")
   private glideRaf = 0;
   private glideTarget: number | null = null;
@@ -120,6 +125,7 @@ class PlaybackEngine {
   private createEl(kind: string, mediaId: string): MediaEl | null {
     const url = registry.getUrl(mediaId);
     if (!url) return null;
+    this.prewarmTimeouts.delete(mediaId); // elemento novo: recomeça a espera
     const onErr = () => this.flagDecodeError(mediaId);
     if (kind === "image") {
       const img = new Image();
@@ -134,7 +140,7 @@ class PlaybackEngine {
       a.preload = "auto";
       a.addEventListener("error", onErr);
       a.addEventListener("seeked", () => (this.dirty = true));
-      this.prewarmEl(a);
+      this.prewarmEl(a, mediaId);
       return a;
     }
     const v = document.createElement("video");
@@ -145,21 +151,20 @@ class PlaybackEngine {
     v.addEventListener("error", onErr);
     v.addEventListener("seeked", () => (this.dirty = true));
     v.addEventListener("loadeddata", () => (this.dirty = true));
-    this.prewarmEl(v);
+    this.prewarmEl(v, mediaId);
     return v;
   }
 
-  /** v7.2: a mídia CARREGA INTEIRA assim que entra na timeline — e o navegador
-   *  é FORÇADO a isso: quando o buffer para de andar, pulamos pro maior
-   *  pedaço ainda não carregado (o seek obriga o player a ler aquela região).
-   *  Arquivos locais (blob) terminam em instantes; o teto de 90s cobre os
-   *  casos extremos. Enquanto isso a tela mostra a % andando. */
-  private prewarmEl(el: HTMLMediaElement) {
+  /** v7.3: espera a mídia carregar inteira SEM pulos pra buracos. O v7.2
+   *  forçava o navegador a ler os buracos pulando o currentTime pra lá — isso
+   *  derrubava o readyState e fazia o preview PISCAR "mídia não carregada"
+   *  toda hora (aparecia, sumia, aparecia). Arquivos locais (blob) carregam
+   *  quase instantâneo e o navegador bufar por conta própria; o pulo só
+   *  atrapalhava (cancelava leituras em andamento). Aqui: só acompanha o
+   *  buffer e repinta a % — e depois de 60s de teto, libera o play mesmo assim. */
+  private prewarmEl(el: HTMLMediaElement, mediaId: string) {
     const startedAt = performance.now();
-    let lastBuffered = -1;
-    let stalls = 0;
     const poll = () => {
-      this.dirty = true; // repinta a prévia (a % do placeholder anda)
       const dur = isFinite(el.duration) ? el.duration : 0;
       let buffered = 0;
       try {
@@ -167,39 +172,13 @@ class PlaybackEngine {
       } catch {
         buffered = 0;
       }
-      const done = (el.readyState >= 4 && dur > 0 && buffered >= dur * 0.985) || (dur > 0 && buffered >= dur - 0.15);
-      const timedOut = performance.now() - startedAt > 90_000;
+      const done = (el.readyState >= 4 && dur > 0 && buffered >= dur * 0.985) || (dur > 0 && buffered >= dur - 0.15) || el.error !== null;
+      const timedOut = performance.now() - startedAt > 60_000;
       if (!done && !timedOut && el.error === null) {
-        if (dur > 0 && el.readyState >= 1) {
-          if (buffered > lastBuffered + 0.01) {
-            stalls = 0; // andou
-          } else if (++stalls >= 6) {
-            // buffer parado: pula pro meio do maior buraco não carregado
-            stalls = 0;
-            let hole = -1;
-            try {
-              for (let i = 0; i < el.buffered.length; i++) {
-                const end = el.buffered.end(i);
-                const next = i + 1 < el.buffered.length ? el.buffered.start(i + 1) : dur;
-                if (next - end > 0.5) {
-                  hole = (end + next) / 2;
-                  break;
-                }
-              }
-            } catch {
-              /* noop */
-            }
-            if (hole < 0) hole = Math.min(dur - 0.1, buffered + 1);
-            try {
-              el.currentTime = Math.max(0, Math.min(dur - 0.05, hole));
-            } catch {
-              /* ainda não seekable */
-            }
-          }
-          lastBuffered = buffered;
-        }
+        this.dirty = true; // repinta a prévia (a % do placeholder anda)
         setTimeout(poll, 220);
       } else {
+        if (timedOut && !done) this.prewarmTimeouts.add(mediaId); // válvula: não segura o play pra sempre
         this.dirty = true;
       }
     };
@@ -208,12 +187,14 @@ class PlaybackEngine {
 
   /** v7.2: TODA a mídia do projeto (vídeo/áudio/imagem dos clipes) tá 100%
    *  carregada? O play só deixa assistir com tudo pronto — nada de
-   *  "carregando" no meio da reprodução. */
+   *  "carregando" no meio da reprodução. v7.3: mídia que estourou o teto de
+   *  pré-carga não segura mais o play (válvula de escape). */
   allMediaReady(): boolean {
     const { clips, media } = useProject.getState();
     for (const c of clips) {
       if (c.kind === "text" || c.videoHidden) continue;
       if (!c.mediaId) continue;
+      if (this.prewarmTimeouts.has(c.mediaId)) continue; // teto estourado: não espera mais
       const m = media.find((x) => x.id === c.mediaId);
       if (!m || m.missing || m.decodeError || !registry.hasBlob(c.mediaId)) continue; // desses a gente não espera
       const el = this.elements.get(this.bindings.get(c.id) ?? elKeyOf(c.kind, c.mediaId));
@@ -236,15 +217,27 @@ class PlaybackEngine {
     return true;
   }
 
-  /** Arquivo que o navegador não decodifica → aviso ÚNICO e claro pro dono. */
+  /** Arquivos que o navegador não decodifica → UM aviso agregado (v7.3: antes
+   *  eram N toasts — um por arquivo — logo ao abrir o projeto). */
+  private decodeErrQueue: string[] = [];
+  private decodeErrTimer = 0;
   private flagDecodeError(mediaId: string) {
     const st = useProject.getState();
     const m = st.media.find((x) => x.id === mediaId);
     if (!m || m.decodeError) return;
     st.updateMedia(mediaId, { decodeError: true });
-    toast.error(`Não consegui ler "${m.name}"`, {
-      description: "Este formato não abre no navegador — converta pra MP4 (H.264) ou WebM e reimporte.",
-    });
+    this.decodeErrQueue.push(m.name);
+    if (!this.decodeErrTimer) {
+      this.decodeErrTimer = window.setTimeout(() => {
+        const names = this.decodeErrQueue.splice(0);
+        this.decodeErrTimer = 0;
+        if (!names.length) return;
+        const shown = names.slice(0, 3).map((n) => `"${n}"`).join(", ") + (names.length > 3 ? ` +${names.length - 3}` : "");
+        toast.error(t("render.decodeErr", { n: names.length, files: shown }), {
+          description: t("render.decodeErrDesc"),
+        });
+      }, 900);
+    }
   }
 
   private getOrCreateEl(kind: string, mediaId: string, n = 0): MediaEl | undefined {

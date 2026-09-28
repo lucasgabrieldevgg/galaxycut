@@ -145,8 +145,12 @@ export function FloatMenu({
       openedAt.current = performance.now();
       setSubOpen(-1);
       setSubAnchor(null);
-      const r = hostRef.current.getBoundingClientRect();
-      setPos({ x: r.left, y: r.bottom + 2 });
+      // v7.3: âncora é o BOTÃO clicado de verdade. O wrapper é display:contents
+      // (não gera caixa) — o getBoundingClientRect dele volta tudo 0 e o menu
+      // abria no CANTO SUPERIOR ESQUERDO da tela, longe do cursor.
+      const btn = (el.closest("button") ?? el) as HTMLElement;
+      const r = btn.getBoundingClientRect();
+      setPos({ x: r.right - 218, y: r.bottom + 4 }); // alinhado à direita do botão
     };
     const host = hostRef.current;
     host?.addEventListener("click", onClick, true);
@@ -237,6 +241,12 @@ export function FloatMenu({
             maxHeight: maxMenuH,
           }}
           onContextMenu={(e) => e.preventDefault()}
+          /* v7.3: o portal é FILHO do card na árvore React — sem isso, o clique
+             num item (Renomear/Excluir…) borbulha sinteticamente até o onClick
+             do card e ABRE O EDITOR (o bug do "3 pontinhos abre o editor") */
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
         >
           {items.map((it, i) =>
             it.type === "sep" ? (
@@ -304,6 +314,11 @@ export function FloatMenu({
           onMouseEnter={() => window.clearTimeout(subCloseTimer.current)}
           onMouseLeave={scheduleSubClose}
           onContextMenu={(e) => e.preventDefault()}
+          /* v7.3: idem ao menu — portal filho do card/clip não vaza clique pro
+             ancestral React (mesmo bug do "abre o editor") */
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
         >
           {items[subOpen]?.children?.map((c, j) =>
             c.type === "sep" ? (

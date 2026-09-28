@@ -1,15 +1,18 @@
-// GaláxiaCut — exportação de vídeo (MediaRecorder), GIF, WAV e legendas SRT
-// v7: resolução de verdade (o "menor lado" é a qualidade — 1080p vertical =
-// 1080×1920 de fato), formatos múltiplos e GIF animado offline.
+// GaláxiaCut — exportação de vídeo (offline quadro-a-quadro, tempo real só
+// como plano B), GIF, WAV e legendas SRT
+// v7.3: o padrão é o motor OFFLINE (WebCodecs + muxer) — mais rápido que tempo
+// real, sem "mídia não carregada" queimada e com a proporção certa em qualquer
+// resolução. O MediaRecorder antigo virou fallback para navegadores sem
+// WebCodecs (com os mesmos consertos de proporção e pré-carga).
 "use client";
 
 import { useProject, usePlayback } from "./store";
 import { engine } from "./playback";
 import { audioEngine } from "./audio";
 import { drawFrame } from "./render";
-import { registry } from "./media";
 import { Clip, ProjectMeta, clipEnd, fmtSrtTime } from "./types";
 import { GIFEncoder, quantize, applyPalette } from "gifenc";
+import { exportOffline, offlineSupported, OfflineProgressInfo, renderAudioMix } from "./exportEngine";
 
 export type VideoFormat = "mp4" | "webm9" | "webm8" | "gif" | "wav" | "png";
 
@@ -18,7 +21,11 @@ export interface ExportOptions {
   fps: number; // 24…60 (GIF usa o próprio)
   bitrate: number; // bits/s
   format: VideoFormat;
+  /** v7.3: cancelamento — setar cancelled=true aborta o render na hora */
+  cancel?: { cancelled: boolean };
 }
+
+export type ExportProgress = (p: number, info?: OfflineProgressInfo) => void;
 
 export interface ExportResult {
   blob: Blob;
@@ -88,15 +95,49 @@ export function suggestBitrate(shortSide: number, aspect: number): number {
 }
 
 /**
- * Exporta a timeline inteira em tempo real: canvas → captureStream + áudio do AudioEngine.
+ * Exporta a timeline inteira. v7.3: OFFLINE quadro a quadro (WebCodecs) —
+ * mais rápido que tempo real e determinístico. Sem WebCodecs (ou sem codec
+ * compatível) cai no plano B: gravação em tempo real com pré-carga total
+ * da mídia (nada de "não carregada" no meio do vídeo) e proporção corrigida.
  */
 export async function exportVideo(
   opts: ExportOptions,
-  onProgress: (p: number, stage: string) => void
+  onProgress: ExportProgress
+): Promise<ExportResult> {
+  const duration = usePlayback.getState().duration;
+  if (duration <= 0) throw new Error("Timeline vazia — adicione mídia antes de exportar.");
+
+  if (offlineSupported()) {
+    try {
+      return await exportOffline({
+        shortSide: opts.shortSide,
+        fps: opts.fps,
+        bitrate: opts.bitrate,
+        format: opts.format === "webm8" ? "webm8" : opts.format === "webm9" ? "webm9" : "mp4",
+        onProgress,
+        cancel: opts.cancel,
+      });
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e);
+      if (msg.includes("cancel")) throw e;
+      // sem codec offline disponível → plano B (tempo real). Qualquer outra
+      // falha no meio do render é erro de verdade (não refaz tudo do zero).
+      if (!msg.includes("no-offline-codec")) throw e;
+    }
+  }
+  return exportRealtime(opts, onProgress);
+}
+
+/** Plano B: gravação em tempo real (MediaRecorder) — só quando o navegador não
+ *  tem WebCodecs. v7.3: espera TODA a mídia carregar antes de gravar (nada de
+ *  "mídia não carregada" queimada no vídeo) e escala o espaço do projeto pro
+ *  canvas de saída (a proporção fica certa em qualquer resolução). */
+async function exportRealtime(
+  opts: ExportOptions,
+  onProgress: ExportProgress
 ): Promise<ExportResult> {
   const { project, tracks, clips } = useProject.getState();
   const duration = usePlayback.getState().duration;
-  if (duration <= 0) throw new Error("Timeline vazia — adicione mídia antes de exportar.");
   const picked = pickMime(opts.format === "gif" || opts.format === "wav" || opts.format === "png" ? "mp4" : opts.format);
   if (!picked) throw new Error("Seu navegador não suporta gravação de vídeo (MediaRecorder). Use Chrome/Edge atualizado.");
 
@@ -105,6 +146,7 @@ export async function exportVideo(
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
+  const scaledProject = { ...project, width: W, height: H }; // proporção certa ✔
 
   const videoStream = canvas.captureStream(opts.fps);
   let audioStream: MediaStream | null = null;
@@ -127,9 +169,18 @@ export async function exportVideo(
     if (e.data.size > 0) chunks.push(e.data);
   };
 
-  // vai pro início, pausa e toca do começo ao fim renderizando no canvas de exportação
+  // v7.3: espera a mídia carregar INTEIRA antes de gravar (o mesmo critério
+  // do play) — sem isso o vídeo podia sair com quadros de "carregando"
   engine.pause();
   engine.seek(0);
+  const waitReady = async () => {
+    for (let i = 0; i < 600; i++) {
+      if (engine.allMediaReady()) return;
+      onProgress(Math.min(0.15, 0.002 * i), { stage: "prepare" });
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  };
+  await waitReady();
   await new Promise((r) => setTimeout(r, 350)); // deca os seeks assentarem
 
   const done = new Promise<void>((resolve) => {
@@ -141,10 +192,14 @@ export async function exportVideo(
 
   await new Promise<void>((resolve) => {
     const step = () => {
+      if (opts.cancel?.cancelled) {
+        resolve();
+        return;
+      }
       const pb = usePlayback.getState();
       const t = pb.playhead;
-      drawFrame(ctx, project, tracks, clips, t, { getElement: (id) => engine.getElement(id) });
-      onProgress(Math.min(0.999, t / duration), "Gravando");
+      drawFrame(ctx, scaledProject, tracks, clips, t, { getElement: (id) => engine.getElement(id) });
+      onProgress(Math.min(0.999, t / duration), { stage: "render" });
       if (!pb.playing || t >= duration - 0.001) {
         resolve();
         return;
@@ -159,7 +214,8 @@ export async function exportVideo(
   await new Promise((r) => setTimeout(r, 300));
   rec.stop();
   await done;
-  onProgress(1, "Finalizando");
+  if (opts.cancel?.cancelled) throw new Error("exportação cancelada");
+  onProgress(1, { stage: "finish" });
 
   const blob = new Blob(chunks, { type: picked.mime });
   return { blob, ext: picked.ext, mime: picked.mime };
@@ -213,68 +269,18 @@ export async function exportGif(
 
 /**
  * WAV do projeto inteiro — mixa TODOS os clipes com som offline (determinístico,
- * sem tempo real): decodifica cada arquivo uma vez e agenda na OfflineAudioContext.
+ * sem tempo real). v7.3: usa o mesmo renderAudioMix do motor de exportação.
  */
 export async function exportWav(onProgress: (p: number) => void): Promise<ExportResult> {
-  const { clips, tracks, project } = useProject.getState();
   const duration = usePlayback.getState().duration;
   if (duration <= 0) throw new Error("Timeline vazia — adicione mídia antes de exportar.");
-
-  const AC: typeof AudioContext = window.AudioContext;
-  const probe = new AC();
-  const OAC: typeof OfflineAudioContext = window.OfflineAudioContext;
-  const off = new OAC(2, Math.ceil(duration * 48000), 48000);
-  const decoded = new Map<string, AudioBuffer | null>();
-
-  const withSound = clips.filter((c) => c.kind === "video" || c.kind === "audio");
-  let done = 0;
-  for (const c of withSound) {
-    if (!c.mediaId || decoded.has(c.mediaId)) continue;
-    const blob = registry.getBlob(c.mediaId);
-    if (!blob) {
-      decoded.set(c.mediaId, null);
-      continue;
-    }
-    try {
-      decoded.set(c.mediaId, await probe.decodeAudioData(await blob.slice(0).arrayBuffer()));
-    } catch {
-      decoded.set(c.mediaId, null);
-    }
-    done++;
-    onProgress(0.05 + 0.55 * (done / Math.max(1, new Set(withSound.map((c) => c.mediaId)).size)));
-  }
-  void probe.close();
-
-  for (const c of withSound) {
-    const buf = c.mediaId ? decoded.get(c.mediaId) : null;
-    if (!buf) continue;
-    const track = tracks.find((t) => t.id === c.trackId);
-    if (c.muted || track?.muted) continue;
-    const src = off.createBufferSource();
-    src.buffer = buf;
-    src.playbackRate.value = Math.max(0.0625, Math.min(16, c.speed || 1));
-    const gain = off.createGain();
-    // envelope de fades (volume 0→1 na entrada, 1→0 na saída)
-    const g0 = Math.max(0.0001, c.volume ?? 1);
-    const start = c.start;
-    const end = clipEnd(c);
-    gain.gain.setValueAtTime(c.fadeIn > 0 ? 0.0001 : g0, start);
-    if (c.fadeIn > 0) gain.gain.linearRampToValueAtTime(g0, start + Math.min(c.fadeIn, c.duration));
-    if (c.fadeOut > 0) {
-      gain.gain.setValueAtTime(g0, Math.max(start, end - c.fadeOut));
-      gain.gain.linearRampToValueAtTime(0.0001, end);
-    }
-    src.connect(gain).connect(off.destination);
-    src.start(start, c.inPoint, Math.min(c.duration, (buf.duration - c.inPoint) / (c.speed || 1)));
-  }
-  onProgress(0.65);
-  const rendered = await off.startRendering();
+  const rendered = await renderAudioMix(duration, (p) => onProgress(0.05 + 0.6 * p));
+  if (!rendered) throw new Error("Esta edição não tem áudio para exportar.");
   onProgress(0.9);
 
   // AudioBuffer → WAV 16-bit (o mesmo empacotador do "extrair áudio")
   const wav = encodeWavFromBuffer(rendered);
   onProgress(1);
-  void project;
   return { blob: wav, ext: "wav", mime: "audio/wav" };
 }
 

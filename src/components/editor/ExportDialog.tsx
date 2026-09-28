@@ -3,7 +3,7 @@
 // e formatos (MP4, WebM, GIF animado, WAV do áudio e PNG do quadro).
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -12,12 +12,12 @@ import { Progress } from "@/components/ui/progress";
 import { useProject, usePlayback } from "@/lib/editor/store";
 import {
   buildSrt, canExport, downloadBlob, exportVideo, exportGif, exportWav, exportPng,
-  listVideoFormats, outputSize, sanitizeName, suggestBitrate, VideoFormat,
+  listVideoFormats, outputSize, sanitizeName, suggestBitrate, VideoFormat, ExportProgress,
 } from "@/lib/editor/exporter";
-import { deliverExport, isDesktopBuild } from "@/lib/editor/desktop";
+import { deliverExport, askExportDestination, isDesktopBuild } from "@/lib/editor/desktop";
 import { useT } from "@/lib/editor/i18n";
 import { toast } from "sonner";
-import { Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen, Star, ChevronDown, ChevronUp, Image as ImageIcon, Music4, FileVideo } from "lucide-react";
+import { Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen, Star, ChevronDown, ChevronUp, Image as ImageIcon, Music4, FileVideo, XCircle } from "lucide-react";
 
 /** qualidade = MENOR lado da saída. 1080 é o padrão; o resto aparece em "mais opções". */
 const RESOLUTIONS: { id: number; label: string; hintKey: string }[] = [
@@ -44,7 +44,9 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [showMore, setShowMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progInfo, setProgInfo] = useState<{ frame?: number; frames?: number; etaSec?: number; speed?: number }>({});
   const [result, setResult] = useState<{ blob: Blob; name: string; path?: string | null } | null>(null);
+  const cancelRef = useRef<{ cancelled: boolean }>({ cancelled: false });
 
   const videoFormats = useMemo(() => listVideoFormats(), []);
   const supported = canExport();
@@ -57,20 +59,44 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     return quality === "alta" ? base : quality === "media" ? Math.round(base * 0.65) : Math.round(base * 0.38);
   }, [shortSide, quality, project]);
 
+  function fmtEta(s?: number) {
+    if (s == null || !isFinite(s) || s <= 0) return "";
+    if (s < 60) return `${Math.max(1, Math.round(s))}s`;
+    const m = Math.floor(s / 60);
+    return `${m}m${String(Math.round(s % 60)).padStart(2, "0")}s`;
+  }
+
   async function run() {
     if (duration <= 0) {
       toast.error(t("ex.emptyTimeline"));
       return;
     }
+    // nomeação própria: nunca briga com outros vídeos da pasta
+    const now = new Date();
+    const p = (n: number) => String(n).padStart(2, "0");
+    const ts = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}_${p(now.getHours())}-${p(now.getMinutes())}-${p(now.getSeconds())}`;
+    const resTag = format === "wav" || format === "png" || format === "gif" ? format.toUpperCase() : `${shortSide}p`;
+    const ext = format === "mp4" ? "mp4" : format === "webm9" || format === "webm8" ? "webm" : format === "gif" ? "gif" : format === "wav" ? "wav" : "png";
+    const name = `GalaxyCut_${ts}_${sanitizeName(project.name)}_${resTag}.${ext}`;
+
+    // no APP: pergunta ANTES onde salvar (cancelar aqui não joga o render fora)
+    const dest = await askExportDestination(name);
+    if ("canceled" in dest) {
+      toast.info(t("ex.pickCanceled"));
+      return;
+    }
+
     setBusy(true);
     setProgress(0);
+    setProgInfo({});
     setResult(null);
+    cancelRef.current = { cancelled: false };
+    const onProg: ExportProgress = (v, info) => {
+      setProgress(v);
+      if (info?.stage === "render") setProgInfo({ frame: info.frame, frames: info.frames, etaSec: info.etaSec, speed: info.speed });
+      else setProgInfo({});
+    };
     try {
-      // nomeação própria: nunca briga com outros vídeos da pasta
-      const now = new Date();
-      const p = (n: number) => String(n).padStart(2, "0");
-      const ts = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}_${p(now.getHours())}-${p(now.getMinutes())}-${p(now.getSeconds())}`;
-      const resTag = format === "wav" || format === "png" || format === "gif" ? format.toUpperCase() : `${shortSide}p`;
       let out: { blob: Blob; ext: string };
       let stage = "";
       if (format === "gif") {
@@ -83,12 +109,11 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         out = await exportPng();
         stage = "PNG";
       } else {
-        out = await exportVideo({ shortSide, fps, bitrate, format }, (v) => setProgress(v));
+        out = await exportVideo({ shortSide, fps, bitrate, format, cancel: cancelRef.current }, onProg);
         stage = out.ext.toUpperCase();
       }
       void stage;
-      const name = `GalaxyCut_${ts}_${sanitizeName(project.name)}_${resTag}.${out.ext}`;
-      const path = await deliverExport(out.blob, name);
+      const path = await deliverExport(out.blob, name, dest.dest === "desktop" ? dest.path || undefined : undefined);
       setResult({ blob: out.blob, name, path });
       toast.success(
         isDesktopBuild()
@@ -101,7 +126,9 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         }
       );
     } catch (e) {
-      toast.error(t("ex.fail"), { description: String((e as Error).message ?? e) });
+      const msg = String((e as Error).message ?? e);
+      if (msg.includes("cancel")) toast.info(t("ex.cancelled"));
+      else toast.error(t("ex.fail"), { description: msg });
     } finally {
       setBusy(false);
     }
@@ -206,6 +233,12 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   ? RESOLUTIONS.map((r) => resBtn(r.id, r.label, t(r.hintKey)))
                   : [720, 1080].map((id) => resBtn(id, id === 1080 ? "1080p" : "720p", t(id === 1080 ? "ex.hint1080" : "ex.hint720b")))}
               </div>
+              {/* aviso pedido pelo dono: mais resoluções moram no "Mais opções" */}
+              {!showMore && (
+                <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">
+                  {t("ex.moreResHint", { more: t("ex.more") })}
+                </p>
+              )}
               {shortSide >= 2160 && (
                 <p className="mt-1 text-[10px] text-amber-400/80">
                   {t("ex.hugeWarn", { k: shortSide === 4320 ? "8K" : "4K" })}
@@ -276,14 +309,38 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-zinc-300">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--gc-accent)]" />{" "}
-                  {format === "gif" ? t("ex.gifStage") : format === "wav" ? t("ex.wavStage") : t("ex.recording")}
+                  {format === "gif" ? t("ex.gifStage") : format === "wav" ? t("ex.wavStage") : t("ex.rendering")}
                 </span>
                 <span className="font-mono text-[var(--gc-accent)]">{Math.round(progress * 100)}%</span>
               </div>
               <Progress value={progress * 100} className="h-1.5 bg-[#0a0d14]" />
-              <p className="text-[10px] text-zinc-500">
-                {isVideo ? t("ex.rtNote") : t("ex.offlineNote")}
-              </p>
+              <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-500">
+                <span>
+                  {isVideo && progInfo.frames
+                    ? t("ex.frameOf", { i: progInfo.frame ?? 0, n: progInfo.frames })
+                    : format === "gif" || format === "wav"
+                      ? t("ex.offlineNote")
+                      : t("ex.preparing")}
+                </span>
+                <span className="flex shrink-0 items-center gap-2 tabular-nums">
+                  {progInfo.speed != null && progInfo.speed > 0 && (
+                    <span className="text-[var(--gc-accent)]">{progInfo.speed.toFixed(1)}× {t("ex.realtime")}</span>
+                  )}
+                  {progInfo.etaSec != null && progInfo.etaSec > 1 && <span>~{fmtEta(progInfo.etaSec)}</span>}
+                </span>
+              </div>
+              {isVideo && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-full gap-1.5 border-red-500/40 bg-transparent text-[11px] text-red-400 hover:bg-red-500/10"
+                  onClick={() => {
+                    cancelRef.current.cancelled = true;
+                  }}
+                >
+                  <XCircle className="h-3.5 w-3.5" /> {t("ex.cancelExport")}
+                </Button>
+              )}
             </div>
           )}
 

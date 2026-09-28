@@ -29,7 +29,7 @@ import {
   Eye, EyeOff, VolumeX, Volume2, Type as TypeIcon, Film, ImageIcon, Music2, TriangleAlert,
   ArrowUpDown, Plus, Scissors as ScissorsIcon, ClipboardPaste, AudioLines, ArrowRightFromLine,
   AudioWaveform, UnfoldHorizontal, ArrowLeftToLine, AudioLines as AudioLinesIcon, Wand2, Eraser,
-  Combine, ListChecks, X, MonitorPlay,
+  Combine, ListChecks, X, MonitorPlay, Sparkles,
 } from "lucide-react";
 
 const HEADER_W = 128;
@@ -1274,6 +1274,12 @@ function ClipContent({
   hasTrans: boolean;
 }) {
   const showWaveform = (clip.kind === "audio" || clip.kind === "video") && showWave && !clip.muted && !!media?.peaks?.length;
+  // v7.3: selo de efeitos visuais aplicados (o dono pediu: aplicou efeito,
+  // o clipe mostra que tem efeito)
+  const hasFx =
+    clip.brightness !== 1 || clip.contrast !== 1 || clip.saturation !== 1 ||
+    clip.blur > 0 || clip.hue !== 0 || clip.sepia > 0 || clip.grayscale > 0 ||
+    clip.opacity < 1 || clip.rotation !== 0 || clip.scale !== 1;
   return (
     <div className="pointer-events-none absolute inset-0">
       {(clip.kind === "video" || clip.kind === "image") && media?.thumbnail && (
@@ -1303,6 +1309,16 @@ function ClipContent({
         </span>
         <span className="ml-auto tabular-nums opacity-70">{(Math.round(clip.duration * 10) / 10).toFixed(1)}s</span>
         {clip.enhance && <Wand2 className="h-2.5 w-2.5 text-[var(--gc-accent)]" />}
+        {hasFx && (
+          <span className="flex items-center gap-0.5 rounded-sm bg-fuchsia-500/20 px-0.5 text-[8px] font-bold leading-none text-fuchsia-300" title={tr("tl.fxBadge")}>
+            <Sparkles className="h-2 w-2" />fx
+          </span>
+        )}
+        {clip.speed !== 1 && (
+          <span className="rounded-sm bg-sky-500/20 px-0.5 text-[8px] font-bold leading-none text-sky-300" title={tr("tl.speedBadge")}>
+            {clip.speed}×
+          </span>
+        )}
         {clip.muted && <VolumeX className="h-2.5 w-2.5 text-amber-400" />}
         {clip.videoHidden && <EyeOff className="h-2.5 w-2.5 text-sky-400" />}
         {hasTrans && <ArrowRightFromLine className="h-2.5 w-2.5 text-fuchsia-400" />}
