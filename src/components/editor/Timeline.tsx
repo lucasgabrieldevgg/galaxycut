@@ -1527,6 +1527,25 @@ function ClipContent({
           ))}
         </div>
       )}
+      {/* Faixas de tempo de efeitos customizados */}
+      {clip.effects && clip.effects.some((e) => e.enabled && (e.start || e.duration !== undefined)) && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-3.5 z-10 h-1">
+          {clip.effects.filter((e) => e.enabled && ((e.start ?? 0) > 0 || e.duration !== undefined)).map((eff) => {
+            const effStart = eff.start ?? 0;
+            const effDur = eff.duration !== undefined ? eff.duration : (clip.duration - effStart);
+            const leftPct = Math.max(0, Math.min(100, (effStart / clip.duration) * 100));
+            const widthPct = Math.max(2, Math.min(100 - leftPct, (effDur / clip.duration) * 100));
+            return (
+              <div
+                key={`eff-range-${eff.id}`}
+                className="absolute top-0 h-1 rounded-sm bg-emerald-400 shadow-[0_0_4px_#10b981]"
+                style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                title={`Efeito ativo de ${effStart.toFixed(1)}s a ${(effStart + effDur).toFixed(1)}s`}
+              />
+            );
+          })}
+        </div>
+      )}
       {clip.fadeIn > 0 && <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-white/25 to-transparent" style={{ width: clip.fadeIn * zoom }} />}
       {clip.fadeOut > 0 && <div className="absolute inset-y-0 right-0 bg-gradient-to-l from-white/25 to-transparent" style={{ width: clip.fadeOut * zoom }} />}
       {missing && <TriangleAlert className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-red-400" />}

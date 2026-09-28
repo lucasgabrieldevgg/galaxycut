@@ -219,6 +219,8 @@ export interface ClipEffect {
   enabled: boolean;
   intensity: number; // 0..2 (1 = padrão)
   speed?: number; // 0.1..3 (1 = normal)
+  start?: number; // início relativo ao clipe em segundos (ex: 0 = início)
+  duration?: number; // duração do efeito em segundos (undefined = clipe inteiro)
   params?: Record<string, number | string | boolean>;
 }
 
@@ -790,6 +792,8 @@ export interface EvaluatedTransform {
   extraDx: number;
   extraDy: number;
   extraScale: number;
+  extraScaleX: number;
+  extraScaleY: number;
   extraRot: number;
   extraAlpha: number;
   extraBlur: number;
@@ -912,6 +916,8 @@ export function evaluateClipState(c: Clip, t: number): EvaluatedTransform {
   let extraDx = 0;
   let extraDy = 0;
   let extraScale = 1;
+  let extraScaleX = 1;
+  let extraScaleY = 1;
   let extraRot = 0;
   let extraAlpha = 1;
   let extraBlur = 0;
@@ -968,11 +974,14 @@ export function evaluateClipState(c: Clip, t: number): EvaluatedTransform {
           extraScale *= 0.7 + 0.3 * p;
           break;
         case "flipInX":
-          extraScale *= Math.max(0.01, Math.sin(p * Math.PI * 0.5));
-          extraRot += (1 - p) * 90;
+          extraScaleY *= Math.max(0.001, Math.cos((1 - p) * Math.PI * 0.5));
+          extraRot += Math.sin((1 - p) * Math.PI * 0.5) * 18;
+          extraAlpha *= Math.min(1, p * 2.5);
           break;
         case "flipInY":
-          extraScale *= Math.max(0.01, Math.sin(p * Math.PI * 0.5));
+          extraScaleX *= Math.max(0.001, Math.cos((1 - p) * Math.PI * 0.5));
+          extraRot += Math.sin((1 - p) * Math.PI * 0.5) * -18;
+          extraAlpha *= Math.min(1, p * 2.5);
           break;
         case "wipeRight":
           extraDx -= (1 - easeOutCubic(p)) * 1.5;
@@ -1087,6 +1096,10 @@ export function evaluateClipState(c: Clip, t: number): EvaluatedTransform {
   const effects = c.effects || [];
   for (const eff of effects) {
     if (!eff.enabled) continue;
+    const effStart = eff.start ?? 0;
+    const effDur = eff.duration != null ? eff.duration : (c.duration - effStart);
+    if (tRel < effStart || tRel > effStart + effDur) continue;
+
     const intensity = eff.intensity ?? 1;
     const spd = eff.speed ?? 1;
     if (eff.type === "shake") {
@@ -1119,6 +1132,8 @@ export function evaluateClipState(c: Clip, t: number): EvaluatedTransform {
     extraDx,
     extraDy,
     extraScale,
+    extraScaleX,
+    extraScaleY,
     extraRot,
     extraAlpha,
     extraBlur,

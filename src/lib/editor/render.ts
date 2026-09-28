@@ -232,6 +232,19 @@ function buildEvaluatedFilter(st: EvaluatedTransform, H: number, extraBlurPx?: n
   return parts.length ? parts.join(" ") : "none";
 }
 
+let offscreenPixelCanvas: HTMLCanvasElement | null = null;
+function getPixelCanvas(w: number, h: number): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  if (!offscreenPixelCanvas) {
+    offscreenPixelCanvas = document.createElement("canvas");
+  }
+  if (offscreenPixelCanvas.width !== w || offscreenPixelCanvas.height !== h) {
+    offscreenPixelCanvas.width = Math.max(1, w);
+    offscreenPixelCanvas.height = Math.max(1, h);
+  }
+  return offscreenPixelCanvas;
+}
+
 function applyPostEffects(
   ctx: CanvasRenderingContext2D,
   W: number,
@@ -256,6 +269,10 @@ function applyPostEffects(
   }
 
   for (const eff of effects) {
+    const effStart = eff.start ?? 0;
+    const effDur = eff.duration != null ? eff.duration : (c.duration - effStart);
+    if (tRel < effStart || tRel > effStart + effDur) continue;
+
     const intensity = eff.intensity ?? 1;
     const spd = eff.speed ?? 1;
 
@@ -350,6 +367,85 @@ function applyPostEffects(
         ctx.restore();
         break;
       }
+      case "pixelate": {
+        if (!d) break;
+        ctx.save();
+        const pixelSize = Math.max(3, Math.round(24 * intensity));
+        const offW = Math.max(2, Math.floor(dw / pixelSize));
+        const offH = Math.max(2, Math.floor(dh / pixelSize));
+        const pCan = getPixelCanvas(offW, offH);
+        if (pCan) {
+          const pCtx = pCan.getContext("2d");
+          if (pCtx) {
+            pCtx.imageSmoothingEnabled = false;
+            pCtx.drawImage(d.el, 0, 0, offW, offH);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(pCan, -dw / 2, -dh / 2, dw, dh);
+          }
+        }
+        ctx.restore();
+        break;
+      }
+      case "fisheye": {
+        if (!d) break;
+        ctx.save();
+        const rings = 14;
+        const maxR = Math.hypot(dw, dh) * 0.55;
+        for (let r = rings; r >= 1; r--) {
+          const norm = r / rings; // 0..1
+          const distNorm = Math.pow(norm, 1 + 0.9 * intensity);
+          const radius = norm * maxR;
+          const srcRadius = distNorm * maxR;
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(0, 0, radius, 0, Math.PI * 2);
+          ctx.clip();
+          const zoom = radius / Math.max(1, srcRadius);
+          const zw = dw * zoom;
+          const zh = dh * zoom;
+          try {
+            ctx.drawImage(d.el, -zw / 2, -zh / 2, zw, zh);
+          } catch {}
+          ctx.restore();
+        }
+        const grad = ctx.createRadialGradient(0, 0, maxR * 0.4, 0, 0, maxR);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(0.8, `rgba(0,0,0,${0.25 * intensity})`);
+        grad.addColorStop(1, `rgba(0,0,0,${0.75 * intensity})`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, maxR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        break;
+      }
+      case "thermal": {
+        if (!d) break;
+        ctx.save();
+        ctx.globalCompositeOperation = "difference";
+        ctx.globalAlpha = 0.85 * intensity;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+
+        ctx.globalCompositeOperation = "color-dodge";
+        ctx.globalAlpha = 0.9 * intensity;
+        const tGrad = ctx.createLinearGradient(-dw / 2, -dh / 2, dw / 2, dh / 2);
+        tGrad.addColorStop(0.0, "#0000ff");
+        tGrad.addColorStop(0.25, "#00ffff");
+        tGrad.addColorStop(0.5, "#00ff00");
+        tGrad.addColorStop(0.75, "#ffff00");
+        tGrad.addColorStop(1.0, "#ff0044");
+        ctx.fillStyle = tGrad;
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.4 * intensity;
+        try {
+          ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+        } catch {}
+        ctx.restore();
+        break;
+      }
       case "lightLeak": {
         ctx.save();
         ctx.globalCompositeOperation = "screen";
@@ -369,13 +465,17 @@ function applyPostEffects(
       case "filmGrain": {
         ctx.save();
         ctx.globalCompositeOperation = "overlay";
-        ctx.globalAlpha = 0.3 * intensity;
+        ctx.globalAlpha = 0.45 * intensity;
         const seed = Math.floor(tRel * 24);
-        for (let i = 0; i < 350; i++) {
-          const gx = ((Math.sin(seed * 157 + i * 47) * 0.5 + 0.5) - 0.5) * dw;
-          const gy = ((Math.cos(seed * 89 + i * 61) * 0.5 + 0.5) - 0.5) * dh;
-          const sz = (Math.sin(i * 23) * 0.5 + 0.5) * 3 + 1;
-          ctx.fillStyle = i % 2 === 0 ? "#ffffff" : "#000000";
+        const grainCount = Math.floor(800 * intensity);
+        for (let i = 0; i < grainCount; i++) {
+          const rx = (Math.sin(seed * 197.3 + i * 47.9) * 43758.5453) % 1;
+          const ry = (Math.cos(seed * 113.7 + i * 61.3) * 23421.6312) % 1;
+          const gx = ((rx >= 0 ? rx : -rx) - 0.5) * dw;
+          const gy = ((ry >= 0 ? ry : -ry) - 0.5) * dh;
+          const sz = (Math.sin(i * 17.1) * 0.5 + 0.5) * 2.2 + 1;
+          const isBright = i % 3 === 0;
+          ctx.fillStyle = isBright ? "rgba(255, 255, 255, 0.75)" : "rgba(0, 0, 0, 0.65)";
           ctx.fillRect(gx, gy, sz, sz);
         }
         ctx.restore();
@@ -576,6 +676,9 @@ function drawMediaLayer(
   ctx.filter = buildEvaluatedFilter(st, H, opts.blurPx);
   ctx.translate(cx, cy);
   if (rot) ctx.rotate((rot * Math.PI) / 180);
+  if (st.extraScaleX !== 1 || st.extraScaleY !== 1) {
+    ctx.scale(st.extraScaleX ?? 1, st.extraScaleY ?? 1);
+  }
 
   try {
     ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
@@ -782,6 +885,9 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, W: number, H: number, c: C
   if (totalBlur > 0.5) ctx.filter = `blur(${totalBlur}px)`;
   ctx.translate(cx, cy);
   if (rot) ctx.rotate((rot * Math.PI) / 180);
+  if (st.extraScaleX !== 1 || st.extraScaleY !== 1) {
+    ctx.scale(st.extraScaleX ?? 1, st.extraScaleY ?? 1);
+  }
 
   ctx.font = `${style}${weight} ${size}px ${tp.font}`;
   ctx.textBaseline = "middle";

@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { engine } from "@/lib/editor/playback";
-import { Sparkles, Plus, Trash2, Sliders, Check, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Plus, Trash2, Sliders, Check, Eye, EyeOff, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 export function EffectsInspector({ clip }: { clip: Clip }) {
@@ -201,6 +201,69 @@ export function EffectsInspector({ clip }: { clip: Clip }) {
                         />
                       </div>
                     )}
+
+                    {/* Posicionamento de Tempo & Duração do Efeito no Clipe */}
+                    <div className="pt-2 border-t border-[#1c2430] space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                        <span className="flex items-center gap-1 font-medium text-zinc-300">
+                          <Clock className="h-3 w-3 text-emerald-400" />
+                          Tempo no Clipe
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateClipEffect(clip.id, eff.id, { start: 0, duration: undefined });
+                            engine.markDirty();
+                          }}
+                          className="text-[9px] text-emerald-400 hover:text-emerald-300 transition hover:underline"
+                        >
+                          Clipe inteiro
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-[9px] text-zinc-400">
+                            <span>Início</span>
+                            <span className="font-mono text-emerald-300">{(eff.start ?? 0).toFixed(1)}s</span>
+                          </div>
+                          <Slider
+                            value={[eff.start ?? 0]}
+                            min={0}
+                            max={Math.max(0, clip.duration - 0.1)}
+                            step={0.1}
+                            onValueChange={([v]) => {
+                              const maxDur = clip.duration - v;
+                              const newDur = eff.duration !== undefined ? Math.min(eff.duration, maxDur) : undefined;
+                              updateClipEffect(clip.id, eff.id, { start: v, duration: newDur });
+                              engine.markDirty();
+                            }}
+                            className="py-0.5"
+                          />
+                        </div>
+
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-[9px] text-zinc-400">
+                            <span>Duração</span>
+                            <span className="font-mono text-emerald-300">
+                              {eff.duration !== undefined ? `${eff.duration.toFixed(1)}s` : "Total"}
+                            </span>
+                          </div>
+                          <Slider
+                            value={[eff.duration !== undefined ? eff.duration : (clip.duration - (eff.start ?? 0))]}
+                            min={0.1}
+                            max={Math.max(0.1, clip.duration - (eff.start ?? 0))}
+                            step={0.1}
+                            onValueChange={([v]) => {
+                              const isMax = Math.abs(v - (clip.duration - (eff.start ?? 0))) < 0.05;
+                              updateClipEffect(clip.id, eff.id, { duration: isMax ? undefined : v });
+                              engine.markDirty();
+                            }}
+                            className="py-0.5"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
