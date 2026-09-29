@@ -92,7 +92,8 @@ function videoCodecCandidates(format: OfflineOptions["format"], W: number, H: nu
     return [
       { webcodecs: l, muxer: "avc" },
       { webcodecs: l.replace("6400", "4d00"), muxer: "avc" }, // Main
-      { webcodecs: l.replace("6400", "42E00"), muxer: "avc" }, // Baseline
+      { webcodecs: "avc1.420028", muxer: "avc" }, // Baseline
+      { webcodecs: "avc1.42001f", muxer: "avc" }, // Baseline 3.1
       { webcodecs: "vp09.00.10.08", muxer: "vp9" }, // último recurso: VP9 dentro de MP4
     ];
   }
@@ -371,8 +372,11 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
 
   let audioEncoder: any = null;
   let audioCodecPick: string | null = null;
+  let audioEncError: any = null;
+  let audioChunksCount = 0;
+
   if (audioBuffer && wantAudio) {
-    const candidateAudioCodecs = isMp4 ? ["mp4a.40.2", "mp4a.40.02", "mp4a.67"] : ["opus", "vorbis"];
+    const candidateAudioCodecs = isMp4 ? ["mp4a.40.2", "mp4a.40.02", "mp4a.67", "opus"] : ["opus", "vorbis"];
     for (const cand of candidateAudioCodecs) {
       try {
         const support = await WC.AudioEncoder.isConfigSupported({
@@ -401,7 +405,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
       target: new Mp4Target(),
       video: { codec: vPick.muxer as "avc", width: W, height: H, frameRate: fps },
       audio: audioCodecPick
-        ? { codec: "aac", numberOfChannels: 2, sampleRate: 48000 }
+        ? { codec: audioCodecPick === "opus" ? "opus" : "aac", numberOfChannels: 2, sampleRate: 48000 }
         : undefined,
       fastStart: "in-memory",
       firstTimestampBehavior: "offset",
@@ -435,8 +439,14 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
   if (audioCodecPick && audioBuffer) {
     try {
       audioEncoder = new WC.AudioEncoder({
-        output: (chunk: any, meta: any) => muxer.addAudioChunk(chunk, meta),
-        error: (err: any) => console.warn("AudioEncoder error:", err),
+        output: (chunk: any, meta: any) => {
+          audioChunksCount++;
+          muxer.addAudioChunk(chunk, meta);
+        },
+        error: (err: any) => {
+          console.error("AudioEncoder error:", err);
+          audioEncError = err;
+        },
       });
       audioEncoder.configure({
         codec: audioCodecPick,
@@ -536,28 +546,76 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
   if (audioBuffer && audioEncoder) {
     onProgress0(opts, 0.96, { stage: "finish" });
     const CH = 2;
+    const sampleRate = 48000;
     const left = audioBuffer.getChannelData(0);
     const right = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : left;
-    const CHUNK = 4096;
-    for (let off = 0; off < audioBuffer.length; off += CHUNK) {
-      const n = Math.min(CHUNK, audioBuffer.length - off);
-      const data = new Float32Array(n * CH);
-      data.set(left.subarray(off, off + n), 0);
-      data.set(right.subarray(off, off + n), n);
-      const ad = new WC.AudioData({
-        format: "f32-planar",
-        sampleRate: 48000,
-        numberOfFrames: n,
-        numberOfChannels: CH,
-        timestamp: Math.round((off / 48000) * 1e6),
-        data,
-      });
-      audioEncoder.encode(ad);
-      ad.close();
-      if (off % 245760 === 0) await new Promise((r) => setTimeout(r, 0)); // fôlego
+    const totalSamples = audioBuffer.length;
+    const CHUNK = 1024; // Padrão AAC (1024 amostras por quadro)
+
+    for (let off = 0; off < totalSamples; off += CHUNK) {
+      if (audioEncError) break;
+      const n = Math.min(CHUNK, totalSamples - off);
+      const frameCount = CHUNK;
+
+      // Monta dados intercalados f32 (padrão universal WebCodecs)
+      const dataInterleaved = new Float32Array(frameCount * CH);
+      for (let j = 0; j < n; j++) {
+        dataInterleaved[j * 2] = left[off + j];
+        dataInterleaved[j * 2 + 1] = right[off + j];
+      }
+
+      try {
+        const ad = new WC.AudioData({
+          format: "f32",
+          sampleRate,
+          numberOfFrames: frameCount,
+          numberOfChannels: CH,
+          timestamp: Math.round((off / sampleRate) * 1e6),
+          data: dataInterleaved,
+        });
+        audioEncoder.encode(ad);
+        ad.close();
+      } catch (e1) {
+        // Fallback para f32-planar caso o driver exija planar
+        try {
+          const dataPlanar = new Float32Array(frameCount * CH);
+          dataPlanar.set(left.subarray(off, off + n), 0);
+          dataPlanar.set(right.subarray(off, off + n), frameCount);
+          const ad = new WC.AudioData({
+            format: "f32-planar",
+            sampleRate,
+            numberOfFrames: frameCount,
+            numberOfChannels: CH,
+            timestamp: Math.round((off / sampleRate) * 1e6),
+            data: dataPlanar,
+          });
+          audioEncoder.encode(ad);
+          ad.close();
+        } catch (e2) {
+          console.error("Audio encode chunk error:", e2);
+          audioEncError = e2;
+          break;
+        }
+      }
+
+      if (off % (CHUNK * 30) === 0) {
+        await new Promise((r) => setTimeout(r, 0)); // fôlego pro navegador
+      }
     }
-    await audioEncoder.flush();
+
+    try {
+      await audioEncoder.flush();
+    } catch (e) {
+      console.warn("AudioEncoder flush warning:", e);
+      audioEncError = audioEncError || e;
+    }
     audioEncoder.close();
+
+    // Se houve erro grave e nenhum chunk foi gravado, cai no fallback
+    if (audioEncError && audioChunksCount === 0 && wantAudio) {
+      console.warn("AudioEncoder falhou totalmente, caindo para fallback de gravação.");
+      throw new Error("no-offline-codec");
+    }
   }
 
   // ---- 7) finaliza ----

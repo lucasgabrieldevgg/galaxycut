@@ -1,7 +1,6 @@
 // GalaxyCut — diálogo de exportação (vídeo + GIF + WAV + PNG/JPG + SRT)
-// v7.5: Categorias claras (Vídeo, Áudio, Animação GIF e Foto da Cena PNG/JPG),
-// mais formatos de vídeo (MP4, WebM, MOV, MKV), opção de vídeo Mudo (sem áudio),
-// e correção definitiva do áudio na exportação.
+// v7.6: Layout compacto sem rolagem desnecessária, aviso claro sobre abas em segundo plano,
+// corte inteligente de áudio e garantia de áudio sem travamentos.
 "use client";
 
 import { useMemo, useRef, useState } from "react";
@@ -19,8 +18,8 @@ import { deliverExport, askExportDestination, isDesktopBuild } from "@/lib/edito
 import { useT } from "@/lib/editor/i18n";
 import { toast } from "sonner";
 import {
-  Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen, Star, ChevronDown, ChevronUp,
-  Image as ImageIcon, Music4, FileVideo, XCircle, Volume2, VolumeX, Sparkles, Film, Camera, Clock
+  Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen, Star,
+  Image as ImageIcon, Music4, FileVideo, XCircle, Volume2, VolumeX, Film, Camera, Clock, AlertTriangle,
 } from "lucide-react";
 import { clipEnd } from "@/lib/editor/types";
 import { computeEffectiveDuration } from "@/lib/editor/store";
@@ -32,17 +31,13 @@ function fmtDur(d: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** qualidade = MENOR lado da saída. 1080 é o padrão; o resto aparece em "mais opções". */
-const RESOLUTIONS: { id: number; label: string; hintKey: string }[] = [
-  { id: 4320, label: "8K", hintKey: "ex.hint4320" },
-  { id: 2160, label: "4K", hintKey: "ex.hint2160" },
-  { id: 1440, label: "2K", hintKey: "ex.hint1440" },
-  { id: 1080, label: "1080p", hintKey: "ex.hint1080" },
-  { id: 720, label: "720p", hintKey: "ex.hint720" },
-  { id: 480, label: "480p", hintKey: "ex.hint480" },
-  { id: 360, label: "360p", hintKey: "ex.hint360" },
-  { id: 240, label: "240p", hintKey: "ex.hint240" },
+const RESOLUTIONS: { id: number; label: string; hint: string }[] = [
+  { id: 1080, label: "1080p", hint: "Full HD (Padrão)" },
+  { id: 720, label: "720p", hint: "HD Leve" },
+  { id: 2160, label: "4K", hint: "Ultra HD" },
+  { id: 480, label: "480p", hint: "Rápido / SD" },
 ];
+const ALL_RESOLUTIONS = [4320, 2160, 1440, 1080, 720, 480, 360, 240];
 const FPS_OPTIONS = [24, 25, 30, 50, 60];
 
 type ExportCategory = "video" | "audio" | "gif" | "photo";
@@ -66,6 +61,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [progress, setProgress] = useState(0);
   const [progInfo, setProgInfo] = useState<{ frame?: number; frames?: number; etaSec?: number; speed?: number }>({});
   const [result, setResult] = useState<{ blob: Blob; name: string; path?: string | null } | null>(null);
+  const [showMoreRes, setShowMoreRes] = useState(false);
   const cancelRef = useRef<{ cancelled: boolean }>({ cancelled: false });
 
   const videoFormats = useMemo(() => listVideoFormats(), []);
@@ -117,35 +113,29 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
     let ext = "mp4";
     let resTag = `${shortSide}p`;
-
     if (category === "photo") {
       ext = photoFormat;
-      resTag = `Frame_${playhead.toFixed(1)}s`;
+      resTag = `${project.width}x${project.height}`;
     } else if (category === "audio") {
       ext = audioFormat;
-      resTag = "AUDIO";
+      resTag = "audio";
     } else if (category === "gif") {
       ext = "gif";
-      resTag = `${shortSide}p_GIF`;
+      resTag = `${shortSide}p`;
     } else {
-      ext = format;
-      resTag = !includeAudio ? `${shortSide}p_MUTE` : `${shortSide}p`;
+      ext = format === "mov" ? "mov" : format === "mkv" ? "mkv" : format === "webm8" || format === "webm9" ? "webm" : "mp4";
     }
 
-    const name = `GalaxyCut_${ts}_${sanitizeName(project.name)}_${resTag}.${ext}`;
+    const name = `${sanitizeName(project.name)}_${resTag}_${ts}.${ext}`;
 
-    // no APP: pergunta ANTES onde salvar
-    const dest = await askExportDestination(name);
-    if ("canceled" in dest) {
-      toast.info(t("ex.pickCanceled"));
-      return;
-    }
+    const dest = await askExportDestination(name, ext);
+    if (dest.dest === "cancelled") return;
 
+    cancelRef.current.cancelled = false;
     setBusy(true);
     setProgress(0);
     setProgInfo({});
     setResult(null);
-    cancelRef.current = { cancelled: false };
 
     const onProg: ExportProgress = (v, info) => {
       setProgress(v);
@@ -208,41 +198,25 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     toast.success(t("ex.srtDone"));
   }
 
-  const resBtn = (id: number, label: string, hint: string) => (
-    <button
-      key={id}
-      onClick={() => setShortSide(id)}
-      disabled={busy}
-      className={`rounded-md border px-2 py-2 text-xs transition ${
-        shortSide === id ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-      }`}
-    >
-      <span className="block font-semibold">
-        {label} {id === 1080 && <span className="text-[8px] font-normal opacity-70">({t("ex.default")})</span>}
-      </span>
-      <span className="block text-[9px] opacity-70">{hint}</span>
-    </button>
-  );
-
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto border-[#232d3d] bg-[#121722] text-zinc-200">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto border-[#232d3d] bg-[#121722] p-4 text-zinc-200 sm:p-5">
+        <DialogHeader className="pb-1">
+          <DialogTitle className="flex items-center gap-2 text-base">
             <MonitorPlay className="h-4 w-4 text-[var(--gc-accent)]" /> {t("ex.title")}
           </DialogTitle>
-          <DialogDescription className="text-zinc-500">
+          <DialogDescription className="text-[11px] text-zinc-500">
             {t("ex.descSimple")}
           </DialogDescription>
         </DialogHeader>
 
         {/* Abas de Categorias */}
-        <div className="flex rounded-lg border border-[#232d3d] bg-[#0c1017] p-1">
+        <div className="grid grid-cols-4 gap-1 rounded-lg border border-[#232d3d] bg-[#0c1017] p-1">
           <button
             type="button"
             onClick={() => setCategory("video")}
             disabled={busy}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
+            className={`flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
               category === "video" ? "bg-[var(--gc-accent)] text-black shadow-sm" : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
@@ -252,7 +226,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             type="button"
             onClick={() => setCategory("audio")}
             disabled={busy}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
+            className={`flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
               category === "audio" ? "bg-[var(--gc-accent)] text-black shadow-sm" : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
@@ -262,7 +236,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             type="button"
             onClick={() => setCategory("gif")}
             disabled={busy}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
+            className={`flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
               category === "gif" ? "bg-[var(--gc-accent)] text-black shadow-sm" : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
@@ -272,7 +246,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             type="button"
             onClick={() => setCategory("photo")}
             disabled={busy}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
+            className={`flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition ${
               category === "photo" ? "bg-[var(--gc-accent)] text-black shadow-sm" : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
@@ -280,180 +254,178 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           </button>
         </div>
 
-        <div className="space-y-3.5 py-1">
+        <div className="space-y-3 py-1 text-xs">
           {/* CATEGORIA: VÍDEO */}
           {category === "video" && (
             <>
               {/* Duração & Ajuste Inteligente ao Vídeo */}
-              <div className="rounded-lg border border-[#232d3d] bg-[#0e1320] p-3 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 flex items-center gap-1.5 font-medium">
+              <div className="rounded-lg border border-[#232d3d] bg-[#0e1320] p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400 flex items-center gap-1.5 font-medium text-xs">
                     <Clock className="h-3.5 w-3.5 text-emerald-400" />
                     Duração da Exportação:
                   </span>
-                  <span className="font-mono text-emerald-300 font-semibold text-sm">
+                  <span className="font-mono text-emerald-300 font-semibold text-xs">
                     {fmtDur(finalExportDuration)} ({finalExportDuration.toFixed(1)}s)
                   </span>
                 </div>
 
                 {audioHasExtra && (
-                  <div className="pt-2 border-t border-[#1c2430] space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="trim-video-opt" className="text-[11px] text-zinc-300 font-medium cursor-pointer flex items-center gap-2">
-                        <input
-                          id="trim-video-opt"
-                          type="checkbox"
-                          checked={trimToVideo}
-                          onChange={(e) => setTrimToVideo(e.target.checked)}
-                          className="rounded border-[#2a3546] bg-[#121722] text-emerald-500 focus:ring-0 cursor-pointer h-3.5 w-3.5"
-                        />
-                        Cortar no final do último vídeo ({videoDuration.toFixed(1)}s)
-                      </label>
-                      <span className="text-[10px] text-amber-400 font-mono">
-                        {trimToVideo ? "Sem tela preta" : `Trilha até ${totalDuration.toFixed(1)}s`}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-zinc-500 leading-relaxed">
-                      {trimToVideo
-                        ? `A música dura ${fmtDur(totalDuration)}, mas o vídeo termina aos ${fmtDur(videoDuration)}. O vídeo exportado terminará certinho aos ${fmtDur(videoDuration)} evitando tela preta no final.`
-                        : `A exportação continuará até ${fmtDur(totalDuration)} com tela preta enquanto a música toca.`}
-                    </p>
+                  <div className="pt-1.5 border-t border-[#1c2430] flex items-center justify-between">
+                    <label htmlFor="trim-video-opt" className="text-[11px] text-zinc-300 font-medium cursor-pointer flex items-center gap-1.5">
+                      <input
+                        id="trim-video-opt"
+                        type="checkbox"
+                        checked={trimToVideo}
+                        onChange={(e) => setTrimToVideo(e.target.checked)}
+                        className="rounded border-[#2a3546] bg-[#121722] text-emerald-500 focus:ring-0 cursor-pointer h-3.5 w-3.5"
+                      />
+                      Cortar no fim do vídeo ({videoDuration.toFixed(1)}s)
+                    </label>
+                    <span className="text-[10px] text-amber-400 font-mono">
+                      {trimToVideo ? "Sem tela preta" : `Trilha até ${totalDuration.toFixed(1)}s`}
+                    </span>
                   </div>
                 )}
               </div>
 
-              {/* Formato de Vídeo */}
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.format")}</p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {videoFormats.map((f) => (
+              {/* Formato e Áudio (Lado a Lado) */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="mb-1 text-[11px] font-medium text-zinc-400">{t("ex.format")}</p>
+                  <div className="grid grid-cols-3 gap-1">
+                    {videoFormats.slice(0, 3).map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setFormat(f.id)}
+                        disabled={busy}
+                        className={`rounded-md border p-1.5 text-center text-[11px] transition ${
+                          format === f.id
+                            ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                            : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                        }`}
+                      >
+                        {f.label.split(" ")[0]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[11px] font-medium text-zinc-400">{t("ex.audioTrack")}</p>
+                  <div className="grid grid-cols-2 gap-1">
                     <button
-                      key={f.id}
-                      onClick={() => setFormat(f.id)}
+                      type="button"
+                      onClick={() => setIncludeAudio(true)}
                       disabled={busy}
-                      title={f.hint}
-                      className={`flex flex-col items-center justify-center rounded-md border p-2 text-center text-xs transition ${
-                        format === f.id
+                      className={`flex items-center justify-center gap-1 rounded-md border p-1.5 text-[11px] transition ${
+                        includeAudio
                           ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
                           : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                       }`}
                     >
-                      <span className="flex items-center gap-1">
-                        <FileVideo className="h-3.5 w-3.5" /> {f.label}
-                      </span>
+                      <Volume2 className="h-3 w-3" /> Com som
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => setIncludeAudio(false)}
+                      disabled={busy}
+                      className={`flex items-center justify-center gap-1 rounded-md border p-1.5 text-[11px] transition ${
+                        !includeAudio
+                          ? "border-amber-400 bg-amber-400/10 text-amber-300 font-semibold"
+                          : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                      }`}
+                    >
+                      <VolumeX className="h-3 w-3" /> Mudo
+                    </button>
+                  </div>
                 </div>
-                <p className="mt-1 text-[10px] text-zinc-500">
-                  {videoFormats.find((f) => f.id === format)?.hint}
-                </p>
-              </div>
-
-              {/* Opção de Áudio no Vídeo (Novo!) */}
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.audioTrack")}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIncludeAudio(true)}
-                    disabled={busy}
-                    className={`flex items-center justify-center gap-2 rounded-md border p-2 text-xs transition ${
-                      includeAudio
-                        ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
-                        : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-                    }`}
-                  >
-                    <Volume2 className="h-4 w-4" /> {t("ex.audioInclude")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIncludeAudio(false)}
-                    disabled={busy}
-                    className={`flex items-center justify-center gap-2 rounded-md border p-2 text-xs transition ${
-                      !includeAudio
-                        ? "border-amber-400 bg-amber-400/10 text-amber-300 font-semibold"
-                        : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-                    }`}
-                  >
-                    <VolumeX className="h-4 w-4" /> {t("ex.audioMute")}
-                  </button>
-                </div>
-                {!includeAudio && (
-                  <p className="mt-1 text-[10px] text-amber-400/80">
-                    {t("ex.audioMuteNote")}
-                  </p>
-                )}
               </div>
 
               {/* Resolução */}
               <div>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <p className="text-xs font-medium text-zinc-400">{t("ex.resolution")}</p>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-[11px] font-medium text-zinc-400">{t("ex.resolution")}</p>
                   <span className="text-[10px] text-zinc-500">
-                    {W}×{H} ({project.width >= project.height ? t("ex.horizontal") : project.width === project.height ? t("ex.square") : t("ex.vertical")})
+                    {W}×{H} ({project.width >= project.height ? "Horizontal" : project.width === project.height ? "Quadrado" : "Vertical"})
                   </span>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
-                  {RESOLUTIONS.map((r) => resBtn(r.id, r.label, t(r.hintKey)))}
-                </div>
-                {shortSide >= 2160 && (
-                  <p className="mt-1 text-[10px] text-amber-400/80">
-                    {t("ex.hugeWarn", { k: shortSide === 4320 ? "8K" : "4K" })}
-                  </p>
-                )}
-              </div>
-
-              {/* Taxa de Quadros (FPS) */}
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.fps")}</p>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {FPS_OPTIONS.map((f) => (
+                  {RESOLUTIONS.map((r) => (
                     <button
-                      key={f}
-                      onClick={() => setFps(f)}
+                      key={r.id}
+                      type="button"
+                      onClick={() => setShortSide(r.id)}
                       disabled={busy}
-                      className={`rounded-md border px-2 py-1.5 text-xs transition ${
-                        fps === f ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                      className={`rounded-md border px-1.5 py-1.5 text-center text-xs transition ${
+                        shortSide === r.id
+                          ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                          : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
                       }`}
                     >
-                      {f} fps {f === 30 && <span className="block text-[8px] opacity-70">({t("ex.default")})</span>}
+                      <span className="block font-semibold leading-tight">{r.label}</span>
+                      <span className="block text-[8.5px] opacity-70 leading-tight">{r.hint}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Qualidade (Bitrate) */}
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-zinc-400">{t("ex.quality")}</p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(["baixa", "media", "alta"] as const).map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => setQuality(q)}
-                      disabled={busy}
-                      className={`rounded-md border px-2 py-1.5 text-xs capitalize transition ${
-                        quality === q ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold" : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-                      }`}
-                    >
-                      {q === "media" ? t("ex.qmid") : q === "alta" ? t("ex.qhigh") : t("ex.qlow")}
-                    </button>
-                  ))}
+              {/* FPS & Qualidade (Lado a Lado) */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="mb-1 text-[11px] font-medium text-zinc-400">{t("ex.fps")}</p>
+                  <div className="grid grid-cols-5 gap-1">
+                    {FPS_OPTIONS.map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setFps(f)}
+                        disabled={busy}
+                        className={`rounded-md border py-1 text-center text-[11px] transition ${
+                          fps === f
+                            ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                            : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <p className="mt-1 text-[10px] text-zinc-600">
-                  {t("ex.qualityNote", { q: quality === "alta" ? t("ex.qhigh") : quality === "media" ? t("ex.qmid") : t("ex.qlow"), mbps: (bitrate / 1_000_000).toFixed(1) })}
-                </p>
+
+                <div>
+                  <p className="mb-1 text-[11px] font-medium text-zinc-400">{t("ex.quality")}</p>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(["baixa", "media", "alta"] as const).map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        onClick={() => setQuality(q)}
+                        disabled={busy}
+                        className={`rounded-md border py-1 text-center text-[11px] capitalize transition ${
+                          quality === q
+                            ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                            : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                        }`}
+                      >
+                        {q === "alta" ? "Alta" : q === "media" ? "Média" : "Baixa"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </>
           )}
 
           {/* CATEGORIA: ÁUDIO APENAS */}
           {category === "audio" && (
-            <div className="space-y-3 rounded-lg border border-[#232d3d] bg-[#0e1320] p-3.5">
+            <div className="space-y-2.5 rounded-lg border border-[#232d3d] bg-[#0e1320] p-3">
               <div className="flex items-center gap-2 text-zinc-200">
-                <Music4 className="h-5 w-5 text-amber-400" />
+                <Music4 className="h-4 w-4 text-amber-400" />
                 <div>
                   <h4 className="text-xs font-semibold">{t("ex.audioTitle")}</h4>
-                  <p className="text-[11px] text-zinc-400">{t("ex.wavNote")}</p>
+                  <p className="text-[10px] text-zinc-400">{t("ex.wavNote")}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -465,8 +437,8 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                     audioFormat === "wav" ? "border-amber-400 bg-amber-400/10 text-amber-300 font-semibold" : "border-[#2a3546] text-zinc-400"
                   }`}
                 >
-                  <span className="block font-semibold">WAV (48kHz 16-bit)</span>
-                  <span className="text-[9px] text-zinc-500">{t("ex.audioLossless")}</span>
+                  <span className="block font-semibold">WAV (Lossless)</span>
+                  <span className="text-[9px] text-zinc-500">48kHz 16-bit Master</span>
                 </button>
                 <button
                   type="button"
@@ -477,7 +449,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   }`}
                 >
                   <span className="block font-semibold">MP3 / AAC</span>
-                  <span className="text-[9px] text-zinc-500">{t("ex.audioCompressed")}</span>
+                  <span className="text-[9px] text-zinc-500">Áudio Compactado</span>
                 </button>
               </div>
             </div>
@@ -485,92 +457,104 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
           {/* CATEGORIA: GIF ANIMADO */}
           {category === "gif" && (
-            <div className="space-y-3 rounded-lg border border-[#232d3d] bg-[#0e1320] p-3.5">
+            <div className="space-y-2.5 rounded-lg border border-[#232d3d] bg-[#0e1320] p-3">
               <div className="flex items-center gap-2 text-zinc-200">
-                <ImageIcon className="h-5 w-5 text-teal-400" />
+                <ImageIcon className="h-4 w-4 text-teal-400" />
                 <div>
                   <h4 className="text-xs font-semibold">{t("ex.gifTitle")}</h4>
-                  <p className="text-[11px] text-zinc-400">{t("ex.gifNote")}</p>
+                  <p className="text-[10px] text-zinc-400">{t("ex.gifNote")}</p>
                 </div>
               </div>
-              <div>
-                <p className="mb-1 text-xs text-zinc-400">{t("ex.resolution")}</p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[240, 360, 480].map((id) => resBtn(id, `${id}p`, ""))}
-                </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[240, 360, 480].map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setShortSide(id)}
+                    disabled={busy}
+                    className={`rounded-md border p-2 text-xs transition ${
+                      shortSide === id ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold" : "border-[#2a3546] text-zinc-400"
+                    }`}
+                  >
+                    {id}p
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
-          {/* CATEGORIA: FOTO DA CENA (PNG/JPG) */}
+          {/* CATEGORIA: FOTO DA CENA */}
           {category === "photo" && (
-            <div className="space-y-3 rounded-lg border border-[#232d3d] bg-[#0e1320] p-3.5">
-              <div className="flex items-start gap-2.5 text-zinc-200">
-                <Camera className="h-5 w-5 shrink-0 text-[var(--gc-accent)]" />
+            <div className="space-y-2.5 rounded-lg border border-[#232d3d] bg-[#0e1320] p-3">
+              <div className="flex items-start gap-2 text-zinc-200">
+                <Camera className="h-4 w-4 shrink-0 text-[var(--gc-accent)]" />
                 <div>
                   <h4 className="text-xs font-semibold">{t("ex.photoTitle")}</h4>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-400">
-                    {t("ex.photoDesc", { s: playhead.toFixed(2), w: project.width, h: project.height })}
+                  <p className="text-[10px] text-zinc-400">
+                    Captura o quadro atual ({playhead.toFixed(2)}s) na resolução nativa do projeto ({project.width}×{project.height}).
                   </p>
                 </div>
               </div>
 
-              <div>
-                <p className="mb-1 text-xs text-zinc-400">{t("ex.photoFormat")}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPhotoFormat("png")}
-                    disabled={busy}
-                    className={`rounded-md border p-2 text-xs transition ${
-                      photoFormat === "png"
-                        ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
-                        : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-                    }`}
-                  >
-                    <span className="block font-semibold">PNG (Máxima Fidelidade)</span>
-                    <span className="text-[9px] text-zinc-500">Sem perdas · Ideal para miniaturas</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPhotoFormat("jpg")}
-                    disabled={busy}
-                    className={`rounded-md border p-2 text-xs transition ${
-                      photoFormat === "jpg"
-                        ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
-                        : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-                    }`}
-                  >
-                    <span className="block font-semibold">JPG (Foto Compactada)</span>
-                    <span className="text-[9px] text-zinc-500">Arquivo leve e rápido</span>
-                  </button>
-                </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPhotoFormat("png")}
+                  disabled={busy}
+                  className={`rounded-md border p-2 text-xs transition ${
+                    photoFormat === "png"
+                      ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                      : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                  }`}
+                >
+                  <span className="block font-semibold">PNG (Sem perdas)</span>
+                  <span className="text-[9px] text-zinc-500">Máxima nitidez</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhotoFormat("jpg")}
+                  disabled={busy}
+                  className={`rounded-md border p-2 text-xs transition ${
+                    photoFormat === "jpg"
+                      ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                      : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
+                  }`}
+                >
+                  <span className="block font-semibold">JPG (Compacto)</span>
+                  <span className="text-[9px] text-zinc-500">Arquivo leve</span>
+                </button>
               </div>
             </div>
           )}
 
+          {/* Aviso sobre Aba em Segundo Plano */}
+          <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2 text-[10.5px] leading-relaxed text-amber-300/90">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400 mt-0.5" />
+            <span>
+              <strong>Dica:</strong> Mantenha esta aba aberta durante a exportação. Os navegadores pausam ou reduzem o processamento de quadros se você alternar de aba.
+            </span>
+          </div>
+
           {/* Barra de Progresso */}
           {busy && (
-            <div className="space-y-2 rounded-lg border border[var(--gc-accent-30)] bg[var(--gc-accent-5)] p-3">
+            <div className="space-y-2 rounded-lg border border[var(--gc-accent-30)] bg[var(--gc-accent-5)] p-2.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-zinc-300">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--gc-accent)]" />{" "}
-                  {category === "gif" ? t("ex.gifStage") : category === "audio" ? t("ex.wavStage") : category === "photo" ? t("ex.photoStage") : t("ex.rendering")}
+                  {category === "gif" ? "Renderizando GIF..." : category === "audio" ? "Processando áudio..." : category === "photo" ? "Capturando foto..." : "Renderizando vídeo..."}
                 </span>
-                <span className="font-mono text-[var(--gc-accent)]">{Math.round(progress * 100)}%</span>
+                <span className="font-mono text-[var(--gc-accent)] font-semibold">{Math.round(progress * 100)}%</span>
               </div>
               <Progress value={progress * 100} className="h-1.5 bg-[#0a0d14]" />
               <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-500">
                 <span>
                   {isVideo && progInfo.frames
-                    ? t("ex.frameOf", { i: progInfo.frame ?? 0, n: progInfo.frames })
-                    : category === "gif" || category === "audio"
-                      ? t("ex.offlineNote")
-                      : t("ex.preparing")}
+                    ? `Quadro ${progInfo.frame ?? 0} de ${progInfo.frames}`
+                    : "Processando..."}
                 </span>
                 <span className="flex shrink-0 items-center gap-2 tabular-nums">
                   {progInfo.speed != null && progInfo.speed > 0 && (
-                    <span className="text-[var(--gc-accent)]">{progInfo.speed.toFixed(1)}× {t("ex.realtime")}</span>
+                    <span className="text-[var(--gc-accent)]">{progInfo.speed.toFixed(1)}× tempo real</span>
                   )}
                   {progInfo.etaSec != null && progInfo.etaSec > 1 && <span>~{fmtEta(progInfo.etaSec)}</span>}
                 </span>
@@ -579,12 +563,12 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 w-full gap-1.5 border-red-500/40 bg-transparent text-[11px] text-red-400 hover:bg-red-500/10"
+                  className="h-6 w-full gap-1 border-red-500/40 bg-transparent text-[10.5px] text-red-400 hover:bg-red-500/10"
                   onClick={() => {
                     cancelRef.current.cancelled = true;
                   }}
                 >
-                  <XCircle className="h-3.5 w-3.5" /> {t("ex.cancelExport")}
+                  <XCircle className="h-3 w-3" /> Cancelar Exportação
                 </Button>
               )}
             </div>
@@ -592,60 +576,48 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
           {/* Resultado */}
           {result && (
-            <div className="space-y-2 rounded-lg border border[var(--gc-accent-40)] bg[var(--gc-accent-10)] p-3">
+            <div className="space-y-2 rounded-lg border border[var(--gc-accent-40)] bg[var(--gc-accent-10)] p-2.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-2 text-xs text-zinc-200">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--gc-accent)]" /> <span className="truncate">{result.path ? result.name : t("ex.ready", { name: result.name })}</span>
+                <span className="flex min-w-0 items-center gap-1.5 text-xs text-zinc-200">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--gc-accent)]" />
+                  <span className="truncate">{result.name}</span>
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 shrink-0 gap-1 border[var(--gc-accent-40)] bg-transparent text-[var(--gc-accent)] hover:bg[var(--gc-accent-10)]"
+                  className="h-6 shrink-0 gap-1 border[var(--gc-accent-40)] bg-transparent text-[11px] text-[var(--gc-accent)] hover:bg[var(--gc-accent-10)]"
                   onClick={() => {
                     void deliverExport(result.blob, result.name);
                   }}
                 >
                   {result.path ? <FolderOpen className="h-3 w-3" /> : <Download className="h-3 w-3" />}
-                  {result.path ? t("ex.anotherCopy") : t("ex.downloadAgain")}
+                  {result.path ? "Abrir" : "Baixar de novo"}
                 </Button>
               </div>
-              <a
-                href="https://github.com/lucasgabrieldevgg/galaxycut"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 text-[10px] text-amber-300/90 transition hover:text-amber-200"
-              >
-                <Star className="h-3 w-3 fill-amber-300 text-amber-300" /> {t("ex.starAsk")}
-              </a>
             </div>
-          )}
-
-          {!supported && (
-            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] text-amber-300">
-              {t("ex.unsupported")}
-            </p>
           )}
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 pt-1">
           {category === "video" && (
-            <Button variant="outline" onClick={downloadSrt} disabled={busy} className="gap-1.5 border-[#2a3546] bg-transparent text-zinc-300 hover:bg-[#1c2430]">
-              <FileText className="h-4 w-4" /> {t("ex.srt")}
+            <Button variant="outline" size="sm" onClick={downloadSrt} disabled={busy} className="gap-1.5 border-[#2a3546] bg-transparent text-xs text-zinc-300 hover:bg-[#1c2430]">
+              <FileText className="h-3.5 w-3.5" /> Baixar SRT
             </Button>
           )}
           <Button
+            size="sm"
             onClick={() => void run()}
             disabled={busy || (isVideo && !supported)}
-            className="gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
+            className="gap-1.5 bg-[var(--gc-accent)] font-semibold text-xs text-black hover:bg-[var(--gc-accent-hover)]"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             {busy
-              ? t("ex.exporting")
+              ? "Exportando..."
               : category === "photo"
-                ? t("ex.captureBtn")
+                ? "Capturar Foto"
                 : category === "audio"
-                  ? t("ex.exportAudioBtn")
-                  : t("ex.exportBtn")}
+                  ? "Exportar Áudio"
+                  : "Exportar Vídeo"}
           </Button>
         </DialogFooter>
       </DialogContent>
