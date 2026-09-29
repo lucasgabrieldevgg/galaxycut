@@ -290,6 +290,7 @@ function GeneralSwitches() {
   const t = useT();
   const snapEnabled = useSettings((s) => s.snapEnabled);
   const showWaveOnVideo = useSettings((s) => s.showWaveOnVideo);
+  const resetInspectorOnSelect = useSettings((s) => s.resetInspectorOnSelect);
   const set = useSettings((s) => s.set);
   return (
     <div className="space-y-3 rounded-lg border border-[#2a3546] bg-[#0e1320] p-3">
@@ -306,6 +307,13 @@ function GeneralSwitches() {
           <p className="text-[10px] text-zinc-500">{t("st.waveHint")}</p>
         </div>
         <Switch checked={showWaveOnVideo} onCheckedChange={(v) => set({ showWaveOnVideo: v })} className="data-[state=checked]:bg-[var(--gc-accent)]" />
+      </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[11px] font-medium text-zinc-300">Resetar rolagem do painel</p>
+          <p className="text-[10px] text-zinc-500">Volta o painel de propriedades pro topo ao selecionar outro clipe</p>
+        </div>
+        <Switch checked={resetInspectorOnSelect} onCheckedChange={(v) => set({ resetInspectorOnSelect: v })} className="data-[state=checked]:bg-[var(--gc-accent)]" />
       </div>
     </div>
   );

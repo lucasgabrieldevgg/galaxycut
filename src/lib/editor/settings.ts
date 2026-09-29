@@ -35,6 +35,8 @@ export interface AppSettings {
   onboarded: boolean;
   /** mover na prévia com guias magnéticas (centro/bordas)? ligado por padrão */
   magnetMove: boolean;
+  /** resetar barra de rolagem do painel de propriedades pro topo ao selecionar outro clipe? ligado por padrão */
+  resetInspectorOnSelect: boolean;
   set: (patch: Partial<AppSettings>) => void;
 }
 
@@ -62,6 +64,7 @@ function load(): Partial<AppSettings> {
       accent: parsed.accent ?? "galaxy",
       onboarded: parsed.onboarded ?? false,
       magnetMove: parsed.magnetMove ?? true,
+      resetInspectorOnSelect: parsed.resetInspectorOnSelect ?? true,
     };
   } catch {
     return {};
@@ -86,6 +89,7 @@ function persist(s: AppSettings) {
         accent: s.accent,
         onboarded: s.onboarded,
         magnetMove: s.magnetMove,
+        resetInspectorOnSelect: s.resetInspectorOnSelect,
       })
     );
   } catch {
@@ -109,6 +113,7 @@ export const useSettings = create<AppSettings>((set, get) => ({
   accent: "galaxy",
   onboarded: false,
   magnetMove: true,
+  resetInspectorOnSelect: true,
   ...boot,
   set: (patch) => {
     set(patch as AppSettings);

@@ -23,10 +23,21 @@ import { EffectsInspector } from "./EffectsInspector";
 
 export function Inspector() {
   const t = useT();
+  const selectedId = useProject((s) => s.selectedId);
   const clip = useProject((s) => s.clips.find((c) => c.id === s.selectedId) ?? null);
   const duration = usePlayback((s) => s.duration);
   const project = useProject((s) => s.project);
   const clipCount = useProject((s) => s.clips.length);
+  const resetInspectorOnSelect = useSettings((s) => s.resetInspectorOnSelect ?? true);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Sempre que mudar a seleção de clipe, reseta a rolagem pro topo
+  useEffect(() => {
+    if (resetInspectorOnSelect && scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [selectedId, resetInspectorOnSelect]);
 
   return (
     <div className="flex h-full flex-col bg-[#0c1017]">
@@ -35,7 +46,7 @@ export function Inspector() {
           {clip ? t("ins.props") : t("ins.project")}
         </h2>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 timeline-scroll">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-3 timeline-scroll">
         {!clip ? (
           <div className="space-y-3">
             <InfoRow label={t("ins.format")}>{project.width}×{project.height}</InfoRow>
