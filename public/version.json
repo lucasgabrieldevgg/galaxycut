@@ -1,7 +1,38 @@
 {
   "name": "GalaxyCut",
-  "version": "7.6.0",
+  "version": "7.7.0",
   "changelog": [
+    {
+      "version": "7.7.0",
+      "date": "2026-09-30",
+      "items": [
+        "AUTO-ORGANIZE STOCK MEDIA INTO CATEGORY FOLDERS: Downloading any item from the Stock Search tab (music, sound effects, stock videos, photos, stickers) automatically creates and assigns it to its dedicated category folder (e.g. Músicas, Efeitos Sonoros, Vídeos de Estoque) and instantly navigates the Media tab view to that folder",
+        "QUICK SOUND EFFECTS & SMART MUSIC FILTERS: Quick 1-click sound effect presets (Whoosh, Boom, Ding, Laughter, Applause, Glitch, Pop, Laser) and automatic genre + duration filter combinations, plus a bottom notice to easily check 'Todas' for more music",
+        "SMART EXPORT DURATION & FLAWLESS STEREO AUDIO: Intelligent duration trimming to end exactly at the last video frame (preventing trailing black screens when audio extends past video) with robust 1024-sample interleaved WebCodecs AAC audio encoding",
+        "COMPACT EXPORT DIALOG: Redesigned export interface fitting comfortably on any display without awkward scrolling, plus background tab throttling guidance",
+        "SILENCE DETECTION DEFAULT: 'Excluir só o áudio' is now selected by default as option #1 in the silence detector",
+        "AUTOMATIC INSPECTOR SCROLL RESET: Selecting a different clip automatically resets the inspector properties panel scroll position back to the top (with a setting toggle in Settings)",
+        "APPIMAGE IN-PLACE UPDATER & TERMINAL UPDATE COMMAND: Seamless desktop AppImage updates without uninstalling previous versions, preserving all projects and configurations in user storage, with 1-click auto-updater and direct 1-line terminal commands"
+      ],
+      "items_pt": [
+        "ORGANIZAÇÃO AUTOMÁTICA EM PASTAS NA BUSCA: Ao adicionar qualquer item da aba Busca (músicas, efeitos sonoros, vídeos de estoque, fotos, figurinhas), o editor cria a pasta da categoria automaticamente e já abre a aba Mídia dentro dela",
+        "EFEITOS SONOROS RÁPIDOS & FILTROS DE MÚSICA: Barra de botões com sons clássicos de 1-clique (Transição Whoosh, Impacto Boom, Sino Ding, Risada, Aplauso, Glitch, Pop, Laser) e busca combinada de Gênero + Duração de música com aviso 'Marcar em Todas'",
+        "DURAÇÃO INTELIGENTE & ÁUDIO PERFEITO NA EXPORTAÇÃO: Corte automático no final do último clipe de vídeo (evitando telas pretas no final quando a música for mais longa) e codificação estéreo AAC intercalada em 1024 amostras sem travamentos ou mudez",
+        "PAINEL DE EXPORTAÇÃO COMPACTO: Layout responsivo e compacto sem barras de rolagem desnecessárias, com aviso sobre renderização em abas em segundo plano",
+        "DETECTOR DE SILÊNCIO: 'Excluir só o áudio' agora é a opção nº 1 e já vem marcada por padrão",
+        "RESET AUTOMÁTICO DO INSPETOR: Ao clicar em outro clipe na timeline, o painel de propriedades sobe de volta pro topo automaticamente (com opção de manter rolagem nas Configurações)",
+        "ATUALIZAÇÃO DO APPIMAGE SEM DESINSTALAR: Atualização contínua do aplicativo desktop mantendo todos os projetos e configurações salvos intactos, com auto-atualizador e comando direto de 1 linha de terminal"
+      ],
+      "items_es": [
+        "ORGANIZACIÓN AUTOMÁTICA EN CARPETAS: Al añadir elementos de la búsqueda (músicas, efectos de sonido, vídeos, fotos, stickers), se crea automáticamente la carpeta de su categoría y se navega a ella",
+        "EFECTOS DE SONIDO RÁPIDOS Y FILTROS: Botones de 1-clic con efectos de sonido clásicos (Whoosh, Boom, Ding, Risas, Aplausos, Glitch, Pop, Láser) y búsqueda combinada de Género + Duración",
+        "DURACIÓN INTELIGENTE Y AUDIO PERFECTO: Corte automático al final del último clip de vídeo (evitando pantallas negras) y codificación estéreo AAC sin fallos ni silencios",
+        "PANEL DE EXPORTACIÓN COMPACTO: Interfaz compacta sin desplazamiento innecesario con aviso sobre pestañas en segundo plano",
+        "DETECTOR DE SILENCIO: 'Eliminar sólo el audio' es ahora la opción nº 1 por defecto",
+        "RESET DEL INSPECTOR: Al seleccionar otro clip, el panel de propiedades vuelve arriba automáticamente",
+        "ACTUALIZACIÓN DE APPIMAGE SIN DESINSTALAR: Actualizaciones directas en Linux manteniendo proyectos y configuración intactos con comando de 1 línea"
+      ]
+    },
     {
       "version": "7.6.0",
       "date": "2026-09-28",
@@ -355,5 +386,5 @@
       ]
     }
   ],
-  "date": "2026-09-29T03:15:08.897Z"
+  "date": "2026-09-30T21:23:33.695Z"
 }

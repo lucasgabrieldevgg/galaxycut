@@ -120,6 +120,26 @@ export function UpdateDialog() {
           </p>
         )}
 
+        {/* Dica de atualização sem desinstalar + comando de terminal */}
+        <div className="rounded-lg border border-[#232d3d] bg-[#0c1017] p-2.5 space-y-1.5 text-[11px]">
+          <p className="text-zinc-400 leading-relaxed">
+            💡 <strong>Atualização sem desinstalar:</strong> Seus projetos e configurações salvos continuam intactos.
+          </p>
+          <div className="flex items-center justify-between gap-2 rounded border border-[#1e293b] bg-[#090d14] px-2 py-1 font-mono text-[10px] text-zinc-300">
+            <span className="truncate">wget -qO- https://raw.githubusercontent.com/lucasgabrieldevgg/galaxycut/main/scripts/update.sh | bash</span>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText("wget -qO- https://raw.githubusercontent.com/lucasgabrieldevgg/galaxycut/main/scripts/update.sh | bash");
+                toast.success("Comando de terminal copiado!");
+              }}
+              className="shrink-0 text-[var(--gc-accent)] hover:underline font-sans text-[10px]"
+            >
+              Copiar
+            </button>
+          </div>
+        </div>
+
         <DialogFooter className="gap-2">
           <Button
             variant="ghost"
