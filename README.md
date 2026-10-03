@@ -1,5 +1,7 @@
 # GalaxyCut
 
+[![CI](https://github.com/lucasgabrieldevgg/galaxycut/actions/workflows/ci.yml/badge.svg)](https://github.com/lucasgabrieldevgg/galaxycut/actions/workflows/ci.yml)
+
 <p align="center">
   <img src="docs/banner.png" alt="GalaxyCut — free video editor, right in your browser" width="720" />
 </p>
@@ -99,3 +101,7 @@ That's it — the token lives only on the server side.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## 🎨 Identity — EDITING SUITE
+
+**Archivo** for the UI (industrial, compact — the face of an NLE) and **Martian Mono** for timecodes and tabular numbers. No template-default fonts (Geist/Inter). The accent color stays user-selectable in settings — that's a feature, not noise.

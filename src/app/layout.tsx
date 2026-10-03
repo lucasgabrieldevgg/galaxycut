@@ -1,16 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Archivo, Martian_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Identidade SALA DE MONTAGEM: Archivo (UI de editor, industrial e compacta)
+// + Martian Mono (timecodes e números tabulares). Zero fonte-default de template.
+const archivo = Archivo({
+  variable: "--font-archivo",
   subsets: ["latin"],
 });
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const martian = Martian_Mono({
+  variable: "--font-martian",
   subsets: ["latin"],
+  weight: ["400", "500", "700"],
 });
 
 const DESCRIPTION =
@@ -54,7 +56,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className="dark" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#080b11] text-zinc-200`}
+        className={`${archivo.variable} ${martian.variable} antialiased bg-[#080b11] text-zinc-200`}
       >
         {/* fontes de legenda/thumbnail (Anton, Bangers, Luckiest Guy, Bebas Neue) — React 19 sobe pro <head> */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

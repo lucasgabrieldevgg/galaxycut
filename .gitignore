@@ -51,3 +51,7 @@ next-env.d.ts
 .DS_Store
 *.pem
 .vercel
+
+# ids internos do vercel link (regenerados localmente)
+.gc-org-id
+.gc-project-id
