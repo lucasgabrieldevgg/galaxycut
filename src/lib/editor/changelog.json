@@ -1,6 +1,22 @@
 {
-  "version": "7.7.0",
+  "version": "7.7.1",
   "entries": [
+    {
+      "version": "7.7.1",
+      "date": "2026-10-03",
+      "items": [
+        "NEW EDITING-SUITE IDENTITY: Archivo for the interface and Martian Mono for timecodes — no more template-default system font binding (the UI font now actually applies)",
+        "INTERNAL HYGIENE: Vercel link ids removed from the repository and a repository hygiene step added to CI"
+      ],
+      "items_pt": [
+        "IDENTIDADE SALA DE MONTAGEM: Archivo na interface e Martian Mono nos timecodes — a fonte do app agora liga de verdade (antes caía na fonte do sistema)",
+        "HIGIENE INTERNA: ids internos do vercel link removidos do repositório e passo de higiene adicionado ao CI"
+      ],
+      "items_es": [
+        "IDENTIDAD SALA DE MONTAJE: Archivo en la interfaz y Martian Mono en los timecodes — la fuente del app ahora se aplica de verdad",
+        "HIGIENE INTERNA: ids internos de vercel link eliminados del repositorio y paso de higiene añadido al CI"
+      ]
+    },
     {
       "version": "7.7.0",
       "date": "2026-09-30",
