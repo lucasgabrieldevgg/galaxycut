@@ -14,6 +14,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { useProject, usePlayback } from "@/lib/editor/store";
+import { engine } from "@/lib/editor/playback";
 import { registry } from "@/lib/editor/media";
 import { isDesktopBuild } from "@/lib/editor/desktop";
 import { useSubtitleJob } from "@/lib/editor/subtitles";

@@ -196,8 +196,7 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
 
   const jumpToKf = (time: number) => {
     if (!selected) return;
-    usePlayback.getState().seek(selected.start + time);
-    engine.markDirty();
+    engine.seek(selected.start + time);
   };
 
   const toggleKeyframeAtPlayhead = () => {

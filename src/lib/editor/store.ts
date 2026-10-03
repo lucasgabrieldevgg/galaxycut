@@ -4,6 +4,9 @@
 import { create } from "zustand";
 import {
   Clip,
+  ClipAnimation,
+  ClipEffect,
+  Keyframe,
   MediaClipboard,
   MediaFolder,
   MediaMeta,

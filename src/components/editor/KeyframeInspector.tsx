@@ -30,8 +30,7 @@ export function KeyframeInspector({ clip }: { clip: Clip }) {
   const nextKf = kfs.filter((k) => k.time > tRel + 0.08)[0];
 
   const jumpTo = (time: number) => {
-    usePlayback.getState().seek(clip.start + time);
-    engine.markDirty();
+    engine.seek(clip.start + time);
   };
 
   const toggleKeyframeAtPlayhead = () => {

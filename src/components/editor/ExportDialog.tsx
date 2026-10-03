@@ -128,8 +128,8 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
     const name = `${sanitizeName(project.name)}_${resTag}_${ts}.${ext}`;
 
-    const dest = await askExportDestination(name, ext);
-    if (dest.dest === "cancelled") return;
+    const dest = await askExportDestination(name);
+    if ("canceled" in dest && dest.canceled) return;
 
     cancelRef.current.cancelled = false;
     setBusy(true);
@@ -167,7 +167,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         stage = out.ext.toUpperCase();
       }
 
-      const path = await deliverExport(out.blob, name, dest.dest === "desktop" ? dest.path || undefined : undefined);
+      const path = await deliverExport(out.blob, name, "path" in dest ? dest.path || undefined : undefined);
       setResult({ blob: out.blob, name, path });
       toast.success(
         isDesktopBuild()
