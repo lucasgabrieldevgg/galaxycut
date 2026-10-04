@@ -74,7 +74,7 @@ interface ProjectState extends Snapshot {
   dropMediaAt: (mediaId: string, trackId: string, start: number) => { clip: Clip; redirected: boolean } | null;
   /** depois de arrastar livre: empurra os clipes que ficaram por baixo (inserção estilo CapCut). Devolve quantos empurrou. */
   settleOverlaps: (clipId: string) => number;
-  addTextClip: (at: number, preset?: Partial<ReturnType<typeof defaultTextProps>>) => void;
+  addTextClip: (at?: number | Partial<TextProps> | string, preset?: Partial<TextProps>) => Clip | void;
   updateClip: (id: string, patch: Partial<Clip>, opts?: { history?: boolean }) => void;
   moveClipLive: (id: string, start: number, trackId: string) => void;
   /** apaga o clipe. ripple=true puxa os da frente pra fechar o espaço junto com o de trás */
@@ -480,24 +480,60 @@ export const useProject = create<ProjectState>((set, get) => ({
     }
     return pushed;
   },
-  addTextClip: (at, preset) => {
+  addTextClip: (at?: number | Partial<TextProps> | string, preset?: Partial<TextProps>) => {
     const s = get();
-    const track = s.tracks.find((t) => t.kind === "text");
-    if (!track) return;
-    const onTrack = s.clips.filter((c) => c.trackId === track.id);
-    const start = onTrack.reduce((acc, c) => Math.max(acc, clipEnd(c)), Math.max(0, at));
-    const text = { ...defaultTextProps(), ...(preset ?? {}), content: preset?.content ?? defaultTextProps().content };
+    let track = s.tracks.find((t) => t.kind === "text");
+    if (!track) {
+      track = { id: "T-texto", kind: "text", name: "Texto", muted: false, hidden: false };
+      set((st) => ({ tracks: [track!, ...st.tracks] }));
+    }
+
+    let pos = 0;
+    let customProps: Partial<TextProps> = {};
+
+    if (typeof at === "number" && !isNaN(at)) {
+      pos = Math.max(0, at);
+      if (preset && typeof preset === "object") customProps = preset;
+    } else if (typeof at === "string") {
+      customProps = { content: at };
+      const pb = usePlayback.getState().playhead;
+      pos = typeof pb === "number" && !isNaN(pb) ? pb : 0;
+    } else if (typeof at === "object" && at !== null) {
+      customProps = at;
+      const pb = usePlayback.getState().playhead;
+      pos = typeof pb === "number" && !isNaN(pb) ? pb : 0;
+    } else {
+      const pb = usePlayback.getState().playhead;
+      pos = typeof pb === "number" && !isNaN(pb) ? pb : 0;
+    }
+
+    const base = defaultTextProps();
+    const text: TextProps = {
+      ...base,
+      ...customProps,
+      content: customProps.content || "Seu Texto Aqui",
+    };
+
     const clip = makeClip({
       kind: "text",
       trackId: track.id,
-      start,
-      duration: 4,
+      start: pos,
+      duration: 3,
       inPoint: 0,
-      outPoint: 4,
+      outPoint: 3,
+      x: 0,
+      y: 0,
       text,
     });
+
     get().pushHistory();
-    set((st) => ({ clips: [...st.clips, clip], selectedId: clip.id, selectedIds: [clip.id] }));
+    set((st) => ({
+      clips: [...st.clips, clip],
+      selectedId: clip.id,
+      selectedIds: [clip.id],
+    }));
+    engine.markDirty();
+    return clip;
   },
   updateClip: (id, patch, opts) => {
     if (opts?.history !== false) get().pushHistory();
