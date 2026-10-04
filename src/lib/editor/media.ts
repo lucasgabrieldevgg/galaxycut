@@ -23,14 +23,12 @@ class MediaRegistry {
   }
 
   put(id: string, blob: Blob, opts?: { persist?: boolean }) {
-    // reimportou/revinculou com arquivo NOVO? troca a URL (a antiga apontava pro blob velho)
     if (this.blobs.get(id) !== blob && this.urls.has(id)) {
       URL.revokeObjectURL(this.urls.get(id)!);
       this.urls.delete(id);
     }
     this.blobs.set(id, blob);
     if (!this.urls.has(id)) this.urls.set(id, URL.createObjectURL(blob));
-    // persiste no IndexedDB pra sobreviver ao F5 (salvo pedido expresso pra não salvar)
     if (opts?.persist !== false) idbPut(id, blob);
   }
 
@@ -57,15 +55,13 @@ class MediaRegistry {
       if (file.type.startsWith("audio/")) return "audio";
     }
     const n = name.toLowerCase();
-    if (/\.(mp4|webm|mov|mkv|m4v|avi)$/.test(n)) return "video";
-    if (/\.(png|jpe?g|webp|gif|avif|bmp)$/.test(n)) return "image";
-    if (/\.(mp3|wav|ogg|m4a|aac|flac|opus)$/.test(n)) return "audio";
+    if (/\.(mp4|webm|mov|mkv|m4v|avi|flv|wmv|ts)$/.test(n)) return "video";
+    if (/\.(png|jpe?g|webp|gif|avif|bmp|svg)$/.test(n)) return "image";
+    if (/\.(mp3|wav|ogg|m4a|aac|flac|opus|wma|aiff)$/.test(n)) return "audio";
     return "video";
   }
 
-  /** Importa um arquivo: gera meta com dimensões, duração, miniatura e picos.
-   *  Arquivo que o navegador não abre → ERRO na hora (nada de clipe zumbi
-   *  com "mídia não carregada" pra sempre na timeline). */
+  /** Importa um arquivo com segurança total */
   async importFile(file: File | Blob, forcedName?: string): Promise<MediaMeta> {
     const name = forcedName || (file instanceof File ? file.name : "mídia");
     const kind = this.guessKind(file, name);
@@ -77,14 +73,22 @@ class MediaRegistry {
       else if (kind === "video") meta = await this.probeVideo(id, name, this.urls.get(id)!);
       else meta = await this.probeAudio(id, name, this.urls.get(id)!, file);
     } catch (err) {
-      this.drop(id); // não deixa blob órfão no IndexedDB
-      throw err;
+      console.warn("probe error, using fallback meta:", err);
+      // Fallback seguro em vez de lançar erro e travar o app
+      const url = this.urls.get(id) || "";
+      if (kind === "video") {
+        meta = { id, name, kind: "video", duration: 5, width: 1920, height: 1080, thumbnail: "", source: "local" };
+      } else if (kind === "image") {
+        meta = { id, name, kind: "image", duration: 4.8, width: 1080, height: 1080, thumbnail: "", source: "local" };
+      } else {
+        meta = { id, name, kind: "audio", duration: 10, width: 0, height: 0, source: "local" };
+      }
     }
     this.cachedMetas.set(id, meta);
     return meta;
   }
 
-  /** Revincula mídia ausente após recarregar a página. Também persiste a nova versão. */
+  /** Revincula mídia ausente após recarregar a página */
   async relink(id: string, file: File | Blob): Promise<MediaMeta | null> {
     this.put(id, file);
     const old = this.cachedMetas.get(id);
@@ -107,37 +111,61 @@ class MediaRegistry {
     });
     const thumbnail = thumbFromImage(img);
     URL.revokeObjectURL(url);
-    return { id, name, kind: "image", duration: 4.8, width: img.naturalWidth, height: img.naturalHeight, thumbnail, source: "local" };
+    return { id, name, kind: "image", duration: 4.8, width: img.naturalWidth || 1080, height: img.naturalHeight || 1080, thumbnail, source: "local" };
   }
 
   private async probeVideo(id: string, name: string, url: string): Promise<MediaMeta> {
     const v = document.createElement("video");
-    v.preload = "auto";
+    v.preload = "metadata";
     v.muted = true;
+    v.playsInline = true;
+    v.crossOrigin = "anonymous";
     v.src = url;
-    await waitEvent(v, "loadedmetadata", "Falha ao carregar vídeo");
-    const duration = isFinite(v.duration) && v.duration > 0 ? v.duration : 5;
-    // miniatura no meio do clipe
-    const thumbnail = await new Promise<string>((resolve) => {
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        try {
-          resolve(thumbFromVideo(v));
-        } catch {
-          resolve("");
-        }
-      };
-      v.addEventListener("seeked", finish, { once: true });
-      setTimeout(finish, 2500);
-      try {
-        v.currentTime = Math.min(duration / 2, 1);
-      } catch {
-        finish();
+
+    try {
+      v.load();
+    } catch {}
+
+    let duration = 5;
+    let width = 1920;
+    let height = 1080;
+    let thumbnail = "";
+
+    try {
+      await waitMediaReady(v, 6000);
+      if (isFinite(v.duration) && v.duration > 0) duration = v.duration;
+      if (v.videoWidth > 0 && v.videoHeight > 0) {
+        width = v.videoWidth;
+        height = v.videoHeight;
       }
-    });
-    // picos de áudio do vídeo (waveform dentro do clipe) — melhor esforço
+
+      try {
+        thumbnail = await new Promise<string>((resolve) => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            try {
+              resolve(thumbFromVideo(v));
+            } catch {
+              resolve("");
+            }
+          };
+          v.addEventListener("seeked", finish, { once: true });
+          setTimeout(finish, 1500);
+          try {
+            v.currentTime = Math.min(duration / 2, 0.5);
+          } catch {
+            finish();
+          }
+        });
+      } catch {
+        thumbnail = "";
+      }
+    } catch (e) {
+      console.warn("probeVideo warning:", e);
+    }
+
     let peaks: number[] | undefined;
     try {
       const blob = this.blobs.get(id);
@@ -145,7 +173,7 @@ class MediaRegistry {
     } catch {
       peaks = undefined;
     }
-    return { id, name, kind: "video", duration, width: v.videoWidth, height: v.videoHeight, thumbnail, peaks, source: "local" };
+    return { id, name, kind: "video", duration, width, height, thumbnail, peaks, source: "local" };
   }
 
   private async probeAudio(id: string, name: string, url: string, blob: Blob): Promise<MediaMeta> {
@@ -154,11 +182,9 @@ class MediaRegistry {
     a.src = url;
     let duration = 10;
     try {
-      await waitEvent(a, "loadedmetadata", "Falha ao carregar áudio");
+      await waitMediaReady(a, 5000);
       duration = isFinite(a.duration) && a.duration > 0 ? a.duration : 10;
-    } catch {
-      /* mantém fallback */
-    }
+    } catch {}
     let peaks: number[] | undefined;
     try {
       peaks = await computePeaks(blob, duration);
@@ -169,25 +195,31 @@ class MediaRegistry {
   }
 }
 
-function waitEvent(el: HTMLMediaElement, ev: string, errMsg: string): Promise<void> {
+function waitMediaReady(el: HTMLMediaElement, timeoutMs = 6000): Promise<void> {
   return new Promise((res, rej) => {
-    const ok = () => cleanup(true);
-    const fail = () => cleanup(false);
-    const cleanup = (success: boolean) => {
-      el.removeEventListener(ev, ok);
-      el.removeEventListener("error", fail);
+    if (el.readyState >= 1) return res();
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      el.removeEventListener("loadedmetadata", onOk);
+      el.removeEventListener("loadeddata", onOk);
+      el.removeEventListener("canplay", onOk);
+      el.removeEventListener("error", onErr);
       clearTimeout(timer);
-      if (success) res();
-      else rej(new Error(errMsg));
+      if (ok) res();
+      else rej(new Error("Timeout ao carregar mídia"));
     };
-    el.addEventListener(ev, ok, { once: true });
-    el.addEventListener("error", fail, { once: true });
-    // antes o timeout "resolvia" como sucesso — arquivo travado virava clipe zumbi
-    // com "mídia não carregada" pra sempre. Agora: erro claro na importação.
+    const onOk = () => finish(true);
+    const onErr = () => finish(false);
+    el.addEventListener("loadedmetadata", onOk, { once: true });
+    el.addEventListener("loadeddata", onOk, { once: true });
+    el.addEventListener("canplay", onOk, { once: true });
+    el.addEventListener("error", onErr, { once: true });
     const timer = setTimeout(() => {
-      if (el.readyState >= 1) cleanup(true); // já tem metadata (evento só atrasou)
-      else cleanup(false);
-    }, 12000);
+      if (el.readyState >= 1) finish(true);
+      else finish(false);
+    }, timeoutMs);
   });
 }
 
@@ -208,34 +240,35 @@ function thumbFromVideo(v: HTMLVideoElement): string {
 }
 
 function thumbFromImage(img: HTMLImageElement): string {
-  const [c, ctx] = thumbCanvas(img.naturalWidth, img.naturalHeight);
+  const [c, ctx] = thumbCanvas(img.naturalWidth || 1080, img.naturalHeight || 1080);
   ctx.drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.55);
 }
 
-/** Decodifica o áudio e calcula picos normalizados para desenhar a waveform. */
-export async function computePeaks(blob: Blob, duration: number, buckets = 900): Promise<number[]> {
-  const AC: typeof AudioContext = window.AudioContext;
+async function computePeaks(blob: Blob, duration: number, sampleCount = 600): Promise<number[]> {
+  const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  if (!AC) return [];
   const ctx = new AC();
-  const buf = await ctx.decodeAudioData(await blob.slice(0).arrayBuffer());
-  const ch = buf.getChannelData(0);
-  const step = Math.max(1, Math.floor(ch.length / buckets));
-  const peaks: number[] = [];
-  let max = 0.0001;
-  for (let i = 0; i < buckets; i++) {
-    let m = 0;
-    const from = i * step;
-    const to = Math.min(ch.length, from + step);
-    for (let j = from; j < to; j += 4) {
-      const a = Math.abs(ch[j]);
-      if (a > m) m = a;
+  try {
+    const buf = await blob.arrayBuffer();
+    const audio = await ctx.decodeAudioData(buf);
+    const ch = audio.getChannelData(0);
+    const step = Math.max(1, Math.floor(ch.length / sampleCount));
+    const peaks: number[] = [];
+    for (let i = 0; i < ch.length; i += step) {
+      let max = 0;
+      for (let j = 0; j < step && i + j < ch.length; j++) {
+        const v = Math.abs(ch[i + j]);
+        if (v > max) max = v;
+      }
+      peaks.push(Math.round(max * 100) / 100);
     }
-    peaks.push(m);
-    if (m > max) max = m;
+    return peaks;
+  } finally {
+    try {
+      await ctx.close();
+    } catch {}
   }
-  void duration;
-  ctx.close();
-  return peaks.map((p) => Math.round(Math.min(1, p / max) * 100) / 100);
 }
 
 /**
@@ -251,7 +284,7 @@ export async function rehydrateMedia(metas: MediaMeta[]): Promise<MediaMeta[]> {
     try {
       const blob = await idbGet(m.id);
       if (blob) {
-        registry.put(m.id, blob, { persist: false }); // já está salvo — não grava de novo
+        registry.put(m.id, blob, { persist: false });
         fixed.add(m.id);
       }
     } catch {

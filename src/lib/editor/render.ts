@@ -854,7 +854,8 @@ interface WordToken {
 }
 
 function tokensForKaraoke(tp: TextProps, tRel: number): WordToken[] {
-  const content = tp.content || "";
+  let content = tp.content || "";
+  if (tp.uppercase) content = content.toUpperCase();
   const raw = content.split(/\s+/).filter(Boolean);
   if (!tp.highlight || raw.length <= 1) {
     return raw.map((w) => ({ text: w, active: false, wp: 0, color: tp.color }));
@@ -974,16 +975,49 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, W: number, H: number, c: C
       const wWidth = ctx.measureText(tok.text).width;
       let scale = 1;
       if (tok.active) {
-        const hS = tp.highlightScale || 1.12;
-        let k = 1;
-        if (tp.highlightAnim === "pop") k = easeOutBack(Math.min(1, 0.15 + tok.wp));
-        else if (tp.highlightAnim === "bounce") k = Math.abs(Math.sin(tok.wp * Math.PI)) * 0.9 + 0.1;
-        else if (tp.highlightAnim === "pulse") k = 0.75 + 0.25 * Math.sin(tok.wp * Math.PI * 2);
-        scale = 1 + (hS - 1) * Math.max(0, Math.min(1.2, k));
+        if (tp.highlightAnim === "pop") {
+          const hS = tp.highlightScale || 1.18;
+          const k = easeOutBack(Math.min(1, 0.15 + tok.wp));
+          scale = 1 + (hS - 1) * Math.max(0, Math.min(1.2, k));
+        } else if (tp.highlightAnim === "bounce") {
+          const hS = tp.highlightScale || 1.18;
+          const k = Math.abs(Math.sin(tok.wp * Math.PI)) * 0.9 + 0.1;
+          scale = 1 + (hS - 1) * Math.max(0, Math.min(1.2, k));
+        } else if (tp.highlightAnim === "pulse") {
+          const hS = tp.highlightScale || 1.12;
+          const k = 0.75 + 0.25 * Math.sin(tok.wp * Math.PI * 2);
+          scale = 1 + (hS - 1) * Math.max(0, Math.min(1.2, k));
+        } else if (tp.highlightAnim === "box") {
+          scale = tp.highlightScale || 1.0;
+        } else {
+          // "none" ou "colorOnly" (Seca / Sem saltos)
+          scale = 1;
+        }
       }
       ctx.save();
       ctx.translate(x + wWidth / 2, y);
       if (scale !== 1) ctx.scale(scale, scale);
+
+      // Caixa individual na palavra ativa (modo Box Highlight)
+      if (tok.active && tp.highlightAnim === "box") {
+        ctx.save();
+        const boxPad = ((tp.highlightBgPad ?? 8) * H) / 1080;
+        const boxRadius = ((tp.highlightBgRadius ?? 6) * H) / 1080;
+        const boxW = wWidth + boxPad * 2;
+        const boxH = size * 1.25;
+        ctx.fillStyle = tp.highlightBg || tp.highlightColor || "#FACC15";
+        roundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, boxRadius);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Brilho Neon na palavra ativa (modo Glow)
+      if (tok.active && tp.highlightAnim === "glow") {
+        ctx.shadowColor = tok.color || tp.highlightColor || "#38BDF8";
+        ctx.shadowBlur = size / 2.5;
+        ctx.shadowOffsetY = 0;
+      }
+
       if (tp.strokeW > 0) {
         ctx.lineJoin = "round";
         ctx.lineCap = "round";

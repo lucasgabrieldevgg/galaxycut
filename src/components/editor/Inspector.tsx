@@ -221,24 +221,42 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
   );
 }
 
-function ColorRow({ label, value, onChange, allowNone }: { label: string; value: string; onChange: (v: string) => void; allowNone?: boolean }) {
+function ColorRow({ label, value, onChange, allowNone, swatches }: { label: string; value: string; onChange: (v: string) => void; allowNone?: boolean; swatches?: string[] }) {
+  const palette = swatches || ["#FFFFFF", "#FACC15", "#22C55E", "#38BDF8", "#F43F5E", "#FB923C", "#EF4444", "#A855F7", "#000000"];
   return (
-    <div className="flex items-center justify-between">
-      <Label className="text-[11px] text-zinc-400">{label}</Label>
-      <div className="flex items-center gap-1.5">
-        {allowNone && value && (
-          <button className="rounded border border-[#2a3546] px-1.5 py-0.5 text-[9px] text-zinc-500 hover:text-red-400" onClick={() => onChange("")}>
-            remover
-          </button>
-        )}
-        <input
-          type="color"
-          value={value ? value.slice(0, 7) : "#000000"}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => useProject.getState().pushHistory()}
-          className="h-6 w-10 cursor-pointer rounded border border-[#2a3546] bg-transparent p-0.5"
-          aria-label={label}
-        />
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <Label className="text-[11px] text-zinc-400">{label}</Label>
+        <div className="flex items-center gap-1.5">
+          {allowNone && value && (
+            <button className="rounded border border-[#2a3546] px-1.5 py-0.5 text-[9px] text-zinc-500 hover:text-red-400" onClick={() => onChange("")}>
+              remover
+            </button>
+          )}
+          <input
+            type="color"
+            value={value ? value.slice(0, 7) : "#000000"}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => useProject.getState().pushHistory()}
+            className="h-5 w-8 cursor-pointer rounded border border-[#2a3546] bg-transparent p-0.5"
+            aria-label={label}
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-1 flex-wrap pt-0.5">
+        {palette.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => {
+              useProject.getState().pushHistory();
+              onChange(c);
+            }}
+            style={{ backgroundColor: c || "transparent" }}
+            className={`h-4 w-4 rounded-sm border transition ${value === c ? "border-white ring-1 ring-[var(--gc-accent)] scale-110" : "border-zinc-700 hover:scale-105"}`}
+            title={c || "Nenhum"}
+          />
+        ))}
       </div>
     </div>
   );
