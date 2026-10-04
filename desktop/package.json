@@ -1,62 +1,50 @@
 {
   "name": "galaxycut-desktop",
-  "productName": "GalaxyCut",
-  "version": "7.7.1",
-  "private": true,
-  "description": "GalaxyCut — editor de vídeo grátis (pacote de desktop)",
+  "version": "7.8.0",
+  "description": "GalaxyCut — Editor de Vídeo para Criadores",
   "main": "main.js",
-  "author": "GalaxyCut",
-  "license": "MIT",
   "scripts": {
     "start": "electron .",
     "dist:linux": "electron-builder --linux AppImage",
-    "dist:win": "electron-builder --win nsis"
-  },
-  "devDependencies": {
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "dist:win": "electron-builder --win nsis",
+    "dist:mac": "electron-builder --mac dmg",
+    "dist:all": "electron-builder -mwl"
   },
   "build": {
-    "appId": "galaxycut.app",
+    "appId": "app.galaxycut.desktop",
     "productName": "GalaxyCut",
+    "copyright": "Copyright © 2026 Lucas Gabriel Dev",
     "directories": {
-      "output": "release",
-      "buildResources": "build"
+      "output": "release"
     },
     "files": [
       "main.js",
-      "preload.js",
-      "build/icon.png",
-      "www/**/*"
+      "package.json",
+      "out/**/*"
     ],
-    "asar": true,
-    "icon": "build/icon.png",
     "linux": {
       "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
+        "AppImage"
       ],
       "category": "AudioVideo",
-      "artifactName": "GalaxyCut-${version}-x86_64.AppImage"
+      "icon": "icons/icon.png"
     },
     "win": {
       "target": [
         "nsis"
       ],
-      "artifactName": "GalaxyCut-Setup-${version}.exe"
+      "icon": "icons/icon.ico"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "shortcutName": "GalaxyCut"
-    },
-    "publish": null
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "icons/icon.icns",
+      "category": "public.app-category.video"
+    }
   },
-  "dependencies": {
-    "electron-updater": "^6.8.9"
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
   }
 }
