@@ -114,6 +114,11 @@ export function MediaPanel() {
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renamingFolderName, setRenamingFolderName] = useState("");
 
+  /** drag & drop de arquivos e pastas no painel */
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [detectedFolder, setDetectedFolder] = useState<string | null>(null);
+  const dragCounter = useRef(0);
+
   /** mídia selecionada no painel (o Delete do teclado apaga ela) */
   const [selMedia, setSelMedia] = useState<string | null>(null);
   /** filtro da aba Mídia: tudo/vídeos/áudios/imagens */
@@ -267,6 +272,164 @@ export function MediaPanel() {
     }
   }
 
+  /** Leitura recursiva de entradas arrastadas (arquivos soltos e pastas completas) */
+  async function scanEntry(entry: any, currentPath: string[]): Promise<{ file: File; folderPath: string[] }[]> {
+    if (entry.isFile) {
+      return new Promise((resolve) => {
+        entry.file(
+          (file: File) => resolve([{ file, folderPath: currentPath }]),
+          () => resolve([])
+        );
+      });
+    } else if (entry.isDirectory) {
+      const dirReader = entry.createReader();
+      const newPath = [...currentPath, entry.name];
+      const readSubEntries = (): Promise<any[]> => {
+        return new Promise((resolve) => {
+          dirReader.readEntries(
+            (results: any[]) => {
+              if (!results || !results.length) resolve([]);
+              else {
+                readSubEntries().then((more) => resolve([...results, ...more]));
+              }
+            },
+            () => resolve([])
+          );
+        });
+      };
+      const subEntries = await readSubEntries();
+      const nested = await Promise.all(subEntries.map((sub) => scanEntry(sub, newPath)));
+      return nested.flat();
+    }
+    return [];
+  }
+
+  async function handlePanelDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDraggingOver(false);
+    setDetectedFolder(null);
+
+    const items = e.dataTransfer.items;
+    const scanned: { file: File; folderPath: string[] }[] = [];
+    const detectedFoldersList: string[] = [];
+
+    if (items && items.length > 0) {
+      const promises: Promise<{ file: File; folderPath: string[] }[]>[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (typeof item.webkitGetAsEntry === "function") {
+          const entry = item.webkitGetAsEntry();
+          if (entry) {
+            if (entry.isDirectory) {
+              detectedFoldersList.push(entry.name);
+            }
+            promises.push(scanEntry(entry, []));
+          }
+        }
+      }
+      if (promises.length > 0) {
+        const res = await Promise.all(promises);
+        scanned.push(...res.flat());
+      }
+    }
+
+    // fallback se não usou webkitGetAsEntry
+    if (!scanned.length && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      for (let i = 0; i < e.dataTransfer.files.length; i++) {
+        const f = e.dataTransfer.files[i];
+        scanned.push({ file: f, folderPath: [] });
+      }
+    }
+
+    if (!scanned.length) {
+      toast.info(t("mp.noFiles"));
+      return;
+    }
+
+    // Cria pastas necessárias e mapeia arquivos
+    const folderCache = new Map<string, string>();
+    const getTargetFolderId = (pathArr: string[]): string | null => {
+      if (!pathArr.length) return currentFolderId;
+      let parentId = currentFolderId;
+      let acc = "";
+      for (const seg of pathArr) {
+        acc = acc ? `${acc}/${seg}` : seg;
+        if (folderCache.has(acc)) {
+          parentId = folderCache.get(acc)!;
+        } else {
+          const existing = useProject.getState().folders.find((f) => f.name === seg && (f.parentId ?? null) === parentId);
+          if (existing) {
+            parentId = existing.id;
+            folderCache.set(acc, existing.id);
+          } else {
+            const created = useProject.getState().createFolder(seg, parentId);
+            parentId = created.id;
+            folderCache.set(acc, created.id);
+          }
+        }
+      }
+      return parentId;
+    };
+
+    const byFolder = new Map<string | null, File[]>();
+    for (const item of scanned) {
+      const fid = getTargetFolderId(item.folderPath);
+      if (!byFolder.has(fid)) byFolder.set(fid, []);
+      byFolder.get(fid)!.push(item.file);
+    }
+
+    for (const [fid, files] of byFolder) {
+      await handleFiles(files, fid);
+    }
+
+    if (detectedFoldersList.length > 0) {
+      toast.success(`Pasta(s) "${detectedFoldersList.join(", ")}" importada(s) com sucesso!`);
+      const firstId = folderCache.get(detectedFoldersList[0]);
+      if (firstId) setCurrentFolderId(firstId);
+    }
+  }
+
+  function handlePanelDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDraggingOver(true);
+      // tenta identificar se é pasta
+      if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+        for (let i = 0; i < e.dataTransfer.items.length; i++) {
+          const it = e.dataTransfer.items[i];
+          if (typeof it.webkitGetAsEntry === "function") {
+            const entry = it.webkitGetAsEntry();
+            if (entry?.isDirectory) {
+              setDetectedFolder(entry.name);
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function handlePanelDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setIsDraggingOver(false);
+      setDetectedFolder(null);
+    }
+  }
+
+  function handlePanelDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+  }
+
   async function relink(id: string, file: File) {
     try {
       const meta = await registry.relink(id, file);
@@ -346,7 +509,35 @@ export function MediaPanel() {
         </div>
 
         {/* ---------- MÍDIA ---------- */}
-        <TabsContent value="media" className="min-h-0 flex-1 overflow-hidden pt-0">
+        <TabsContent
+          value="media"
+          className="relative min-h-0 flex-1 overflow-hidden pt-0"
+          onDragEnter={handlePanelDragEnter}
+          onDragLeave={handlePanelDragLeave}
+          onDragOver={handlePanelDragOver}
+          onDrop={handlePanelDrop}
+        >
+          {/* Overlay de Dropzone ao arrastar arquivos ou pastas */}
+          {isDraggingOver && (
+            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#090d14]/95 p-6 backdrop-blur-sm border-2 border-dashed border-[var(--gc-accent)] rounded-lg text-center animate-in fade-in zoom-in-95 pointer-events-none">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--gc-accent-10)] text-[var(--gc-accent)] shadow-[0_0_24px_var(--gc-accent-30)] mb-3 animate-bounce">
+                {detectedFolder ? <FolderOpen className="h-8 w-8 text-[var(--gc-accent)]" /> : <Upload className="h-8 w-8 text-[var(--gc-accent)]" />}
+              </div>
+              <h3 className="text-sm font-semibold text-zinc-100">
+                {detectedFolder ? `Solte para importar a pasta "${detectedFolder}"!` : "Solte seus arquivos ou pastas aqui!"}
+              </h3>
+              <p className="mt-1 text-xs text-zinc-400 max-w-[260px] leading-relaxed">
+                {detectedFolder
+                  ? "As pastas serão criadas e todo o conteúdo será organizado automaticamente dentro do projeto."
+                  : "Arquivos e pastas serão importados e organizados automaticamente na mídia."}
+              </p>
+              <div className="mt-3 flex items-center gap-1.5 rounded-full border border-[var(--gc-accent-30)] bg-[var(--gc-accent-10)] px-3 py-1 text-[11px] font-medium text-[var(--gc-accent)]">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Importação inteligente com pastas</span>
+              </div>
+            </div>
+          )}
+
           <div className="flex h-full min-h-0 flex-col">
             {/* botões de importação e gravação */}
             <div className="grid shrink-0 grid-cols-[1fr_auto_auto] gap-1.5 p-2.5">

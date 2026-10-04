@@ -428,6 +428,11 @@ function ClipInspector({ clip }: { clip: Clip }) {
           <ColorRow label={t("ins.strokeColor")} value={clip.text.strokeColor} onChange={(v) => update({ text: { ...clip.text!, strokeColor: v } }, false)} />
           <ColorRow label={t("ins.bgBox")} value={clip.text.bg} onChange={(v) => update({ text: { ...clip.text!, bg: v } }, false)} allowNone />
           <ToggleRow label={t("ins.shadow")} checked={clip.text.shadow} onChange={(v) => update({ text: { ...clip.text!, shadow: v } })} />
+          <ToggleRow
+            label="Máquina de Escrever (Typewriter)"
+            checked={!!clip.text.typewriter}
+            onChange={(v) => update({ text: { ...clip.text!, typewriter: v } })}
+          />
           <Button
             variant="outline"
             size="sm"

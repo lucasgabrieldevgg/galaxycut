@@ -905,7 +905,31 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, W: number, H: number, c: C
   const maxW = W * 0.88;
   const spaceW = ctx.measureText(" ").width;
 
-  const tokens = tokensForKaraoke(tp, tRel);
+  // Efeito Máquina de Escrever (Typewriter)
+  const isTypewriter = c.animation?.inType === "typewriter" || tp.typewriter;
+  let activeTextProps = tp;
+  let typewriterCursor = "";
+
+  if (isTypewriter && tp.content) {
+    const rawLen = tp.content.length;
+    const inDur = Math.min(c.duration * 0.92, c.animation?.inDuration ?? Math.max(0.8, rawLen * 0.07));
+    if (tRel < inDur && inDur > 0.001) {
+      const p = Math.max(0, Math.min(1, tRel / inDur));
+      const visibleCount = Math.max(1, Math.floor(p * rawLen));
+      const sliced = tp.content.slice(0, visibleCount);
+      typewriterCursor = Math.floor(tRel * 5) % 2 === 0 ? " ▌" : "";
+      activeTextProps = { ...tp, content: sliced };
+    }
+  }
+
+  const tokens = tokensForKaraoke(activeTextProps, tRel);
+  if (typewriterCursor && tokens.length > 0) {
+    tokens[tokens.length - 1] = {
+      ...tokens[tokens.length - 1],
+      text: tokens[tokens.length - 1].text + typewriterCursor,
+    };
+  }
+
   const lines = wrapWords(ctx, tokens.map((x) => x.text), maxW);
   const lineH = size * 1.24;
   const totalH = lines.length * lineH;

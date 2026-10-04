@@ -23,6 +23,9 @@ export interface TextProps {
   bg: string; // "" = sem caixa
   bgPad: number;
   bgRadius: number;
+  // ---- efeito de máquina de escrever (typewriter) ----
+  typewriter?: boolean;
+  typewriterSpeed?: number;
   // ---- karaokê (destacar a palavra sendo falada) ----
   words?: KaraokeWord[]; // tempos por palavra (gerado pela IA ou estimado)
   highlight: boolean; // destacar palavra atual
@@ -85,6 +88,7 @@ export interface Keyframe {
 // ---------- ANIMAÇÕES PRONTAS (CapCut Estilo 1-clique) ----------
 export type AnimationInType =
   | "none"
+  | "typewriter"
   | "zoomIn"
   | "zoomOut"
   | "slideLeft"
@@ -139,6 +143,7 @@ export interface ClipAnimation {
 
 export const ANIMATIONS_IN: { type: AnimationInType; label: string; icon: string }[] = [
   { type: "none", label: "Nenhuma", icon: "∅" },
+  { type: "typewriter", label: "Máquina de Escrever", icon: "⌨️" },
   { type: "zoomIn", label: "Zoom Entrada", icon: "🔍" },
   { type: "zoomOut", label: "Zoom Afastando", icon: "🔎" },
   { type: "slideLeft", label: "Deslizar Esquerda", icon: "⬅️" },
@@ -510,8 +515,44 @@ export const CAPTION_PRESETS: CaptionPreset[] = [
     },
   },
   {
+    id: "hormozi",
+    name: "Viral Hormozi",
+    props: {
+      font: "Impact, Haettenschweiler, 'Arial Black', sans-serif",
+      size: 74,
+      color: "#000000",
+      strokeColor: "#000000",
+      strokeW: 0,
+      shadow: false,
+      bg: "#FACC15",
+      bgPad: 20,
+      bgRadius: 8,
+      bold: true,
+      highlight: true,
+      highlightColor: "#FFFFFF",
+      highlightScale: 1.25,
+      highlightAnim: "pop",
+    },
+  },
+  {
+    id: "karaokeGold",
+    name: "Karaokê Ouro",
+    props: {
+      font: "'Luckiest Guy', cursive",
+      size: 70,
+      color: "#FFFFFF",
+      strokeColor: "#78350F",
+      strokeW: 9,
+      shadow: true,
+      highlight: true,
+      highlightColor: "#F59E0B",
+      highlightScale: 1.22,
+      highlightAnim: "bounce",
+    },
+  },
+  {
     id: "karaoke-verde",
-    name: "Karaokê verde",
+    name: "Karaokê Verde",
     props: {
       font: "Anton, Impact, sans-serif",
       size: 72,
@@ -523,6 +564,109 @@ export const CAPTION_PRESETS: CaptionPreset[] = [
       highlightColor: "#22C55E",
       highlightScale: 1.12,
       highlightAnim: "bounce",
+    },
+  },
+  {
+    id: "cyberpunk",
+    name: "Cyber Neon",
+    props: {
+      font: "Bebas Neue, Arial, sans-serif",
+      size: 76,
+      color: "#38BDF8",
+      strokeColor: "#0369A1",
+      strokeW: 7,
+      shadow: true,
+      highlight: true,
+      highlightColor: "#F43F5E",
+      highlightScale: 1.24,
+      highlightAnim: "pop",
+    },
+  },
+  {
+    id: "netflix",
+    name: "Cinema / Netflix",
+    props: {
+      font: "Arial, Helvetica, sans-serif",
+      size: 54,
+      color: "#FFFFFF",
+      strokeW: 0,
+      shadow: false,
+      bg: "#00000099",
+      bgPad: 18,
+      bgRadius: 8,
+      bold: true,
+      highlight: true,
+      highlightColor: "#FCD34D",
+      highlightScale: 1.08,
+      highlightAnim: "pulse",
+    },
+  },
+  {
+    id: "comic",
+    name: "HQ / Quadrinhos",
+    props: {
+      font: "Bangers, Impact, cursive",
+      size: 76,
+      color: "#FFFFFF",
+      strokeColor: "#000000",
+      strokeW: 10,
+      shadow: true,
+      bold: true,
+      highlight: true,
+      highlightColor: "#EF4444",
+      highlightScale: 1.25,
+      highlightAnim: "bounce",
+    },
+  },
+  {
+    id: "highlighter",
+    name: "Marca-Texto",
+    props: {
+      font: "'Arial Black', Arial, sans-serif",
+      size: 60,
+      color: "#000000",
+      strokeW: 0,
+      shadow: false,
+      bg: "#BEF264",
+      bgPad: 18,
+      bgRadius: 4,
+      bold: true,
+      highlight: true,
+      highlightColor: "#FFFFFF",
+      highlightScale: 1.15,
+      highlightAnim: "pop",
+    },
+  },
+  {
+    id: "arcade",
+    name: "Arcade 8-Bit",
+    props: {
+      font: "'Courier New', Courier, monospace",
+      size: 62,
+      color: "#22D3EE",
+      strokeColor: "#000000",
+      strokeW: 8,
+      shadow: true,
+      bold: true,
+      highlight: true,
+      highlightColor: "#F472B6",
+      highlightScale: 1.18,
+      highlightAnim: "pulse",
+    },
+  },
+  {
+    id: "typewriterStyle",
+    name: "Escrevendo",
+    props: {
+      font: "'Courier New', Courier, monospace",
+      size: 58,
+      color: "#34D399",
+      bg: "#064E3BCC",
+      bgPad: 16,
+      bgRadius: 6,
+      strokeW: 0,
+      bold: true,
+      typewriter: true,
     },
   },
   {
