@@ -345,7 +345,13 @@ export function Timeline() {
     }
     // 2) arquivos do computador (ou de dentro de uma pasta)
     if (e.dataTransfer.files?.length) {
-      const files = Array.from(e.dataTransfer.files).filter((f) => /^(video|audio|image)\//.test(f.type) || /\.(mp4|webm|mov|mkv|m4v|avi|png|jpe?g|webp|gif|avif|mp3|wav|ogg|m4a|aac|flac|opus)$/i.test(f.name));
+      const files = Array.from(e.dataTransfer.files).filter(
+        (f) =>
+          /^(video|audio|image)\//i.test(f.type) ||
+          /\.(mp4|m4v|webm|mov|mkv|avi|wmv|flv|f4v|ts|mts|m2ts|vob|ogv|3gp|3g2|mpe?g|mpe|mpv|m2v|mxf|rmvb?|rm|asf|divx|xvid|y4m|nut|png|jpe?g|jfif|jif|jpe|jfi|webp|gif|avif|bmp|dib|svg|svgz|ico|tiff?|tif|heic|heif|raw|cr2|nef|arw|dng|psd|ai|eps|hdr|mp3|wav|ogg|oga|m4a|aac|flac|opus|wma|aiff?|aifc|alac|caf|mka|ac3|dts|amr|midi?|weba)$/i.test(
+            f.name
+          )
+      );
       if (!files.length) return;
       let offset = 0;
       let ok = 0;

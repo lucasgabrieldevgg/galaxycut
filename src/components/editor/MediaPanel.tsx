@@ -34,6 +34,8 @@ import {
   AnimationComboType,
   ClipEffect,
   uid,
+  makeClip,
+  defaultTextProps,
 } from "@/lib/editor/types";
 import { gcDrag } from "@/lib/editor/dnd";
 import { useLibPlayer } from "@/lib/editor/libPlayer";
@@ -47,6 +49,7 @@ import { SubtitleDialog } from "./SubtitleDialog";
 import { StockSearch } from "./StockSearch";
 import { LibraryPlayerBar } from "./LibraryPlayerBar";
 import { RecordDialog } from "./RecordDialog";
+import { ConvertMediaDialog } from "./ConvertMediaDialog";
 import { FloatMenu, MenuItem } from "./ClipMenu";
 import { useT, t as tr } from "@/lib/editor/i18n";
 import { PresetPreview } from "./PresetPreview";
@@ -126,6 +129,8 @@ export function MediaPanel() {
   const [effectSearch, setEffectSearch] = useState("");
   const [effectCategory, setEffectCategory] = useState<"all" | "motion" | "retro" | "light" | "stylize">("all");
   const [recordOpen, setRecordOpen] = useState(false);
+  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+  const [convertMediaList, setConvertMediaList] = useState<MediaMeta[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
 
@@ -214,10 +219,15 @@ export function MediaPanel() {
     setImporting((prev) => prev + rawArr.length);
     let ok = 0;
     let fail = 0;
+    const importedVideos: MediaMeta[] = [];
+
     for (const f of rawArr) {
       try {
         const meta = await registry.importFile(f);
         addMedia({ ...meta, folderId: targetFolderId });
+        if (meta.kind === "video") {
+          importedVideos.push(meta);
+        }
         ok++;
       } catch (e) {
         fail++;
@@ -232,6 +242,12 @@ export function MediaPanel() {
           ? t("mp.importedPartial", { ok, n: rawArr.length, fail })
           : t("mp.importedN", { n: ok })
       );
+
+      // Se vídeos foram importados, pergunta se deseja converter de formato (com MP4 marcado como padrão)
+      if (importedVideos.length > 0) {
+        setConvertMediaList(importedVideos);
+        setConvertDialogOpen(true);
+      }
     }
   }
 
@@ -514,7 +530,7 @@ export function MediaPanel() {
               ref={fileRef}
               type="file"
               multiple
-              accept="video/*,audio/*,image/*,.mp4,.webm,.mov,.mkv,.m4v,.avi,.png,.jpg,.jpeg,.webp,.gif,.avif,.bmp,.mp3,.wav,.ogg,.m4a,.aac,.flac,.opus"
+              accept="video/*,audio/*,image/*,.mp4,.webm,.mov,.mkv,.m4v,.avi,.wmv,.flv,.ts,.mts,.m2ts,.vob,.ogv,.3gp,.3g2,.mpg,.mpeg,.mpe,.mpv,.m2v,.mxf,.rm,.rmvb,.asf,.f4v,.divx,.xvid,.y4m,.nut,.png,.jpg,.jpeg,.jfif,.jpe,.jif,.jfi,.webp,.gif,.avif,.bmp,.dib,.svg,.svgz,.ico,.tiff,.tif,.heic,.heif,.raw,.cr2,.nef,.arw,.dng,.psd,.ai,.eps,.hdr,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.opus,.wma,.aiff,.aif,.aifc,.alac,.caf,.mka,.ac3,.dts,.amr,.mid,.midi,*"
               className="hidden"
               onChange={(e) => {
                 if (e.target.files) void handleFiles(e.target.files);
@@ -654,8 +670,9 @@ export function MediaPanel() {
                     onDragStart={(e) => {
                       e.dataTransfer.setData(MEDIA_DND_TYPE, m.id);
                       e.dataTransfer.setData("text/plain", m.id);
-                      gcDrag.start("media", { mediaId: m.id });
+                      gcDrag.begin(m.id);
                     }}
+                    onDragEnd={() => gcDrag.end()}
                     onClick={() => setSelMedia(m.id)}
                     className={`group relative flex flex-col overflow-hidden rounded-lg border bg-[#121722] transition ${
                       selMedia === m.id
@@ -700,16 +717,31 @@ export function MediaPanel() {
                       <span className="truncate text-[10px] font-medium text-zinc-300" title={m.name}>
                         {m.name}
                       </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          askRemove(m);
-                        }}
-                        className="text-zinc-500 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
-                        title="Remover"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                      <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                        {m.kind === "video" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConvertMediaList([m]);
+                              setConvertDialogOpen(true);
+                            }}
+                            className="text-zinc-500 transition hover:text-[var(--gc-accent)]"
+                            title="Converter formato do vídeo"
+                          >
+                            <Sparkles className="h-3 w-3" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            askRemove(m);
+                          }}
+                          className="text-zinc-500 transition hover:text-red-400"
+                          title="Remover"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -737,7 +769,7 @@ export function MediaPanel() {
                   className="flex flex-col items-start rounded-lg border border-[#1e2633] bg-[#121722] p-2 text-left transition hover:border-emerald-400/50 hover:bg-[#161c2a]"
                 >
                   <span className="text-xs font-semibold text-zinc-200">{eff.name}</span>
-                  <span className="text-[9px] text-zinc-500 line-clamp-1">{eff.desc}</span>
+                  <span className="text-[9px] text-zinc-500 line-clamp-1">{eff.description}</span>
                 </button>
               ))}
             </div>
@@ -757,7 +789,7 @@ export function MediaPanel() {
                       onClick={() => applyAnimationToSelection(anim.type, "in")}
                       className="rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
                     >
-                      {anim.name}
+                      {anim.label}
                     </button>
                   ))}
                 </div>
@@ -772,7 +804,7 @@ export function MediaPanel() {
                       onClick={() => applyAnimationToSelection(anim.type, "combo")}
                       className="rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
                     >
-                      {anim.name}
+                      {anim.label}
                     </button>
                   ))}
                 </div>
@@ -787,7 +819,7 @@ export function MediaPanel() {
                       onClick={() => applyAnimationToSelection(anim.type, "out")}
                       className="rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
                     >
-                      {anim.name}
+                      {anim.label}
                     </button>
                   ))}
                 </div>
@@ -944,6 +976,13 @@ export function MediaPanel() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Diálogo Converter Formato de Mídia */}
+      <ConvertMediaDialog
+        open={convertDialogOpen}
+        onOpenChange={setConvertDialogOpen}
+        mediaList={convertMediaList}
+      />
     </div>
   );
 }

@@ -49,41 +49,105 @@ class MediaRegistry {
   }
 
   guessKind(file: File | Blob, name: string): "video" | "image" | "audio" {
-    if (file instanceof File) {
-      if (file.type.startsWith("video/")) return "video";
-      if (file.type.startsWith("image/")) return "image";
-      if (file.type.startsWith("audio/")) return "audio";
+    const rawType = (file instanceof File || (file && "type" in file)) ? ((file.type as string) || "").toLowerCase().trim() : "";
+    if (rawType) {
+      if (rawType.startsWith("image/")) return "image";
+      if (rawType.startsWith("audio/")) return "audio";
+      if (rawType.startsWith("video/")) return "video";
     }
-    const n = name.toLowerCase();
-    if (/\.(mp4|webm|mov|mkv|m4v|avi|flv|wmv|ts)$/.test(n)) return "video";
-    if (/\.(png|jpe?g|webp|gif|avif|bmp|svg)$/.test(n)) return "image";
-    if (/\.(mp3|wav|ogg|m4a|aac|flac|opus|wma|aiff)$/.test(n)) return "audio";
-    return "video";
+
+    const n = (name || "").toLowerCase().trim();
+    // Lista completa de formatos de IMAGEM
+    if (/\.(png|jpe?g|jfif|jif|jpe|jfi|webp|gif|avif|bmp|dib|svg|svgz|ico|tiff?|tif|heic|heif|raw|cr2|nef|arw|dng|psd|ai|eps|hdr)$/i.test(n)) {
+      return "image";
+    }
+    // Lista completa de formatos de ÁUDIO
+    if (/\.(mp3|wav|ogg|oga|m4a|aac|flac|opus|wma|aiff?|aifc|alac|caf|mka|ac3|dts|amr|midi?|weba)$/i.test(n)) {
+      return "audio";
+    }
+    // Lista completa de formatos de VÍDEO
+    if (/\.(mp4|m4v|webm|mov|mkv|avi|wmv|flv|f4v|ts|mts|m2ts|vob|ogv|3gp|3g2|mpe?g|mpe|mpv|m2v|mxf|rmvb?|rm|asf|divx|xvid|y4m|nut|h26[45]|hevc|264)$/i.test(n)) {
+      return "video";
+    }
+
+    // Se a extensão for ambígua ou ausente, presume imagem para probe inicial rápido
+    return "image";
   }
 
-  /** Importa um arquivo com segurança total */
+  /** Importa um arquivo com segurança total e detecção inteligente em cascata */
   async importFile(file: File | Blob, forcedName?: string): Promise<MediaMeta> {
     const name = forcedName || (file instanceof File ? file.name : "mídia");
-    const kind = this.guessKind(file, name);
+    let kind = this.guessKind(file, name);
     const id = uid();
     this.put(id, file);
-    let meta: MediaMeta;
-    try {
-      if (kind === "image") meta = await this.probeImage(id, name, file);
-      else if (kind === "video") meta = await this.probeVideo(id, name, this.urls.get(id)!);
-      else meta = await this.probeAudio(id, name, this.urls.get(id)!, file);
-    } catch (err) {
-      console.warn("probe error, using fallback meta:", err);
-      // Fallback seguro em vez de lançar erro e travar o app
-      const url = this.urls.get(id) || "";
-      if (kind === "video") {
-        meta = { id, name, kind: "video", duration: 5, width: 1920, height: 1080, thumbnail: "", source: "local" };
-      } else if (kind === "image") {
-        meta = { id, name, kind: "image", duration: 4.8, width: 1080, height: 1080, thumbnail: "", source: "local" };
-      } else {
-        meta = { id, name, kind: "audio", duration: 10, width: 0, height: 0, source: "local" };
+    let meta: MediaMeta | null = null;
+
+    if (kind === "image") {
+      try {
+        meta = await this.probeImage(id, name, file);
+      } catch {
+        // Falhou como imagem: tenta vídeo, depois áudio
+        try {
+          meta = await this.probeVideo(id, name, this.urls.get(id)!);
+          kind = "video";
+        } catch {
+          try {
+            meta = await this.probeAudio(id, name, this.urls.get(id)!, file);
+            kind = "audio";
+          } catch {
+            meta = null;
+          }
+        }
+      }
+    } else if (kind === "video") {
+      try {
+        meta = await this.probeVideo(id, name, this.urls.get(id)!);
+      } catch {
+        // Se falhou como vídeo (ex: fotos dentro de pastas sem MIME ou formatos não suportados pelo browser), tenta imagem!
+        try {
+          meta = await this.probeImage(id, name, file);
+          kind = "image";
+        } catch {
+          try {
+            meta = await this.probeAudio(id, name, this.urls.get(id)!, file);
+            kind = "audio";
+          } catch {
+            meta = null;
+          }
+        }
+      }
+    } else {
+      try {
+        meta = await this.probeAudio(id, name, this.urls.get(id)!, file);
+      } catch {
+        try {
+          meta = await this.probeImage(id, name, file);
+          kind = "image";
+        } catch {
+          try {
+            meta = await this.probeVideo(id, name, this.urls.get(id)!);
+            kind = "video";
+          } catch {
+            meta = null;
+          }
+        }
       }
     }
+
+    if (!meta) {
+      // Fallback seguro de emergência
+      const cleanName = name.toLowerCase().trim();
+      const isImg = /\.(png|jpe?g|jfif|webp|gif|avif|bmp|svg|tiff?|heic)$/i.test(cleanName);
+      const isAud = /\.(mp3|wav|ogg|m4a|aac|flac|opus|wma|aiff?)$/i.test(cleanName);
+      if (isImg || kind === "image") {
+        meta = { id, name, kind: "image", duration: 4.8, width: 1080, height: 1080, thumbnail: "", source: "local" };
+      } else if (isAud || kind === "audio") {
+        meta = { id, name, kind: "audio", duration: 10, width: 0, height: 0, source: "local" };
+      } else {
+        meta = { id, name, kind: "video", duration: 5, width: 1920, height: 1080, thumbnail: "", source: "local" };
+      }
+    }
+
     this.cachedMetas.set(id, meta);
     return meta;
   }

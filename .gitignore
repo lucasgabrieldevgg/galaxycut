@@ -46,6 +46,7 @@ next-env.d.ts
 /desktop/node_modules/
 /desktop/release/
 /desktop/www/
+/desktop/out/
 
 # sistema
 .DS_Store

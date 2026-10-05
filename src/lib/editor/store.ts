@@ -11,6 +11,7 @@ import {
   MediaFolder,
   MediaMeta,
   ProjectMeta,
+  TextProps,
   Track,
   Transition,
   clipEnd,
@@ -19,6 +20,7 @@ import {
   uid,
 } from "./types";
 import { registry } from "./media";
+import { engine } from "./playback";
 import { spansToTimeline, SilenceSpan } from "./silence";
 import { decodeAudioOf, encodeWav, peaksFromBuffer } from "./wav";
 import * as projects from "./projects";
