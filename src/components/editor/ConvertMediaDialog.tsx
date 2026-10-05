@@ -120,10 +120,10 @@ export function ConvertMediaDialog({
             </div>
             <div>
               <DialogTitle className="text-base font-bold text-zinc-100">
-                Converter Formato de Vídeo
+                Otimizar Formato de Vídeo
               </DialogTitle>
               <DialogDescription className="text-xs text-zinc-400">
-                Deseja converter o(s) vídeo(s) para otimizar compatibilidade e performance?
+                Seus vídeos já estão carregados no projeto. Deseja convertê-los para MP4 para máxima performance?
               </DialogDescription>
             </div>
           </div>
@@ -304,15 +304,15 @@ export function ConvertMediaDialog({
                 variant="ghost"
                 size="sm"
                 onClick={handleKeepOriginal}
-                className="text-xs text-zinc-400 hover:text-zinc-200"
+                className="text-xs text-zinc-300 hover:text-white hover:bg-[#1a2333]"
               >
-                Manter Original
+                Usar Original (Instantâneo)
               </Button>
               <Button
                 type="button"
                 size="sm"
                 onClick={handleConvert}
-                className="bg-gradient-to-r from-[var(--gc-accent)] to-teal-400 text-black font-semibold text-xs hover:brightness-110"
+                className="bg-gradient-to-r from-[var(--gc-accent)] to-teal-400 text-black font-semibold text-xs hover:brightness-110 shadow-[0_0_12px_var(--gc-accent-20)]"
               >
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                 Converter para {activeFormatInfo.label.split(" ")[0]}

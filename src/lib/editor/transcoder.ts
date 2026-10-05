@@ -1,5 +1,5 @@
-// GalaxyCut — Motor de conversão e transcodificação de mídia universal
-// Converte vídeos e áudios para MP4, WebM, MOV, MKV, AVI, GIF, MP3 e WAV
+// GalaxyCut — Motor de conversão e transcodificação ultra-rápida de mídia (v7.8)
+// Transcodificação acelerada por hardware via streaming contínuo / WebCodecs / MediaStream
 "use client";
 
 import { registry } from "./media";
@@ -99,7 +99,7 @@ export interface TranscodeOptions {
 
 const WC = typeof window !== "undefined" ? (window as any) : ({} as any);
 
-function waitMediaReady(el: HTMLMediaElement, timeoutMs = 10000): Promise<void> {
+function waitMediaReady(el: HTMLMediaElement, timeoutMs = 8000): Promise<void> {
   return new Promise((res, rej) => {
     if (el.readyState >= 2) return res();
     let done = false;
@@ -119,31 +119,9 @@ function waitMediaReady(el: HTMLMediaElement, timeoutMs = 10000): Promise<void> 
     el.addEventListener("canplay", onOk, { once: true });
     el.addEventListener("error", onErr, { once: true });
     const timer = setTimeout(() => {
-      if (el.readyState >= 2) finish(true);
+      if (el.readyState >= 1) finish(true);
       else finish(false);
     }, timeoutMs);
-  });
-}
-
-function seekVideo(v: HTMLVideoElement, time: number): Promise<void> {
-  const target = Math.max(0, Math.min((v.duration || time) - 0.001, time));
-  if (Math.abs(v.currentTime - target) < 0.005 && v.readyState >= 2) return Promise.resolve();
-  return new Promise((resolve) => {
-    let done = false;
-    const fin = () => {
-      if (done) return;
-      done = true;
-      v.removeEventListener("seeked", fin);
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = setTimeout(fin, 3000);
-    v.addEventListener("seeked", fin, { once: true });
-    try {
-      v.currentTime = target;
-    } catch {
-      fin();
-    }
   });
 }
 
@@ -162,31 +140,31 @@ function generateThumbFromVideo(v: HTMLVideoElement): string {
 }
 
 /**
- * Converte qualquer arquivo de vídeo ou áudio para o formato desejado
+ * Converte qualquer arquivo de vídeo ou áudio em alta velocidade
  */
 export async function transcodeMedia(
   sourceMedia: MediaMeta,
   targetFormat: TranscodeFormat,
   opts: TranscodeOptions = {}
 ): Promise<{ blob: Blob; meta: MediaMeta }> {
-  const { onProgress, cancelRef, shortSide = 0, fps = 30 } = opts;
+  const { onProgress, cancelRef, shortSide = 0 } = opts;
   const throwIfCancelled = () => {
     if (cancelRef?.cancelled) throw new Error("Conversão cancelada pelo usuário");
   };
 
   const blob = registry.getBlob(sourceMedia.id);
-  if (!blob) throw new Error("Arquivo de mídia original não encontrado na memória");
+  if (!blob) throw new Error("Arquivo de mídia original não encontrado");
 
   const fmtInfo = TRANSCODE_FORMATS.find((f) => f.id === targetFormat) || TRANSCODE_FORMATS[0];
   const newName = sourceMedia.name.replace(/\.[^/.]+$/, "") + `.${fmtInfo.ext}`;
-  onProgress?.(0.05, "Carregando mídia original...");
+  onProgress?.(0.05, "Iniciando processamento ultra-rápido...");
 
-  // ---------- Conversão para ÁUDIO (WAV / MP3) ----------
+  // ---------- 1) Conversão para ÁUDIO (WAV / MP3) ----------
   if (targetFormat === "wav" || targetFormat === "mp3") {
-    onProgress?.(0.2, "Decodificando trilha de áudio...");
+    onProgress?.(0.2, "Extraindo áudio de alta fidelidade...");
     const audioBuf = await decodeAudioOf(blob);
     throwIfCancelled();
-    onProgress?.(0.6, "Codificando áudio...");
+    onProgress?.(0.7, "Finalizando codificação...");
     const wavBlob = encodeWav(audioBuf);
     const finalBlob = targetFormat === "mp3" ? new Blob([wavBlob], { type: "audio/mp3" }) : wavBlob;
     const peaks = peaksFromBuffer(audioBuf);
@@ -204,11 +182,11 @@ export async function transcodeMedia(
       folderId: sourceMedia.folderId,
       source: "local",
     };
-    onProgress?.(1, "Concluído!");
+    onProgress?.(1, "Áudio extraído com sucesso!");
     return { blob: finalBlob, meta: newMeta };
   }
 
-  // ---------- Conversão para GIF ANIMADO ----------
+  // ---------- 2) Conversão para GIF ANIMADO ----------
   if (targetFormat === "gif") {
     const url = registry.getUrl(sourceMedia.id);
     if (!url) throw new Error("URL da mídia indisponível");
@@ -221,7 +199,7 @@ export async function transcodeMedia(
     await waitMediaReady(v);
     throwIfCancelled();
 
-    const dur = Math.min(v.duration || sourceMedia.duration || 5, 20); // Limite de 20s para GIFs
+    const dur = Math.min(v.duration || sourceMedia.duration || 5, 15);
     const srcW = v.videoWidth || 1280;
     const srcH = v.videoHeight || 720;
     const targetW = Math.min(480, srcW);
@@ -232,23 +210,29 @@ export async function transcodeMedia(
     canvas.height = targetH;
     const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
-    const gifFps = 15;
+    const gifFps = 12;
     const totalFrames = Math.max(1, Math.ceil(dur * gifFps));
     const gifEnc = GIFEncoder();
 
+    // Amostragem acelerada com playback streaming
+    v.playbackRate = 4;
+    v.currentTime = 0;
+    await v.play().catch(() => {});
+
     for (let i = 0; i < totalFrames; i++) {
       throwIfCancelled();
-      const t = (i / totalFrames) * dur;
-      await seekVideo(v, t);
+      const targetTime = (i / totalFrames) * dur;
+      v.currentTime = targetTime;
+      await new Promise((r) => setTimeout(r, 20));
       ctx.drawImage(v, 0, 0, targetW, targetH);
       const { data } = ctx.getImageData(0, 0, targetW, targetH);
-      const palette = quantize(data, 256);
+      const palette = quantize(data, 128);
       const index = applyPalette(data, palette);
       gifEnc.writeFrame(index, targetW, targetH, { palette, delay: Math.round(1000 / gifFps) });
-      onProgress?.(0.1 + (i / totalFrames) * 0.85, `Renderizando quadro ${i + 1}/${totalFrames}...`);
-      await new Promise((r) => setTimeout(r, 0));
+      onProgress?.(0.1 + (i / totalFrames) * 0.85, `Renderizando GIF: ${Math.round((i / totalFrames) * 100)}%`);
     }
 
+    v.pause();
     gifEnc.finish();
     const gifBlob = new Blob([gifEnc.bytesView()], { type: "image/gif" });
     const newId = uid();
@@ -265,17 +249,17 @@ export async function transcodeMedia(
       folderId: sourceMedia.folderId,
       source: "local",
     };
-    onProgress?.(1, "Concluído!");
+    onProgress?.(1, "GIF gerado com sucesso!");
     return { blob: gifBlob, meta: newMeta };
   }
 
-  // ---------- Conversão para VÍDEO (MP4, WebM, MOV, MKV, AVI) ----------
+  // ---------- 3) Conversão Ultra-Rápida de VÍDEO (MP4, WebM, MOV, MKV, AVI) ----------
   const url = registry.getUrl(sourceMedia.id);
   if (!url) throw new Error("URL da mídia indisponível");
 
   const v = document.createElement("video");
   v.src = url;
-  v.muted = true;
+  v.muted = false;
   v.preload = "auto";
   v.playsInline = true;
   await waitMediaReady(v);
@@ -303,163 +287,73 @@ export async function transcodeMedia(
   const isWebmBased = targetFormat === "webm" || targetFormat === "mkv";
   const isMp4Based = targetFormat === "mp4" || targetFormat === "mov" || targetFormat === "avi";
 
-  // Tenta extrair áudio se disponível
-  let audioBuffer: AudioBuffer | null = null;
-  try {
-    audioBuffer = await decodeAudioOf(blob);
-  } catch {
-    audioBuffer = null;
-  }
+  // Se o navegador suporta captureStream contínuo com aceleração por hardware (instantâneo):
+  const captureStreamFn = (v as any).captureStream || (v as any).mozCaptureStream;
 
-  const hasWebCodecs = typeof WC.VideoEncoder === "function" && typeof WC.VideoFrame === "function";
-
-  if (hasWebCodecs) {
+  if (typeof captureStreamFn === "function" && typeof MediaRecorder !== "undefined") {
     try {
-      onProgress?.(0.1, "Iniciando codificação acelerada...");
-      let muxer: any;
-      let videoCodec = isWebmBased ? "vp09.00.10.08" : "avc1.640028";
-      let muxerCodec = isWebmBased ? "V_VP9" : "avc";
+      onProgress?.(0.1, "Iniciando codificação acelerada em tempo real...");
+      const stream: MediaStream = captureStreamFn.call(v);
 
-      // Verifica suporte de codec
-      try {
-        const support = await WC.VideoEncoder.isConfigSupported({
-          codec: videoCodec,
-          width: targetW,
-          height: targetH,
-          bitrate: 10_000_000,
-          framerate: fps,
-        });
-        if (!support?.supported) {
-          videoCodec = isWebmBased ? "vp8" : "avc1.42001f";
-          muxerCodec = isWebmBased ? "V_VP8" : "avc";
-        }
-      } catch {
-        // mantém padrão
+      // Escolhe o melhor tipo MIME suportado
+      let mimeType = isWebmBased ? "video/webm;codecs=vp9,opus" : 'video/mp4;codecs="avc1.640028,mp4a.40.2"';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = isWebmBased ? "video/webm" : "video/mp4";
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = isWebmBased ? "video/webm" : "video/mp4";
       }
 
-      let audioCodecPick: string | null = null;
-      if (audioBuffer) {
-        const cands = isMp4Based ? ["mp4a.40.2", "opus"] : ["opus", "vorbis"];
-        for (const c of cands) {
-          try {
-            const aSup = await WC.AudioEncoder?.isConfigSupported?.({
-              codec: c,
-              sampleRate: 48000,
-              numberOfChannels: 2,
-              bitrate: 160000,
-            });
-            if (aSup?.supported) {
-              audioCodecPick = c;
-              break;
-            }
-          } catch {}
-        }
-      }
-
-      if (isMp4Based) {
-        muxer = new Mp4Muxer({
-          target: new Mp4Target(),
-          video: { codec: muxerCodec as "avc", width: targetW, height: targetH, frameRate: fps },
-          audio: audioCodecPick
-            ? { codec: audioCodecPick === "opus" ? "opus" : "aac", numberOfChannels: 2, sampleRate: 48000 }
-            : undefined,
-          fastStart: "in-memory",
-          firstTimestampBehavior: "offset",
-        });
-      } else {
-        muxer = new WebmMuxer({
-          target: new WebmTarget(),
-          video: { codec: muxerCodec, width: targetW, height: targetH, frameRate: fps },
-          audio: audioCodecPick ? { codec: "A_OPUS", numberOfChannels: 2, sampleRate: 48000 } : undefined,
-          firstTimestampBehavior: "permissive",
-        });
-      }
-
-      const videoEncoder = new WC.VideoEncoder({
-        output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
-        error: (e: any) => console.error("VideoEncoder error:", e),
+      const chunks: BlobPart[] = [];
+      const rec = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported(mimeType) ? mimeType : "",
+        videoBitsPerSecond: 12_000_000,
+        audioBitsPerSecond: 192_000,
       });
 
-      videoEncoder.configure({
-        codec: videoCodec,
-        width: targetW,
-        height: targetH,
-        bitrate: 8_000_000,
-        framerate: fps,
-        latencyMode: "quality",
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      const recDone = new Promise<void>((resolve, reject) => {
+        rec.onstop = () => resolve();
+        rec.onerror = (e) => reject(e);
       });
 
-      let audioEncoder: any = null;
-      if (audioCodecPick && audioBuffer && WC.AudioEncoder) {
-        try {
-          audioEncoder = new WC.AudioEncoder({
-            output: (chunk: any, meta: any) => muxer.addAudioChunk(chunk, meta),
-            error: (e: any) => console.error("AudioEncoder error:", e),
-          });
-          audioEncoder.configure({
-            codec: audioCodecPick,
-            sampleRate: 48000,
-            numberOfChannels: 2,
-            bitrate: 160000,
-          });
+      rec.start(100);
 
-          // Converte o buffer para AudioData e alimenta o codificador
-          const samplesCount = audioBuffer.length;
-          const chunkSize = 48000;
-          for (let offset = 0; offset < samplesCount; offset += chunkSize) {
-            const thisChunkSize = Math.min(chunkSize, samplesCount - offset);
-            const planeData = new Float32Array(thisChunkSize * 2);
-            const ch0 = audioBuffer.getChannelData(0);
-            const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : ch0;
-            for (let i = 0; i < thisChunkSize; i++) {
-              planeData[i] = ch0[offset + i];
-              planeData[thisChunkSize + i] = ch1[offset + i];
-            }
-            const audioData = new WC.AudioData({
-              format: "f32-planar",
-              sampleRate: audioBuffer.sampleRate,
-              numberOfFrames: thisChunkSize,
-              numberOfChannels: 2,
-              timestamp: (offset / audioBuffer.sampleRate) * 1_000_000,
-              data: planeData,
-            });
-            audioEncoder.encode(audioData);
-            audioData.close();
+      // Acelera o playback para processar 4× mais rápido que o tempo real
+      v.playbackRate = 4.0;
+      v.currentTime = 0;
+      await v.play();
+
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (cancelRef?.cancelled) {
+            v.pause();
+            rec.stop();
+            resolve();
+            return;
           }
-          await audioEncoder.flush();
-        } catch (aErr) {
-          console.warn("Audio transcode skipped:", aErr);
-        }
-      }
+          const curr = v.currentTime;
+          const pct = Math.min(0.98, curr / Math.max(0.1, dur));
+          onProgress?.(0.1 + pct * 0.85, `Processando: ${Math.round(pct * 100)}% (${curr.toFixed(1)}s / ${dur.toFixed(1)}s)`);
 
-      const canvas = document.createElement("canvas");
-      canvas.width = targetW;
-      canvas.height = targetH;
-      const ctx = canvas.getContext("2d")!;
+          if (v.ended || curr >= dur - 0.05) {
+            resolve();
+          } else {
+            requestAnimationFrame(check);
+          }
+        };
+        requestAnimationFrame(check);
+      });
 
-      const totalFrames = Math.max(1, Math.ceil(dur * fps));
-      for (let i = 0; i < totalFrames; i++) {
-        throwIfCancelled();
-        const t = (i / totalFrames) * dur;
-        await seekVideo(v, t);
-        ctx.drawImage(v, 0, 0, targetW, targetH);
+      v.pause();
+      rec.stop();
+      await recDone;
+      throwIfCancelled();
 
-        const vf = new WC.VideoFrame(canvas, {
-          timestamp: (i * 1_000_000) / fps,
-          duration: 1_000_000 / fps,
-        });
-        videoEncoder.encode(vf, { keyFrame: i % (fps * 2) === 0 });
-        vf.close();
-
-        onProgress?.(0.15 + (i / totalFrames) * 0.8, `Codificando vídeo: ${Math.round((i / totalFrames) * 100)}%`);
-        if (i % 5 === 0) await new Promise((r) => setTimeout(r, 0));
-      }
-
-      await videoEncoder.flush();
-      muxer.finalize();
-
-      const outBuffer = muxer.target.buffer;
-      const finalBlob = new Blob([outBuffer], { type: fmtInfo.mime });
+      const finalBlob = new Blob(chunks, { type: fmtInfo.mime });
       const newId = uid();
       registry.put(newId, finalBlob);
 
@@ -475,48 +369,84 @@ export async function transcodeMedia(
         folderId: sourceMedia.folderId,
         source: "local",
       };
-      onProgress?.(1, "Conversão finalizada com sucesso!");
+
+      onProgress?.(1, "Conversão ultra-rápida finalizada!");
       return { blob: finalBlob, meta: newMeta };
-    } catch (encErr) {
-      console.warn("WebCodecs transcode falhou, tentando fallback MediaRecorder:", encErr);
+    } catch (streamErr) {
+      console.warn("CaptureStream transcode falhou, tentando fallback WebCodecs/Canvas:", streamErr);
     }
   }
 
-  // ---------- Fallback MediaRecorder ----------
-  onProgress?.(0.2, "Convertendo com renderizador universal...");
+  // ---------- Fallback WebCodecs em Lotes Acelerados ----------
   const canvas = document.createElement("canvas");
   canvas.width = targetW;
   canvas.height = targetH;
   const ctx = canvas.getContext("2d")!;
 
-  const stream = canvas.captureStream(fps);
-  const chunks: BlobPart[] = [];
-  const rec = new MediaRecorder(stream, {
-    mimeType: isWebmBased ? "video/webm" : "video/mp4",
-  });
-  rec.ondataavailable = (e) => {
-    if (e.data.size > 0) chunks.push(e.data);
-  };
-
-  const recDone = new Promise<void>((resolve) => {
-    rec.onstop = () => resolve();
-  });
-
-  rec.start(200);
-  const totalFrames = Math.max(1, Math.ceil(dur * fps));
-  for (let i = 0; i < totalFrames; i++) {
-    throwIfCancelled();
-    const t = (i / totalFrames) * dur;
-    await seekVideo(v, t);
-    ctx.drawImage(v, 0, 0, targetW, targetH);
-    onProgress?.(0.2 + (i / totalFrames) * 0.75, `Gravando quadro ${i + 1}/${totalFrames}...`);
-    await new Promise((r) => setTimeout(r, 1000 / fps));
+  let muxer: any;
+  if (isMp4Based) {
+    muxer = new Mp4Muxer({
+      target: new Mp4Target(),
+      video: { codec: "avc", width: targetW, height: targetH, frameRate: 30 },
+      fastStart: "in-memory",
+    });
+  } else {
+    muxer = new WebmMuxer({
+      target: new WebmTarget(),
+      video: { codec: "V_VP9", width: targetW, height: targetH, frameRate: 30 },
+    });
   }
 
-  rec.stop();
-  await recDone;
+  const videoEncoder = new WC.VideoEncoder({
+    output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
+    error: (e: any) => console.error("VideoEncoder error:", e),
+  });
 
-  const finalBlob = new Blob(chunks, { type: fmtInfo.mime });
+  videoEncoder.configure({
+    codec: isMp4Based ? "avc1.42001f" : "vp09.00.10.08",
+    width: targetW,
+    height: targetH,
+    bitrate: 8_000_000,
+    framerate: 30,
+  });
+
+  // Em vez de seekar quadro a quadro, toca o vídeo e grava os quadros conforme chegam
+  v.playbackRate = 4.0;
+  v.currentTime = 0;
+  await v.play().catch(() => {});
+
+  const fps = 30;
+  let frameIdx = 0;
+  const totalFrames = Math.max(1, Math.ceil(dur * fps));
+
+  await new Promise<void>((resolve) => {
+    const step = () => {
+      if (cancelRef?.cancelled || v.ended || v.currentTime >= dur - 0.05) {
+        resolve();
+        return;
+      }
+      ctx.drawImage(v, 0, 0, targetW, targetH);
+      const vf = new WC.VideoFrame(canvas, {
+        timestamp: (frameIdx * 1_000_000) / fps,
+        duration: 1_000_000 / fps,
+      });
+      videoEncoder.encode(vf, { keyFrame: frameIdx % 60 === 0 });
+      vf.close();
+      frameIdx++;
+
+      const pct = Math.min(0.95, v.currentTime / Math.max(0.1, dur));
+      onProgress?.(0.1 + pct * 0.85, `Renderizando: ${Math.round(pct * 100)}%`);
+
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+
+  v.pause();
+  await videoEncoder.flush();
+  muxer.finalize();
+
+  const finalBlob = new Blob([muxer.target.buffer], { type: fmtInfo.mime });
   const newId = uid();
   registry.put(newId, finalBlob);
 
@@ -532,6 +462,7 @@ export async function transcodeMedia(
     folderId: sourceMedia.folderId,
     source: "local",
   };
-  onProgress?.(1, "Concluído!");
+
+  onProgress?.(1, "Conversão finalizada!");
   return { blob: finalBlob, meta: newMeta };
 }
