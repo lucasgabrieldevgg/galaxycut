@@ -468,7 +468,7 @@ class PlaybackEngine {
       const isActive = c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001;
       const fade = isActive ? fadeEnvelope(c, t) : 0;
       const eff = c.muted || track?.muted ? 0 : c.volume * fade;
-      audioEngine.update(key, { gain: eff, enhance: c.enhance });
+      audioEngine.update(key, { gain: eff, enhance: c.enhance, filters: c.audioFilters });
       if (!isActive && !el.paused) el.pause();
     }
   }

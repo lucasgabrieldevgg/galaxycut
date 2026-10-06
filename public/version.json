@@ -1,7 +1,23 @@
 {
   "name": "GalaxyCut",
-  "version": "7.8.0",
+  "version": "7.9.0",
   "changelog": [
+    {
+      "version": "7.9.0",
+      "date": "2026-10-06",
+      "items": [
+        "BATCH AUDIO ENHANCE & OBS STUDIO FILTERS: Selective track & clip dialog with select-all, customizable High-pass, Compressor, Limiter, Gain dB and Noise Gate with live preview and microphone recording integration",
+        "MULTI-TRACK MULTI-CLIP DRAG & AUTO-SCROLL: Dragging marquee-selected clips across different tracks moves all clips in unison, with continuous smooth horizontal auto-scrolling at timeline edges"
+      ],
+      "items_pt": [
+        "MELHORAR ÁUDIO EM LOTE & FILTROS ESTILO OBS STUDIO: Diálogo seletivo por faixas e clipes (todos selecionados por padrão), filtros customizados (Passa-Alta, Compressor, Limitador, Ganho e Portão de Ruído) com integração ao microfone",
+        "MOVIMENTAÇÃO DE MÚLTIPLOS CLIPES EM FAIXAS DIFERENTES & AUTO-SCROLL: Arraste de múltiplos clipes selecionados em uníssono e rolagem automática suave ao arrastar clipes para as laterais da timeline"
+      ],
+      "items_es": [
+        "MEJORA DE AUDIO POR LOTES Y FILTROS ESTILO OBS STUDIO: Diálogo de selección por pistas y clips, filtros personalizables (Pasa-altos, Compresor, Limitador, Ganancia y Puerta de Ruido) con integración de micrófono",
+        "MOVIMIENTO DE MÚLTIPLES CLIPS Y AUTO-SCROLL: Mueve múltiples clips seleccionados al unísono en diferentes pistas con desplazamiento horizontal automático en los bordes"
+      ]
+    },
     {
       "version": "7.8.0",
       "date": "2026-10-04",
@@ -287,5 +303,5 @@
       ]
     }
   ],
-  "date": "2026-10-06T21:13:27.646Z"
+  "date": "2026-10-06T21:40:36.663Z"
 }

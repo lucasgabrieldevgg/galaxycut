@@ -78,7 +78,9 @@ interface ProjectState extends Snapshot {
   settleOverlaps: (clipId: string) => number;
   addTextClip: (at?: number | Partial<TextProps> | string, preset?: Partial<TextProps>) => Clip | void;
   updateClip: (id: string, patch: Partial<Clip>, opts?: { history?: boolean }) => void;
+  updateClips: (ids: string[], patch: Partial<Clip>, opts?: { history?: boolean }) => void;
   moveClipLive: (id: string, start: number, trackId: string) => void;
+  moveClipsLive: (moves: { id: string; start: number; trackId?: string }[]) => void;
   /** apaga o clipe. ripple=true puxa os da frente pra fechar o espaço junto com o de trás */
   deleteClip: (id: string, ripple?: boolean) => void;
   /** move ESTE clipe pra encostar no de trás (fecha o espaço que ficou) */
@@ -541,8 +543,27 @@ export const useProject = create<ProjectState>((set, get) => ({
     if (opts?.history !== false) get().pushHistory();
     set((s) => ({ clips: s.clips.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
   },
+  updateClips: (ids, patch, opts) => {
+    if (opts?.history !== false) get().pushHistory();
+    const setIds = new Set(ids);
+    set((s) => ({ clips: s.clips.map((c) => (setIds.has(c.id) ? { ...c, ...patch } : c)) }));
+  },
   moveClipLive: (id, start, trackId) =>
     set((s) => ({ clips: s.clips.map((c) => (c.id === id ? { ...c, start, trackId } : c)) })),
+  moveClipsLive: (moves) => {
+    const moveMap = new Map(moves.map((m) => [m.id, m]));
+    set((s) => ({
+      clips: s.clips.map((c) => {
+        const m = moveMap.get(c.id);
+        if (!m) return c;
+        return {
+          ...c,
+          start: m.start,
+          trackId: m.trackId ?? c.trackId,
+        };
+      }),
+    }));
+  },
   deleteClip: (id, ripple = false) => {
     const s0 = get();
     const clip = s0.clips.find((c) => c.id === id);

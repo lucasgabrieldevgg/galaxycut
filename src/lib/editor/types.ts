@@ -280,6 +280,47 @@ export const EFFECT_CATALOG: EffectMeta[] = [
   { type: "emboss", name: "Relevo 3D Metálico", category: "stylize", icon: "🗿", description: "Textura escultural em baixo-relevo de metal escovado", defaultIntensity: 1 },
 ];
 
+export interface AudioFilterConfig {
+  enabled: boolean;
+  // 1. Passa-Alta (High-Pass / Corte de Ruído Grave)
+  highpassEnabled: boolean;
+  highpassFrequency: number; // Hz (20..300, padrão OBS 85)
+  // 2. Compressor de Dinâmica (Estilo OBS Studio)
+  compressorEnabled: boolean;
+  compressorThreshold: number; // dB (-60..0, padrão OBS -24)
+  compressorRatio: number; // 1..20 (padrão OBS 3.5)
+  compressorAttack: number; // ms (1..100, padrão OBS 6)
+  compressorRelease: number; // ms (10..1000, padrão OBS 250)
+  compressorMakeupGain: number; // dB (0..24, padrão OBS 2)
+  // 3. Limitador de Picos (Evita Distorção / Limiter)
+  limiterEnabled: boolean;
+  limiterThreshold: number; // dB (-20..0, padrão OBS -1.5)
+  limiterRelease: number; // ms (10..500, padrão OBS 100)
+  // 4. Ganho em dB
+  gainDb: number; // dB (-20..+20, padrão 0)
+  // 5. Portão de Ruído (Noise Gate)
+  noiseGateEnabled: boolean;
+  noiseGateThreshold: number; // dB (-60..-10, padrão -40)
+}
+
+export const DEFAULT_AUDIO_FILTERS: AudioFilterConfig = {
+  enabled: true,
+  highpassEnabled: true,
+  highpassFrequency: 85,
+  compressorEnabled: true,
+  compressorThreshold: -24,
+  compressorRatio: 3.5,
+  compressorAttack: 6,
+  compressorRelease: 250,
+  compressorMakeupGain: 2,
+  limiterEnabled: true,
+  limiterThreshold: -1.5,
+  limiterRelease: 100,
+  gainDb: 0,
+  noiseGateEnabled: false,
+  noiseGateThreshold: -40,
+};
+
 export interface Clip {
   id: string;
   kind: ClipKind;
@@ -318,6 +359,7 @@ export interface Clip {
   volume: number; // 0..2
   muted: boolean;
   enhance: boolean; // melhoria de áudio (highpass + compressor)
+  audioFilters?: AudioFilterConfig; // filtros de áudio estilo OBS Studio
   transitionIn?: Transition; // transição na entrada (na junção com o clipe anterior da faixa)
   text?: TextProps;
   keyframes?: Keyframe[]; // CapCut Keyframes (losangos ◆)
