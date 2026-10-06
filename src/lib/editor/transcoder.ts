@@ -471,8 +471,15 @@ export async function transcodeMedia(
       });
 
       v.pause();
-      await videoEncoder.flush();
-      muxer.finalize();
+      try {
+        await Promise.race([
+          videoEncoder.flush(),
+          new Promise((r) => setTimeout(r, 800)),
+        ]);
+      } catch {}
+      try {
+        muxer.finalize();
+      } catch {}
 
       const outBuffer = muxer.target.buffer;
       const finalBlob = new Blob([outBuffer], { type: fmtInfo.mime });

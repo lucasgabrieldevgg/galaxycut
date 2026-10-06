@@ -181,7 +181,7 @@ class MediaRegistry {
 
   private async probeVideo(id: string, name: string, url: string): Promise<MediaMeta> {
     const v = document.createElement("video");
-    v.preload = "metadata";
+    v.preload = "auto";
     v.muted = true;
     v.playsInline = true;
     v.crossOrigin = "anonymous";
@@ -191,14 +191,39 @@ class MediaRegistry {
       v.load();
     } catch {}
 
-    let duration = 5;
+    let duration = 0;
     let width = 1920;
     let height = 1080;
     let thumbnail = "";
 
     try {
       await waitMediaReady(v, 6000);
-      if (isFinite(v.duration) && v.duration > 0) duration = v.duration;
+
+      if (isFinite(v.duration) && v.duration > 0) {
+        duration = v.duration;
+      } else {
+        // Correção para MKV e WebM no Chrome onde v.duration é Infinity
+        try {
+          v.currentTime = 1e7;
+          await new Promise<void>((resolve) => {
+            const onSeek = () => {
+              v.removeEventListener("seeked", onSeek);
+              v.removeEventListener("timeupdate", onSeek);
+              resolve();
+            };
+            v.addEventListener("seeked", onSeek, { once: true });
+            v.addEventListener("timeupdate", onSeek, { once: true });
+            setTimeout(resolve, 500);
+          });
+          if (isFinite(v.duration) && v.duration > 0) {
+            duration = v.duration;
+          } else if (isFinite(v.currentTime) && v.currentTime > 0) {
+            duration = v.currentTime;
+          }
+          v.currentTime = 0;
+        } catch {}
+      }
+
       if (v.videoWidth > 0 && v.videoHeight > 0) {
         width = v.videoWidth;
         height = v.videoHeight;
@@ -219,7 +244,7 @@ class MediaRegistry {
           v.addEventListener("seeked", finish, { once: true });
           setTimeout(finish, 1500);
           try {
-            v.currentTime = Math.min(duration / 2, 0.5);
+            v.currentTime = Math.min((duration || 5) / 2, 0.5);
           } catch {
             finish();
           }
@@ -231,9 +256,21 @@ class MediaRegistry {
       console.warn("probeVideo warning:", e);
     }
 
+    // Se duration ainda for <= 0, extrai a duração exata da trilha de áudio
+    const blob = this.blobs.get(id);
+    if ((duration <= 0 || duration === 5) && blob) {
+      try {
+        const audioBuf = await decodeAudioOf(blob, 5);
+        if (audioBuf && audioBuf.duration > 0) {
+          duration = audioBuf.duration;
+        }
+      } catch {}
+    }
+
+    if (duration <= 0) duration = 5;
+
     let peaks: number[] | undefined;
     try {
-      const blob = this.blobs.get(id);
       if (blob && blob.size < 400 * 1024 * 1024) peaks = await computePeaks(blob, duration, 900);
     } catch {
       peaks = undefined;
@@ -261,30 +298,24 @@ class MediaRegistry {
 }
 
 function waitMediaReady(el: HTMLMediaElement, timeoutMs = 6000): Promise<void> {
-  return new Promise((res, rej) => {
+  return new Promise((res) => {
     if (el.readyState >= 1) return res();
     let done = false;
-    const finish = (ok: boolean) => {
+    const finish = () => {
       if (done) return;
       done = true;
-      el.removeEventListener("loadedmetadata", onOk);
-      el.removeEventListener("loadeddata", onOk);
-      el.removeEventListener("canplay", onOk);
-      el.removeEventListener("error", onErr);
+      el.removeEventListener("loadedmetadata", finish);
+      el.removeEventListener("loadeddata", finish);
+      el.removeEventListener("canplay", finish);
+      el.removeEventListener("error", finish);
       clearTimeout(timer);
-      if (ok) res();
-      else rej(new Error("Timeout ao carregar mídia"));
+      res();
     };
-    const onOk = () => finish(true);
-    const onErr = () => finish(false);
-    el.addEventListener("loadedmetadata", onOk, { once: true });
-    el.addEventListener("loadeddata", onOk, { once: true });
-    el.addEventListener("canplay", onOk, { once: true });
-    el.addEventListener("error", onErr, { once: true });
-    const timer = setTimeout(() => {
-      if (el.readyState >= 1) finish(true);
-      else finish(false);
-    }, timeoutMs);
+    el.addEventListener("loadedmetadata", finish, { once: true });
+    el.addEventListener("loadeddata", finish, { once: true });
+    el.addEventListener("canplay", finish, { once: true });
+    el.addEventListener("error", finish, { once: true });
+    const timer = setTimeout(finish, timeoutMs);
   });
 }
 
