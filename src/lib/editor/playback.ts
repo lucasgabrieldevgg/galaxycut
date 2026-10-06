@@ -408,24 +408,19 @@ class PlaybackEngine {
           el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed));
           void el.play().catch(() => undefined);
         } else {
-          // drift grande (>0.6s) faz seek direto
-          if (drift > 0.6 && !el.seeking) {
+          // Se o drift for perceptível (>0.06s), resincroniza imediatamente o currentTime
+          if (drift > 0.06 && !el.seeking) {
             try {
               el.currentTime = expected;
             } catch {
               /* noop */
             }
-          } else if (drift > 0.08) {
-            // drift leve: ajusta velocidade suavemente (+-5%) pra convergir sem pausar/engasgar
-            const rateAdjust = expected > el.currentTime ? 1.05 : 0.95;
-            el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed * rateAdjust));
-          } else {
-            el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed));
           }
+          el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed));
         }
       } else {
         if (!el.paused) el.pause();
-        if (Math.abs(el.currentTime - expected) > 0.04) {
+        if (Math.abs(el.currentTime - expected) > 0.02) {
           try {
             el.currentTime = expected;
           } catch {
@@ -594,7 +589,10 @@ class PlaybackEngine {
     cancelAnimationFrame(this.glideRaf);
     this.glideRaf = 0;
     usePlayback.getState().setPlayhead(target);
-    this.dirty = true;
+    this.syncMedia(target, pb.playing);
+    this.updateAudio(target);
+    this.renderPreview(target);
+    this.dirty = false;
   }
 
   /** seta deslizando com inércia até o alvo */

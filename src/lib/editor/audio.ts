@@ -17,11 +17,13 @@ export class AudioEngine {
   private master: GainNode | null = null;
   private recDest: MediaStreamAudioDestinationNode | null = null;
   private chains = new Map<string, Chain>();
-  private linked = new WeakSet<HTMLMediaElement>();
+  private linked = new WeakMap<HTMLMediaElement, Chain>();
 
   ensureContext(): AudioContext {
     if (!this.ctx) {
-      const AC: typeof AudioContext = window.AudioContext;
+      const AC: typeof AudioContext =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AC();
       this.master = this.ctx.createGain();
       this.master.gain.value = 1;
@@ -33,8 +35,10 @@ export class AudioEngine {
 
   /** Cria (ou recupera) o grafo de um elemento. Seguro chamar repetidamente. */
   attach(key: string, el: HTMLMediaElement): Chain | null {
-    if (this.linked.has(el)) {
-      return this.chains.get(key) ?? null;
+    const existing = this.linked.get(el);
+    if (existing) {
+      this.chains.set(key, existing);
+      return existing;
     }
     try {
       const ctx = this.ensureContext();
@@ -58,9 +62,10 @@ export class AudioEngine {
       const makeup = ctx.createGain();
       makeup.gain.value = 1;
       const gain = ctx.createGain();
+      gain.gain.value = 1;
       source.connect(hp).connect(comp).connect(limiter).connect(makeup).connect(gain).connect(this.master!);
       const chain: Chain = { source, hp, comp, limiter, makeup, gain };
-      this.linked.add(el);
+      this.linked.set(el, chain);
       this.chains.set(key, chain);
       return chain;
     } catch {
@@ -74,27 +79,17 @@ export class AudioEngine {
   }
 
   dropClip(key: string) {
-    const c = this.chains.get(key);
-    if (!c) return;
-    try {
-      c.source.disconnect();
-      c.hp.disconnect();
-      c.comp.disconnect();
-      c.limiter.disconnect();
-      c.makeup.disconnect();
-      c.gain.disconnect();
-    } catch {
-      /* noop */
-    }
+    // Apenas desassocia a chave da cadeia sem desconectar o nó físico do elemento
     this.chains.delete(key);
   }
 
-  /** Atualiza ganho/filtros por frame. */
+  /** Atualiza ganho/filtros por frame sem ruído de clique. */
   update(key: string, opts: { gain: number; enhance: boolean }) {
     const c = this.chains.get(key);
     if (!c || !this.ctx) return;
     const t = this.ctx.currentTime;
-    c.gain.gain.setTargetAtTime(opts.gain, t, 0.015);
+    const targetGain = Math.max(0, opts.gain);
+    c.gain.gain.setTargetAtTime(targetGain, t, 0.015);
     if (opts.enhance) {
       c.hp.frequency.setTargetAtTime(85, t, 0.05); // corta ruído grave (vento/ar/zumbido)
       c.comp.threshold.setTargetAtTime(-24, t, 0.05);
@@ -128,3 +123,4 @@ export class AudioEngine {
 }
 
 export const audioEngine = new AudioEngine();
+

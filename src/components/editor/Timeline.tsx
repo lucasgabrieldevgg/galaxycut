@@ -764,11 +764,18 @@ export function Timeline() {
                 }
               }}
               onPointerDown={(e) => {
+                const wasPlaying = usePlayback.getState().playing;
+                if (wasPlaying) {
+                  engine.pause();
+                }
                 scrubTo(e.clientX);
                 const move = (ev: PointerEvent) => scrubTo(ev.clientX);
                 const up = () => {
                   window.removeEventListener("pointermove", move);
                   window.removeEventListener("pointerup", up);
+                  if (wasPlaying) {
+                    engine.play();
+                  }
                 };
                 window.addEventListener("pointermove", move);
                 window.addEventListener("pointerup", up);
