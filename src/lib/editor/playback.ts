@@ -83,7 +83,23 @@ class PlaybackEngine {
       this.last = now;
       const pb = usePlayback.getState();
       if (pb.playing) {
-        const t = pb.playhead + dt;
+        // Encontra o elemento de mídia líder (ativo no playhead atual) para travar o relógio no hardware de áudio
+        let leaderTime: number | null = null;
+        const active = this.activeClips(pb.playhead);
+        for (const clip of active) {
+          if (clip.kind !== "video" && clip.kind !== "audio") continue;
+          const key = this.bindings.get(clip.id);
+          const el = key ? this.elements.get(key) : undefined;
+          if (el instanceof HTMLMediaElement && !el.paused && !el.seeking) {
+            const t = clip.start + (el.currentTime - clip.inPoint) / (clip.speed || 1);
+            if (isFinite(t) && Math.abs(t - pb.playhead) < 0.6) {
+              leaderTime = t;
+              break;
+            }
+          }
+        }
+
+        const t = leaderTime !== null ? leaderTime : pb.playhead + dt;
         const dur = pb.duration;
         if (t >= dur && dur > 0) {
           // acabou o conteúdo visível/audível → a seta PARA aqui
@@ -398,25 +414,26 @@ class PlaybackEngine {
       if (!clip) continue;
       const expected = clip.inPoint + (t - clip.start) * clip.speed;
       if (playing) {
-        const drift = Math.abs(el.currentTime - expected);
         if (el.paused) {
           try {
             el.currentTime = expected;
           } catch {
             /* noop */
           }
-          el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed));
+          el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
           void el.play().catch(() => undefined);
         } else {
-          // Se o drift for perceptível (>0.06s), resincroniza imediatamente o currentTime
-          if (drift > 0.06 && !el.seeking) {
+          // Elemento já está tocando: NUNCA reseta currentTime durante reprodução contínua (evita áudio picotado),
+          // a não ser que haja um drift colossal (> 1.2s por travamento ou troca de aba).
+          const drift = Math.abs(el.currentTime - expected);
+          if (drift > 1.2 && !el.seeking) {
             try {
               el.currentTime = expected;
             } catch {
               /* noop */
             }
           }
-          el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed));
+          el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
         }
       } else {
         if (!el.paused) el.pause();
@@ -538,6 +555,21 @@ class PlaybackEngine {
     this.pendingPlay = false;
     const from = pb.playhead >= pb.duration - 0.01 ? 0 : pb.playhead;
     usePlayback.getState().setPlayhead(from);
+
+    const active = this.activeClips(from);
+    for (const clip of active) {
+      if (clip.kind === "text" || clip.kind === "image") continue;
+      const key = this.bindings.get(clip.id) ?? elKeyOf(clip.kind, clip.mediaId!);
+      const el = this.elements.get(key);
+      if (el instanceof HTMLMediaElement) {
+        try {
+          el.currentTime = clip.inPoint + (from - clip.start) * (clip.speed || 1);
+        } catch {}
+        el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
+        void el.play().catch(() => undefined);
+      }
+    }
+
     usePlayback.getState().setPlaying(true);
     this.dirty = true;
   }
@@ -589,6 +621,19 @@ class PlaybackEngine {
     cancelAnimationFrame(this.glideRaf);
     this.glideRaf = 0;
     usePlayback.getState().setPlayhead(target);
+
+    const active = this.activeClips(target);
+    for (const clip of active) {
+      if (clip.kind === "text" || clip.kind === "image") continue;
+      const key = this.bindings.get(clip.id) ?? elKeyOf(clip.kind, clip.mediaId!);
+      const el = this.elements.get(key);
+      if (el instanceof HTMLMediaElement) {
+        try {
+          el.currentTime = clip.inPoint + (target - clip.start) * (clip.speed || 1);
+        } catch {}
+      }
+    }
+
     this.syncMedia(target, pb.playing);
     this.updateAudio(target);
     this.renderPreview(target);
