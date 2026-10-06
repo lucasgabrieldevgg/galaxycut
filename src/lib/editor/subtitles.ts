@@ -4,6 +4,7 @@
 import { create } from "zustand";
 import { registry } from "./media";
 import { KaraokeWord } from "./types";
+import { decodeAudioOf } from "./wav";
 
 export interface SubSegment {
   start: number;
@@ -321,17 +322,18 @@ async function transcribeLegacy(
   return polish(chunkToSegments(chunks));
 }
 
-/** Extrai PCM mono 16 kHz de um blob de áudio/vídeo. */
+/** Extrai PCM mono 16 kHz de qualquer arquivo de áudio ou vídeo */
 async function extractPcm16k(blob: Blob): Promise<Float32Array> {
-  const AC: typeof AudioContext = window.AudioContext;
-  const ctx = new AC({ sampleRate: 16000 });
-  try {
-    const buf = await ctx.decodeAudioData(await blob.slice(0).arrayBuffer());
-    const ch = buf.getChannelData(0);
-    return new Float32Array(ch);
-  } finally {
-    void ctx.close();
-  }
+  const buf = await decodeAudioOf(blob);
+  const OAC: typeof OfflineAudioContext =
+    window.OfflineAudioContext || (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext;
+  const off = new OAC(1, Math.max(1, Math.ceil(buf.duration * 16000)), 16000);
+  const src = off.createBufferSource();
+  src.buffer = buf;
+  src.connect(off.destination);
+  src.start(0);
+  const resampled = await off.startRendering();
+  return new Float32Array(resampled.getChannelData(0));
 }
 
 interface RawWord {

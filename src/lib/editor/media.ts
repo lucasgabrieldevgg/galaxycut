@@ -3,6 +3,7 @@
 
 import { MediaMeta, uid } from "./types";
 import { idbDel, idbGet, idbPut } from "./mediaDB";
+import { decodeAudioOf, peaksFromBuffer } from "./wav";
 
 class MediaRegistry {
   private blobs = new Map<string, Blob>();
@@ -310,28 +311,11 @@ function thumbFromImage(img: HTMLImageElement): string {
 }
 
 async function computePeaks(blob: Blob, duration: number, sampleCount = 600): Promise<number[]> {
-  const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  if (!AC) return [];
-  const ctx = new AC();
   try {
-    const buf = await blob.arrayBuffer();
-    const audio = await ctx.decodeAudioData(buf);
-    const ch = audio.getChannelData(0);
-    const step = Math.max(1, Math.floor(ch.length / sampleCount));
-    const peaks: number[] = [];
-    for (let i = 0; i < ch.length; i += step) {
-      let max = 0;
-      for (let j = 0; j < step && i + j < ch.length; j++) {
-        const v = Math.abs(ch[i + j]);
-        if (v > max) max = v;
-      }
-      peaks.push(Math.round(max * 100) / 100);
-    }
-    return peaks;
-  } finally {
-    try {
-      await ctx.close();
-    } catch {}
+    const audioBuf = await decodeAudioOf(blob, duration);
+    return peaksFromBuffer(audioBuf, sampleCount);
+  } catch {
+    return [];
   }
 }
 
