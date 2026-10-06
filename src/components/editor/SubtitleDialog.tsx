@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { useProject } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
-import { transcribe, SubSegment, useSubtitleJob, WhisperProgress, cancelTranscription, WhisperModelId } from "@/lib/editor/subtitles";
+import { transcribeTimeline, transcribe, SubSegment, useSubtitleJob, WhisperProgress, cancelTranscription, WhisperModelId } from "@/lib/editor/subtitles";
 import { CAPTION_PRESETS, CaptionPreset, makeClip, defaultTextProps, TextProps, FONTS } from "@/lib/editor/types";
 import { useT } from "@/lib/editor/i18n";
 import { PresetPreview } from "./PresetPreview";
@@ -73,6 +73,7 @@ export function SubtitleDialog() {
   const setSettings = useSettings((s) => s.set);
   const job = useSubtitleJob();
   const [lang, setLang] = useState("pt");
+  const [scope, setScope] = useState<"all" | "selected">("all");
   const t = useT();
 
   const [activeTab, setActiveTab] = useState<"presets" | "customize">("presets");
@@ -97,12 +98,24 @@ export function SubtitleDialog() {
     setCustomStyle((prev) => ({ ...prev, ...patch }));
   };
 
-  // Fonte de áudio: clipe selecionado ou primeiro com áudio
-  const source = useMemo(() => {
-    const sel = clips.find((c) => c.id === selectedId);
-    if (sel && (sel.kind === "video" || sel.kind === "audio") && sel.mediaId) return sel;
-    return clips.find((c) => (c.kind === "video" || c.kind === "audio") && c.mediaId);
+  // Clipes alvo para transcrição (padrão: TODOS os clipes de áudio/vídeo da timeline)
+  const selectedClip = useMemo(() => {
+    return clips.find((c) => c.id === selectedId && (c.kind === "video" || c.kind === "audio") && c.mediaId);
   }, [clips, selectedId]);
+
+  const targetClips = useMemo(() => {
+    if (scope === "selected" && selectedClip) {
+      return [selectedClip];
+    }
+    return clips
+      .filter((c) => (c.kind === "video" || c.kind === "audio") && !c.videoHidden && !c.muted && c.mediaId)
+      .sort((a, b) => a.start - b.start);
+  }, [clips, scope, selectedClip]);
+
+  const totalDuration = useMemo(() => {
+    if (!targetClips.length) return 0;
+    return Math.max(...targetClips.map((c) => c.start + c.duration));
+  }, [targetClips]);
 
   const modelLabel = (id: WhisperModelId) =>
     id === "tiny" ? t("sub.modelFast") : id === "base" ? t("sub.modelBalanced") : t("sub.modelAccurate");
@@ -110,10 +123,20 @@ export function SubtitleDialog() {
     id === "tiny" ? t("sub.modelFastHint") : id === "base" ? t("sub.modelBalancedHint") : t("sub.modelAccurateHint");
 
   async function generate() {
-    if (!source?.mediaId) return;
+    if (targetClips.length === 0) {
+      toast.error("Nenhum clipe com som encontrado na timeline.");
+      return;
+    }
     job.start();
     try {
-      const segs = await transcribe(source.mediaId!, lang, (p: WhisperProgress) => useSubtitleJob.getState().setProg(p), model, maxWords);
+      const segs = await transcribeTimeline(
+        targetClips,
+        totalDuration,
+        lang,
+        (p: WhisperProgress) => useSubtitleJob.getState().setProg(p),
+        model,
+        maxWords
+      );
       if (!segs.length) {
         toast.info(t("sub.noSpeech"));
       } else {
@@ -132,19 +155,17 @@ export function SubtitleDialog() {
 
   function applySegments(segs: SubSegment[]) {
     const st = useProject.getState();
-    const textTrack = st.tracks.find((t) => t.kind === "text");
+    const textTrack = st.tracks.find((t) => t.kind === "text") || st.tracks[0];
     if (!textTrack) return;
-    const speed = source?.speed ?? 1;
-    const offset = source?.start ?? 0;
     const pos = useSettings.getState().captionPos ?? { x: 0, y: 0.62 };
     const newClips = segs.map((s) =>
       makeClip({
         kind: "text",
         trackId: textTrack.id,
-        start: offset + s.start * speed,
-        duration: Math.max(0.5, (s.end - s.start) * speed),
+        start: Math.max(0, s.start),
+        duration: Math.max(0.4, s.end - s.start),
         inPoint: 0,
-        outPoint: Math.max(0.5, (s.end - s.start) * speed),
+        outPoint: Math.max(0.4, s.end - s.start),
         x: pos.x,
         y: pos.y,
         posLock: false,
@@ -212,11 +233,23 @@ export function SubtitleDialog() {
         <div className="space-y-3.5 py-1">
           {/* Origem e Idioma */}
           <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col justify-center rounded-lg border border-[#2a3546] bg-[#0e1320] px-3 py-2">
+            <div className="flex flex-col justify-center rounded-lg border border-[#2a3546] bg-[#0e1320] px-3 py-1.5">
               <span className="text-[10px] text-zinc-500">{t("sub.source")}</span>
-              <span className="truncate text-xs font-semibold text-zinc-200" title={source ? undefined : t("sub.noClip")}>
-                {source ? t("sub.sourceVal", { kind: source.kind === "video" ? t("mp.video") : t("mp.audio"), s: Math.round(source.duration) }) : t("sub.noClip")}
-              </span>
+              <Select value={scope} onValueChange={(v: "all" | "selected") => setScope(v)} disabled={job.running}>
+                <SelectTrigger className="h-7 w-full border-[#2a3546] bg-[#121722] text-xs text-zinc-200 p-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-[#232d3d] bg-[#121722] text-zinc-200">
+                  <SelectItem value="all" className="text-xs">
+                    🌐 Timeline Completa ({targetClips.length} clipes, {Math.round(totalDuration)}s)
+                  </SelectItem>
+                  {selectedClip && (
+                    <SelectItem value="selected" className="text-xs">
+                      🎯 Clipe Selecionado ({Math.round(selectedClip.duration)}s)
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col justify-center rounded-lg border border-[#2a3546] bg-[#0e1320] px-3 py-1.5">
               <span className="text-[10px] text-zinc-500">{t("sub.language")}</span>
@@ -578,7 +611,7 @@ export function SubtitleDialog() {
             </div>
           </div>
 
-          {!source && (
+          {targetClips.length === 0 && (
             <p className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] leading-relaxed text-amber-300">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {t("sub.noClipHint")}
@@ -628,7 +661,7 @@ export function SubtitleDialog() {
           ) : (
             <Button
               onClick={() => void generate()}
-              disabled={!source}
+              disabled={targetClips.length === 0}
               className="gap-1.5 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
             >
               <CheckCircle2 className="h-4 w-4" />

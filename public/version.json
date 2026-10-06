@@ -1,7 +1,23 @@
 {
   "name": "GalaxyCut",
-  "version": "7.9.0",
+  "version": "8.0.0",
   "changelog": [
+    {
+      "version": "8.0.0",
+      "date": "2026-10-06",
+      "items": [
+        "TIMELINE AI SUBTITLES & MULTI-CLIP SYNC: Generates AI subtitles across the entire timeline mixing all audio/video tracks at exact timeline timestamps, eliminating audio skips and trimming misalignment",
+        "AUDIO ENGINE ZERO-STUTTER: Timeline audio scrubbing and needle dragging optimized for ultra-smooth real-time playback without clicks or stutters"
+      ],
+      "items_pt": [
+        "LEGENDAS AUTOMÁTICAS COM IA NA TIMELINE COMPLETA: Transcrição de todos os clipes de áudio e vídeo na timeline inteira com sincronização exata de tempo, respeitando cortes, pontos de entrada/saída e velocidades",
+        "MOTOR DE ÁUDIO SUAVE: Arraste da agulha e navegação na timeline sem cortes, travamentos ou estalos de áudio"
+      ],
+      "items_es": [
+        "SUBTÍTULOS IA EN TODA LA LÍNEA DE TIEMPO: Transcribe todos los clips de audio y video de la línea de tiempo con sincronización exacta y respeto a cortes y velocidades",
+        "MOTOR DE AUDIO SIN CORTES: Desplazamiento de la aguja y navegación en la línea de tiempo ultra suave sin chasquidos ni tartamudeos"
+      ]
+    },
     {
       "version": "7.9.0",
       "date": "2026-10-06",
@@ -303,5 +319,5 @@
       ]
     }
   ],
-  "date": "2026-10-06T21:40:36.663Z"
+  "date": "2026-10-06T23:25:50.611Z"
 }
