@@ -243,9 +243,15 @@ export function MediaPanel() {
           : t("mp.importedN", { n: ok })
       );
 
-      // Se vídeos foram importados, pergunta se deseja converter de formato (com MP4 marcado como padrão)
-      if (importedVideos.length > 0) {
-        setConvertMediaList(importedVideos);
+      // Se vídeos que NÃO são MP4 foram importados (ex: MKV, AVI, MOV, WMV, etc.),
+      // pergunta se deseja converter para MP4 para máxima compatibilidade
+      const nonMp4Videos = importedVideos.filter((m) => {
+        const ext = (m.name.split(".").pop() || "").toLowerCase().trim();
+        return ext !== "mp4";
+      });
+
+      if (nonMp4Videos.length > 0) {
+        setConvertMediaList(nonMp4Videos);
         setConvertDialogOpen(true);
       }
     }

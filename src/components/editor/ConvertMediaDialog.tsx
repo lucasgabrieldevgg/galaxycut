@@ -120,10 +120,10 @@ export function ConvertMediaDialog({
             </div>
             <div>
               <DialogTitle className="text-base font-bold text-zinc-100">
-                Otimizar Formato de Vídeo
+                Converter Formato de Vídeo
               </DialogTitle>
               <DialogDescription className="text-xs text-zinc-400">
-                Seus vídeos já estão carregados no projeto. Deseja convertê-los para MP4 para máxima performance?
+                Você importou vídeo(s) não-MP4. Deseja convertê-los para MP4 para compatibilidade total ou usar o original?
               </DialogDescription>
             </div>
           </div>
