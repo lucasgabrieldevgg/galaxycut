@@ -707,6 +707,7 @@ const PT: Dict = {
   "ed.export": "Exportar",
   // gêneros musicais
   "g.all": "Todos",
+  "g.shorts": "📱 Áudio Shorts (Sem Voz)",
   "g.epic": "Épico",
   "g.calm": "Calmo",
   "g.electronic": "Eletrônica",
@@ -1478,6 +1479,7 @@ const EN: Dict = {
   "ed.mobile": "better on PC 🖥️",
   "ed.export": "Export",
   "g.all": "All",
+  "g.shorts": "📱 Shorts Audio (No Vocals)",
   "g.epic": "Epic",
   "g.calm": "Calm",
   "g.electronic": "Electronic",
@@ -2245,6 +2247,7 @@ const ES: Dict = {
   "ed.mobile": "mejor en PC 🖥️",
   "ed.export": "Exportar",
   "g.all": "Todos",
+  "g.shorts": "📱 Audio Shorts (Sin Voz)",
   "g.epic": "Épico",
   "g.calm": "Calma",
   "g.electronic": "Electrónica",

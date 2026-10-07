@@ -1,7 +1,20 @@
 {
   "name": "GalaxyCut",
-  "version": "8.0.0",
+  "version": "8.1.0",
   "changelog": [
+    {
+      "version": "8.1.0",
+      "date": "2026-10-06",
+      "items": [
+        "SHORTS BACKGROUND AUDIO & 100% INSTRUMENTAL HUB: Dedicated 'Áudio Shorts (Sem Voz)' category with curated YouTuber classic background tracks (Sneaky Snitch, Monkeys Spinning Monkeys, Lo-Fi, Tech & Mystery) and vibe filters for background audio without speech/vocals"
+      ],
+      "items_pt": [
+        "TAG ÁUDIO SHORTS & CENTRAL DE FUNDO 100% INSTRUMENTAL: Nova categoria 'Áudio Shorts (Sem Voz)' com catálogo curado dos áudios mais usados por YouTubers (Sneaky Snitch, Monkeys Spinning Monkeys, Lo-Fi, Tech, Curiosidades e Mistério) e filtros de clima ideais para sobreposição de narração"
+      ],
+      "items_es": [
+        "TAG AUDIO SHORTS & HUB 100% INSTRUMENTAL: Nueva categoría 'Áudio Shorts (Sin Voz)' con catálogo curado de clásicos de YouTubers y filtros de ambiente para fondo sin voces"
+      ]
+    },
     {
       "version": "8.0.0",
       "date": "2026-10-06",
@@ -319,5 +332,5 @@
       ]
     }
   ],
-  "date": "2026-10-06T23:25:50.611Z"
+  "date": "2026-10-07T01:12:29.286Z"
 }
