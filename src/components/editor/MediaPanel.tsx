@@ -912,6 +912,9 @@ export function MediaPanel() {
         </TabsContent>
       </Tabs>
 
+      {/* Barra do Player da Biblioteca / Busca */}
+      <LibraryPlayerBar />
+
       {/* Diálogos */}
       <SubtitleDialog />
       <RecordDialog open={recordOpen} onOpenChange={setRecordOpen} />

@@ -702,10 +702,12 @@ export function StockSearch() {
                           <Plus className="h-6 w-6" strokeWidth={2.5} />
                         )}
                       </button>
-                      {(it.audio || isVideoTile) && (
+                      {(it.audio || isVideoTile || type === "video") && (
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
+                            e.preventDefault();
                             openPlayer({
                               id: it.id,
                               title: it.title,
@@ -715,13 +717,11 @@ export function StockSearch() {
                               isIa: it.provider.includes("Internet Archive"),
                             });
                           }}
-                          className={`absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition hover:bg-black/90 ${
-                            hoverVideo === it.id ? "opacity-0" : "opacity-0 group-hover:opacity-100"
-                          }`}
+                          className="absolute bottom-1.5 right-1.5 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-white/30 bg-black/80 text-white shadow-md transition hover:scale-110 hover:bg-[var(--gc-accent)] hover:text-black opacity-90 group-hover:opacity-100"
                           title={t("ss.playHint")}
                           aria-label={t("ss.playHint")}
                         >
-                          <Play className="h-3 w-3 fill-current" />
+                          <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
                         </button>
                       )}
                     </div>

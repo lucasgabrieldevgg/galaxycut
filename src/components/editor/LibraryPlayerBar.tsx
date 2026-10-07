@@ -38,69 +38,92 @@ function PlayerCore({
   onClose: () => void;
 }) {
   const t = useT();
-  const mediaRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [dur, setDur] = useState(0);
 
+  const getMediaEl = () => (item.kind === "video" ? videoRef.current : audioRef.current);
+
   // montou com src? toca
   useEffect(() => {
-    const el = mediaRef.current;
+    const el = getMediaEl();
     if (!el || !src) return;
     el.src = src;
-    void el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
-  }, [src]);
+    el.currentTime = 0;
+    const p = el.play();
+    if (p !== undefined) {
+      p.then(() => setPlaying(true)).catch(() => setPlaying(false));
+    }
+  }, [src, item.kind]);
 
-  const el = mediaRef.current;
   const toggle = () => {
+    const el = getMediaEl();
     if (!el) return;
     if (el.paused) {
-      void el.play().then(() => setPlaying(true)).catch(() => undefined);
+      void el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
     } else {
       el.pause();
       setPlaying(false);
     }
   };
+
   const skip = (d: number) => {
+    const el = getMediaEl();
     if (!el) return;
     el.currentTime = Math.max(0, Math.min((el.duration || 0) - 0.05, el.currentTime + d));
     setTime(el.currentTime);
   };
 
   return (
-    <div className="flex h-[74px] shrink-0 items-center gap-2.5 border-t border-[#1c2430] bg-[#0e1320] px-2.5">
+    <div className="flex h-[74px] shrink-0 items-center gap-2.5 border-t border-[#1c2430] bg-[#0e1320] px-2.5 shadow-lg">
       {/* janelinha do vídeo (áudio mostra só o ícone) */}
-      <div className="relative h-[52px] w-[74px] shrink-0 overflow-hidden rounded border border-[#232d3d] bg-black">
+      <div className="relative h-[52px] w-[74px] shrink-0 overflow-hidden rounded border border-[#232d3d] bg-black flex items-center justify-center">
+        {loading && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-xs">
+            <Loader2 className="h-5 w-5 animate-spin text-[var(--gc-accent)]" />
+          </div>
+        )}
         {item.kind === "video" ? (
           <video
-            ref={mediaRef}
+            ref={videoRef}
             className="h-full w-full object-contain"
             playsInline
-            onTimeUpdate={() => setTime(mediaRef.current?.currentTime ?? 0)}
-            onLoadedMetadata={() => setDur(mediaRef.current?.duration || 0)}
+            controls={false}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onTimeUpdate={() => setTime(videoRef.current?.currentTime ?? 0)}
+            onLoadedMetadata={() => setDur(videoRef.current?.duration || 0)}
             onEnded={() => setPlaying(false)}
             onError={() => setPlaying(false)}
           />
         ) : (
           <>
             <audio
-              ref={mediaRef as React.RefObject<HTMLAudioElement>}
-              onTimeUpdate={() => setTime((mediaRef.current as HTMLAudioElement)?.currentTime ?? 0)}
-              onLoadedMetadata={() => setDur((mediaRef.current as HTMLAudioElement)?.duration || 0)}
+              ref={audioRef}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              onTimeUpdate={() => setTime(audioRef.current?.currentTime ?? 0)}
+              onLoadedMetadata={() => setDur(audioRef.current?.duration || 0)}
               onEnded={() => setPlaying(false)}
               onError={() => setPlaying(false)}
             />
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-[#3b2e0b] to-[#2e250a]">
-              <Music2 className="h-5 w-5 text-amber-400/80" />
-            </div>
+            {item.thumb ? (
+              <img src={item.thumb} alt={item.title} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-[#3b2e0b] to-[#2e250a]">
+                <Music2 className="h-5 w-5 text-amber-400/80" />
+              </div>
+            )}
           </>
         )}
       </div>
 
       {/* título + controles */}
       <div className="flex h-full min-w-0 flex-1 flex-col justify-center gap-1">
-        <p className="truncate text-[11px] font-medium text-zinc-300" title={item.title}>
-          {item.kind === "video" ? <VideoIcon className="mr-1 inline h-3 w-3 text-emerald-400" /> : null}
+        <p className="truncate text-[11px] font-medium text-zinc-200" title={item.title}>
+          {item.kind === "video" ? <VideoIcon className="mr-1 inline h-3.5 w-3.5 text-emerald-400" /> : null}
           {loading ? <Loader2 className="mr-1 inline h-3 w-3 animate-spin text-zinc-500" /> : null}
           {item.title}
         </p>
@@ -118,7 +141,7 @@ function PlayerCore({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-full bg-[var(--gc-accent)] p-0 text-black hover:bg-[var(--gc-accent-hover)]"
+            className="h-8 w-8 rounded-full bg-[var(--gc-accent)] p-0 text-black hover:bg-[var(--gc-accent-hover)] shadow-sm"
             onClick={toggle}
             aria-label={playing ? t("lib.pause") : t("lib.play")}
           >
@@ -144,18 +167,25 @@ function PlayerCore({
             onChange={(e) => {
               const v = Number(e.target.value);
               setTime(v);
-              if (mediaRef.current) mediaRef.current.currentTime = v;
+              const el = getMediaEl();
+              if (el) el.currentTime = v;
             }}
             className="gc-range h-1.5 min-w-0 flex-1 cursor-pointer accent-[var(--gc-accent)]"
             aria-label={t("lib.position")}
           />
-          <span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-500">
-            {fmt(time)} <span className="text-zinc-700">/ {fmt(dur)}</span>
+          <span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-400">
+            {fmt(time)} <span className="text-zinc-600">/ {fmt(dur)}</span>
           </span>
         </div>
       </div>
 
-      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-zinc-500 hover:text-zinc-200" onClick={onClose} aria-label={t("lib.close")}>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 shrink-0 text-zinc-500 hover:text-zinc-200"
+        onClick={onClose}
+        aria-label={t("lib.close")}
+      >
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>
