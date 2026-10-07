@@ -27,6 +27,7 @@ import { LANGUAGES, useLang, t as tr } from "@/lib/editor/i18n";
 import { useT } from "@/lib/editor/i18n";
 import { PresetPreview } from "./PresetPreview";
 import { useUpdatePrompt } from "./UpdateDialog";
+import { useFavorites } from "@/lib/editor/favorites";
 import { toast } from "sonner";
 import {
   Keyboard, SlidersHorizontal, KeyRound, ExternalLink, ArrowUpDown, Pencil, RotateCcw, RefreshCw, Languages, Save, Palette, Rocket,
@@ -291,6 +292,8 @@ function GeneralSwitches() {
   const snapEnabled = useSettings((s) => s.snapEnabled);
   const showWaveOnVideo = useSettings((s) => s.showWaveOnVideo);
   const resetInspectorOnSelect = useSettings((s) => s.resetInspectorOnSelect);
+  const favoritesEnabled = useFavorites((s) => s.enabled);
+  const favoriteCount = useFavorites((s) => s.items.length);
   const set = useSettings((s) => s.set);
   return (
     <div className="space-y-3 rounded-lg border border-[#2a3546] bg-[#0e1320] p-3">
@@ -315,6 +318,36 @@ function GeneralSwitches() {
         </div>
         <Switch checked={resetInspectorOnSelect} onCheckedChange={(v) => set({ resetInspectorOnSelect: v })} className="data-[state=checked]:bg-[var(--gc-accent)]" />
       </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[11px] font-medium text-zinc-300">⭐ Pastas de Favoritos Automáticas</p>
+          <p className="text-[10px] text-zinc-500">Organiza itens estrelados na pasta "⭐ Favoritos" em novos projetos</p>
+        </div>
+        <Switch
+          checked={favoritesEnabled}
+          onCheckedChange={(v) => {
+            useFavorites.getState().setEnabled(v);
+            if (v) useFavorites.getState().syncToProjectFolders();
+          }}
+          className="data-[state=checked]:bg-[var(--gc-accent)]"
+        />
+      </div>
+      {favoriteCount > 0 && (
+        <div className="flex items-center justify-between pt-1 border-t border-[#1e2633]">
+          <div>
+            <p className="text-[11px] font-medium text-zinc-300">Gerenciar Favoritos</p>
+            <p className="text-[10px] text-zinc-500">{favoriteCount} itens salvos globalmente</p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => useFavorites.getState().clearFavorites()}
+            className="h-7 border-red-500/40 text-red-400 hover:bg-red-500/10 text-[10px]"
+          >
+            Limpar Favoritos
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // GalaxyCut — aba de busca online: fotos, vídeos, músicas, efeitos e STICKERS
 // de bancos livres (Openverse, Freesound, Wikimedia, Internet Archive, Jamendo,
-// Pexels, Pixabay). v8.1: Tag Áudio Shorts (100% Instrumental, sem vocais) com
-// catálogo curado dos clássicos de YouTubers e filtros de vibe.
+// Pexels, Pixabay). v8.2: Prévia completa de vídeo e áudio com player modal,
+// sistema de favoritos com estrela persistente e sincronização com a aba Mídia.
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -24,7 +24,7 @@ import {
   Sticker,
   Sparkles,
   Flame,
-  Radio,
+  Star,
 } from "lucide-react";
 import { useProject } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
@@ -32,6 +32,7 @@ import { registry } from "@/lib/editor/media";
 import { licenseLevel, LICENSE_STYLE } from "@/lib/editor/types";
 import { StockItem, downloadStockFile, resolveIaFile, searchStock, searchStickers } from "@/lib/editor/stockClient";
 import { useLibPlayer } from "@/lib/editor/libPlayer";
+import { useFavorites } from "@/lib/editor/favorites";
 import { useT } from "@/lib/editor/i18n";
 import {
   SHORTS_CATEGORIES,
@@ -39,6 +40,7 @@ import {
   CuratedShortsTrack,
   ShortsVibe,
 } from "@/lib/editor/shortsAudio";
+import { StockPreviewModal } from "./StockPreviewModal";
 
 type StockType = "image" | "video" | "music" | "sfx" | "sticker";
 type DurId = "any" | "short" | "mid" | "long" | "custom";
@@ -104,12 +106,22 @@ export function StockSearch() {
   const [dur, setDur] = useState<DurId>("any");
   const [genre, setGenre] = useState("all");
   const [shortsVibe, setShortsVibe] = useState<ShortsVibe>("all");
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [cmin, setCmin] = useState(10);
   const [cmax, setCmax] = useState(60);
   const [stickTab, setStickTab] = useState<"stickers" | "emojis">("stickers");
+
+  // Modal de Prévia Grande
+  const [previewItem, setPreviewItem] = useState<StockItem | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   const addMedia = useProject((s) => s.addMedia);
   const addClipFromMedia = useProject((s) => s.addClipFromMedia);
   const openPlayer = useLibPlayer((s) => s.open);
+  const isFavorite = useFavorites((s) => s.isFavorite);
+  const toggleFavorite = useFavorites((s) => s.toggleFavorite);
+  const favoriteItems = useFavorites((s) => s.items);
+
   const searchedRef = useRef(false);
   const [hoverVideo, setHoverVideo] = useState<string | null>(null);
 
@@ -198,7 +210,6 @@ export function StockSearch() {
     }
   }
 
-  // trocar filtro/gênero/aba re-busca automaticamente
   useEffect(() => {
     if (!isSticker) {
       if (query.trim() || type === "music" || type === "sfx") {
@@ -213,35 +224,64 @@ export function StockSearch() {
     }
   }, [type, dur, genre]);
 
-  // Lista composta exibida (Curados + Busca Online)
+  // Lista composta exibida (Curados + Busca Online + Filtro de Favoritos)
   const displayItems = useMemo(() => {
-    if (!isShortsMode) return items;
-    const vibe = genre === "shorts" ? shortsVibe : (genre.replace("shorts_", "") as ShortsVibe);
-    const curated = CURATED_SHORTS_TRACKS.filter((t) => {
-      if (vibe !== "all" && t.vibe !== vibe) return false;
-      if (query.trim()) {
-        const ql = query.toLowerCase();
-        return (
-          t.title.toLowerCase().includes(ql) ||
-          t.vibeLabel.toLowerCase().includes(ql) ||
-          (t.badge && t.badge.toLowerCase().includes(ql)) ||
-          (t.creator && t.creator.toLowerCase().includes(ql))
-        );
-      }
-      return true;
-    });
+    let baseList: StockItem[] = [];
 
-    if (items === null) return curated;
-    const seen = new Set<string>(curated.map((c) => c.id));
-    const combined: StockItem[] = [...curated];
-    for (const it of items) {
-      if (!seen.has(it.id)) {
-        seen.add(it.id);
-        combined.push(it);
+    if (onlyFavorites) {
+      const favMatches = favoriteItems.map(
+        (f): StockItem => ({
+          id: f.id,
+          title: f.title,
+          thumb: f.thumb || "",
+          url: f.url,
+          provider: f.provider || "Favoritos",
+          license: f.license || "free",
+          duration: f.duration,
+          audio: f.kind === "music" || f.kind === "sfx",
+          creator: f.creator,
+        })
+      );
+      baseList = favMatches;
+    } else if (isShortsMode) {
+      const vibe = genre === "shorts" ? shortsVibe : (genre.replace("shorts_", "") as ShortsVibe);
+      const curated = CURATED_SHORTS_TRACKS.filter((t) => {
+        if (vibe !== "all" && t.vibe !== vibe) return false;
+        if (query.trim()) {
+          const ql = query.toLowerCase();
+          return (
+            t.title.toLowerCase().includes(ql) ||
+            t.vibeLabel.toLowerCase().includes(ql) ||
+            (t.badge && t.badge.toLowerCase().includes(ql)) ||
+            (t.creator && t.creator.toLowerCase().includes(ql))
+          );
+        }
+        return true;
+      });
+
+      if (items === null) baseList = curated;
+      else {
+        const seen = new Set<string>(curated.map((c) => c.id));
+        const combined: StockItem[] = [...curated];
+        for (const it of items) {
+          if (!seen.has(it.id)) {
+            seen.add(it.id);
+            combined.push(it);
+          }
+        }
+        baseList = combined;
       }
+    } else {
+      baseList = items || [];
     }
-    return combined;
-  }, [items, isShortsMode, genre, shortsVibe, query]);
+
+    if (query.trim() && onlyFavorites) {
+      const ql = query.toLowerCase();
+      baseList = baseList.filter((x) => x.title.toLowerCase().includes(ql) || (x.creator && x.creator.toLowerCase().includes(ql)));
+    }
+
+    return baseList;
+  }, [items, isShortsMode, genre, shortsVibe, query, onlyFavorites, favoriteItems]);
 
   async function addStock(item: StockItem) {
     setAdding(item.id);
@@ -330,13 +370,14 @@ export function StockSearch() {
       <div className="grid grid-cols-5 gap-1 shrink-0">
         {TYPE_TABS.map((tb) => {
           const Icon = tb.icon;
-          const active = type === tb.id;
+          const active = type === tb.id && !onlyFavorites;
           return (
             <button
               key={tb.id}
               type="button"
               onClick={() => {
                 setType(tb.id);
+                setOnlyFavorites(false);
                 setItems(null);
                 setTranslated(null);
                 searchedRef.current = false;
@@ -354,8 +395,28 @@ export function StockSearch() {
         })}
       </div>
 
+      {/* Botão / Filtro rápido de Favoritos */}
+      <div className="flex items-center justify-between shrink-0 px-0.5">
+        <button
+          type="button"
+          onClick={() => setOnlyFavorites((f) => !f)}
+          className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
+            onlyFavorites
+              ? "border-amber-400 bg-amber-400/20 text-amber-300 font-bold shadow-[0_0_10px_rgba(251,191,36,0.3)]"
+              : "border-[#2a3546] bg-[#0e1320] text-zinc-400 hover:border-amber-400/50 hover:text-amber-300"
+          }`}
+        >
+          <Star className={`h-3.5 w-3.5 ${onlyFavorites ? "fill-amber-400 text-amber-400" : ""}`} />
+          <span>⭐ Meus Favoritos ({favoriteItems.length})</span>
+        </button>
+
+        {onlyFavorites && (
+          <span className="text-[10px] text-zinc-500">Mídias salvas com estrela</span>
+        )}
+      </div>
+
       {/* sub-aba do STICKERS */}
-      {isSticker && (
+      {isSticker && !onlyFavorites && (
         <div className="flex rounded-lg border border-[#2a3546] bg-[#0e1320] p-0.5 shrink-0">
           <button
             type="button"
@@ -394,7 +455,13 @@ export function StockSearch() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={isShortsMode ? "Buscar fundo para Shorts (ex: curiosidades, lofi, tech, mistério)..." : activeTab.ph}
+            placeholder={
+              onlyFavorites
+                ? "Filtrar seus favoritos..."
+                : isShortsMode
+                ? "Buscar fundo para Shorts (ex: curiosidades, lofi, tech, mistério)..."
+                : activeTab.ph
+            }
             className="h-8 border-[#2a3546] bg-[#121722] text-xs text-zinc-200 placeholder:text-zinc-600"
           />
           <Button
@@ -409,7 +476,7 @@ export function StockSearch() {
       )}
 
       {/* ---- EFEITOS SONOROS: chips de exemplos rápidos ---- */}
-      {type === "sfx" && (
+      {type === "sfx" && !onlyFavorites && (
         <div className="shrink-0 space-y-1">
           <div className="flex items-center justify-between text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
             <span className="flex items-center gap-1">
@@ -441,7 +508,7 @@ export function StockSearch() {
       )}
 
       {/* ---- MÚSICA: Banner & Categorias de Shorts ---- */}
-      {isShortsMode && (
+      {isShortsMode && !onlyFavorites && (
         <div className="shrink-0 space-y-1.5 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-[#121722] to-amber-500/5 p-2 shadow-inner">
           <div className="flex items-center justify-between text-[10px]">
             <span className="flex items-center gap-1.5 font-bold text-amber-300">
@@ -481,7 +548,7 @@ export function StockSearch() {
       )}
 
       {/* ---- emojis (offline, grid organizado por categoria) ---- */}
-      {isSticker && stickTab === "emojis" && (
+      {isSticker && stickTab === "emojis" && !onlyFavorites && (
         <div className="min-h-0 flex-1 space-y-3">
           <p className="rounded-lg border border-[#232d3d] bg-[#0e1320] p-2.5 text-[10px] leading-relaxed text-zinc-500">
             {t("ss.emojiNote")}
@@ -508,7 +575,7 @@ export function StockSearch() {
       )}
 
       {/* gêneros musicais (estilo CapCut) */}
-      {showGenre && (
+      {showGenre && !onlyFavorites && (
         <div className="shrink-0">
           <div className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
             <Music4 className="h-3 w-3" /> {t("ss.genre")}
@@ -543,7 +610,7 @@ export function StockSearch() {
       )}
 
       {/* duração: pré-opções + personalizado */}
-      {showDur && (
+      {showDur && !onlyFavorites && (
         <div className="shrink-0">
           <div className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
             <Clock className="h-3 w-3" /> {t("ss.duration")}
@@ -613,9 +680,17 @@ export function StockSearch() {
       {/* resultados — rolagem nativa (roda do mouse sempre funciona) */}
       {(!isSticker || stickTab === "stickers") && (
         <div className="min-h-[260px] flex-1 shrink-0 overflow-y-auto overscroll-contain pr-0.5 timeline-scroll">
-          {displayItems === null ? (
+          {displayItems === null || displayItems.length === 0 ? (
             <div className="space-y-2 px-1 py-4">
-              {isSticker ? (
+              {onlyFavorites ? (
+                <div className="text-center py-8 space-y-2 text-zinc-500">
+                  <Star className="h-8 w-8 mx-auto text-amber-400/50" />
+                  <p className="text-xs font-semibold text-zinc-300">Nenhum favorito salvo ainda</p>
+                  <p className="text-[10px] text-zinc-500">
+                    Clique na estrela (⭐) em qualquer vídeo, música ou efeito para salvá-lo aqui e nas suas próximas edições!
+                  </p>
+                </div>
+              ) : isSticker ? (
                 <p className="text-center text-[11px] leading-relaxed text-zinc-600">{t("ss.stickerNote")}</p>
               ) : (
                 <>
@@ -643,11 +718,12 @@ export function StockSearch() {
                 const ls = LICENSE_STYLE[lv];
                 const isVideoTile = type === "video" && !it.audio;
                 const curated = (it as any).badge ? (it as CuratedShortsTrack) : undefined;
+                const starred = isFavorite(it.id);
 
                 return (
                   <div
                     key={it.id}
-                    className="group overflow-hidden rounded-lg border border-[#232d3d] bg-[#121722] hover:border-[#384961] transition"
+                    className="group relative overflow-hidden rounded-lg border border-[#232d3d] bg-[#121722] hover:border-[#384961] transition shadow-sm"
                     onMouseEnter={() => isVideoTile && setHoverVideo(it.id)}
                     onMouseLeave={() => setHoverVideo((v) => (v === it.id ? null : v))}
                   >
@@ -669,27 +745,50 @@ export function StockSearch() {
                         </div>
                       )}
                       {isVideoTile && <VideoPreviewLayer item={it} active={hoverVideo === it.id} />}
+
+                      {/* Selo de Licença */}
                       <span
                         className={`absolute left-1 top-1 rounded border px-1 py-px text-[8px] backdrop-blur ${ls.cls}`}
                         title={t(`st.lic${lv[0].toUpperCase()}${lv.slice(1)}Title`)}
                       >
                         {t(`st.lic${lv[0].toUpperCase()}${lv.slice(1)}`)}
                       </span>
+
+                      {/* Botão de Estrela / Favorito */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          const resolvedKind = it.audio ? (type === "sfx" ? "sfx" : "music") : isSticker ? "sticker" : isVideoTile ? "video" : "image";
+                          toggleFavorite(it, resolvedKind);
+                        }}
+                        className={`absolute right-1 top-1 z-30 flex h-6 w-6 items-center justify-center rounded-md border transition ${
+                          starred
+                            ? "border-amber-400 bg-amber-400/90 text-black shadow-md scale-105"
+                            : "border-black/50 bg-black/60 text-zinc-400 hover:border-amber-400 hover:text-amber-300 opacity-80 group-hover:opacity-100"
+                        }`}
+                        title={starred ? "Remover dos Favoritos" : "Favoritar (salvar em ⭐ Favoritos)"}
+                        aria-label="Favoritar"
+                      >
+                        <Star className={`h-3.5 w-3.5 ${starred ? "fill-black text-black" : ""}`} />
+                      </button>
+
+                      {/* Duração */}
                       {it.duration ? (
-                        <span className="absolute right-1 top-1 rounded bg-black/70 px-1 text-[8px] tabular-nums text-zinc-300">
+                        <span className="absolute right-1 bottom-1 rounded bg-black/75 px-1 text-[8px] tabular-nums text-zinc-300">
                           {fmtDur(it.duration)}
                         </span>
                       ) : null}
+
+                      {/* Badge Curado */}
                       {curated?.badge && (
                         <span className="absolute left-1 bottom-1 rounded bg-amber-400 text-black px-1.5 py-px text-[8px] font-bold shadow-sm">
                           {curated.badge}
                         </span>
                       )}
-                      {isVideoTile && !hoverVideo && (
-                        <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/70 px-1 text-[8px] text-zinc-300">
-                          {t("ss.hoverPreview")}
-                        </span>
-                      )}
+
+                      {/* Botão de Inserção (+) */}
                       <button
                         onClick={() => void addStock(it)}
                         disabled={adding === it.id}
@@ -702,12 +801,16 @@ export function StockSearch() {
                           <Plus className="h-6 w-6" strokeWidth={2.5} />
                         )}
                       </button>
+
+                      {/* Botão de PLAY / PRÉVIA (Abre Modal Grande + Player Bar) */}
                       {(it.audio || isVideoTile || type === "video") && (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             e.preventDefault();
+                            setPreviewItem(it);
+                            setPreviewOpen(true);
                             openPlayer({
                               id: it.id,
                               title: it.title,
@@ -718,13 +821,14 @@ export function StockSearch() {
                             });
                           }}
                           className="absolute bottom-1.5 right-1.5 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-white/30 bg-black/80 text-white shadow-md transition hover:scale-110 hover:bg-[var(--gc-accent)] hover:text-black opacity-90 group-hover:opacity-100"
-                          title={t("ss.playHint")}
-                          aria-label={t("ss.playHint")}
+                          title="Assistir / Ouvir Prévia Completa"
+                          aria-label="Assistir / Ouvir Prévia Completa"
                         >
                           <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
                         </button>
                       )}
                     </div>
+
                     {!isSticker && (
                       <div className="p-1.5">
                         <p className="truncate text-[10px] text-zinc-300 font-medium" title={it.title}>
@@ -748,7 +852,7 @@ export function StockSearch() {
           )}
 
           {/* Prompt amigável quando uma categoria de música estiver marcada */}
-          {type === "music" && genre !== "all" && displayItems !== null && (
+          {type === "music" && genre !== "all" && !onlyFavorites && displayItems !== null && (
             <div className="my-3 rounded-xl border border-[#2a3546] bg-[#121722]/80 p-3 text-center space-y-2">
               <p className="text-xs font-medium text-zinc-300 leading-snug">
                 Procurando outros estilos de trilha sonora?
@@ -772,6 +876,14 @@ export function StockSearch() {
           )}
         </div>
       )}
+
+      {/* Modal de Prévia Grande de Vídeo e Áudio */}
+      <StockPreviewModal
+        item={previewItem}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        onAddStock={addStock}
+      />
     </div>
   );
 }

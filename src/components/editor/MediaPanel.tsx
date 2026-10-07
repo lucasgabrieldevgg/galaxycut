@@ -43,7 +43,7 @@ import { toast } from "sonner";
 import {
   Upload, FolderOpen, FolderPlus, Folder, ChevronRight, ArrowLeft, Trash2, Plus, Type, Sparkles,
   Search, Film, ImageIcon, Music2, FileWarning, Loader2, PlusCircle, Mic, Play as PlayIcon,
-  Scissors, Copy, ClipboardPaste, MoreVertical, Pencil, Check, X, Wand2,
+  Scissors, Copy, ClipboardPaste, MoreVertical, Pencil, Check, X, Wand2, Star,
 } from "lucide-react";
 import { SubtitleDialog } from "./SubtitleDialog";
 import { StockSearch } from "./StockSearch";
@@ -53,6 +53,7 @@ import { ConvertMediaDialog } from "./ConvertMediaDialog";
 import { FloatMenu, MenuItem } from "./ClipMenu";
 import { useT, t as tr } from "@/lib/editor/i18n";
 import { PresetPreview } from "./PresetPreview";
+import { useFavorites } from "@/lib/editor/favorites";
 
 const MEDIA_DND_TYPE = "application/x-galaxiacut-media";
 
@@ -133,6 +134,14 @@ export function MediaPanel() {
   const [convertMediaList, setConvertMediaList] = useState<MediaMeta[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
+
+  const isFavorite = useFavorites((s) => s.isFavorite);
+  const toggleFavorite = useFavorites((s) => s.toggleFavorite);
+  const syncFavorites = useFavorites((s) => s.syncToProjectFolders);
+
+  useEffect(() => {
+    syncFavorites();
+  }, [syncFavorites]);
 
   const applyEffectToSelection = (meta: EffectMeta) => {
     const st = useProject.getState();
@@ -706,6 +715,31 @@ export function MediaPanel() {
                           {fmtDur(m.duration)}
                         </span>
                       )}
+
+                      {/* Botão de Estrela / Favorito */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite({
+                            id: m.id,
+                            title: m.name,
+                            kind: m.kind,
+                            thumb: m.thumbnail,
+                            duration: m.duration,
+                            provider: m.source === "stock" ? "Stock" : "Local / Importado",
+                          });
+                        }}
+                        className={`absolute top-1 left-1 z-20 flex h-6 w-6 items-center justify-center rounded-md border transition ${
+                          isFavorite(m.id)
+                            ? "border-amber-400 bg-amber-400/90 text-black shadow-md scale-105"
+                            : "border-black/50 bg-black/60 text-zinc-400 hover:border-amber-400 hover:text-amber-300 opacity-0 group-hover:opacity-100"
+                        }`}
+                        title={isFavorite(m.id) ? "Remover dos Favoritos" : "Favoritar (salvar em ⭐ Favoritos)"}
+                      >
+                        <Star className={`h-3.5 w-3.5 ${isFavorite(m.id) ? "fill-black text-black" : ""}`} />
+                      </button>
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

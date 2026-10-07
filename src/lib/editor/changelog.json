@@ -1,6 +1,22 @@
 {
-  "version": "8.1.0",
+  "version": "8.2.0",
   "entries": [
+    {
+      "version": "8.2.0",
+      "date": "2026-10-06",
+      "items": [
+        "FULL VIDEO & AUDIO PREVIEW MODAL: High-definition preview player with scrub timeline, play/pause, volume control, and instant timeline insert for stock search videos and audio",
+        "PERSISTENT FAVORITES & STAR SYSTEM: Star (⭐) any video, music, SFX, photo, or imported media to automatically organize in '⭐ Favoritos' folder with category subfolders across all future projects"
+      ],
+      "items_pt": [
+        "MODAL COMPLETO DE PRÉVIA DE VÍDEO & ÁUDIO: Player de alta definição com scrubbing na linha do tempo, play/pause, volume e botão de inserir na timeline para vídeos e músicas da busca",
+        "SISTEMA DE FAVORITOS & ESTRELAS PERSISTENTES: Marque com estrela (⭐) qualquer vídeo, música, efeito, foto ou mídia importada para organizar automaticamente na pasta '⭐ Favoritos' com subpastas categorizadas em novos projetos"
+      ],
+      "items_es": [
+        "MODAL DE VISTA PREVIA COMPLETA DE VIDEO Y AUDIO: Reproductor de alta definición con línea de tiempo, play/pause, volumen e inserción directa en la timeline",
+        "SISTEMA DE FAVORITOS Y ESTRELLAS: Marca con estrella (⭐) cualquier video, música, efecto, foto o archivo importado para organizarlo en '⭐ Favoritos' con subcarpetas para futuros proyectos"
+      ]
+    },
     {
       "version": "8.1.0",
       "date": "2026-10-06",
