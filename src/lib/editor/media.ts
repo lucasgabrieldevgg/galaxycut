@@ -282,17 +282,27 @@ class MediaRegistry {
     const a = document.createElement("audio");
     a.preload = "metadata";
     a.src = url;
-    let duration = 10;
+    let duration = 0;
     try {
       await waitMediaReady(a, 5000);
-      duration = isFinite(a.duration) && a.duration > 0 ? a.duration : 10;
+      if (isFinite(a.duration) && a.duration > 0) {
+        duration = a.duration;
+      }
     } catch {}
+
+    // Extrai a duração real completa decodificando o buffer de áudio (resolve o bug do áudio pela metade)
     let peaks: number[] | undefined;
     try {
-      peaks = await computePeaks(blob, duration);
+      const audioBuf = await decodeAudioOf(blob, duration || 10);
+      if (audioBuf && audioBuf.duration > 0) {
+        duration = audioBuf.duration;
+      }
+      peaks = peaksFromBuffer(audioBuf, 600);
     } catch {
       peaks = undefined;
     }
+
+    if (duration <= 0) duration = 10;
     return { id, name, kind: "audio", duration, width: 0, height: 0, peaks, source: "local" };
   }
 }

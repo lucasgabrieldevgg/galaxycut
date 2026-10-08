@@ -12,7 +12,6 @@ const archivo = Archivo({
 const martian = Martian_Mono({
   variable: "--font-martian",
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
 });
 
 const DESCRIPTION =

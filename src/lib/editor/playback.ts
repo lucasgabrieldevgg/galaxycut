@@ -85,39 +85,14 @@ class PlaybackEngine {
       this.last = now;
       const pb = usePlayback.getState();
       if (pb.playing) {
-        // Encontra o elemento de áudio líder ativo para travar o relógio no hardware de som
-        let leaderTime: number | null = null;
-        const active = this.activeClips(pb.playhead);
-        for (const clip of active) {
-          if (clip.kind !== "video" && clip.kind !== "audio") continue;
-          const key = this.bindings.get(clip.id);
-          const el = key ? this.elements.get(key) : undefined;
-          if (el instanceof HTMLMediaElement && !el.paused && !el.seeking) {
-            const elT = clip.start + (el.currentTime - clip.inPoint) / (clip.speed || 1);
-            if (isFinite(elT) && Math.abs(elT - pb.playhead) < 0.5) {
-              leaderTime = elT;
-              break;
-            }
-          }
-        }
-
-        const nextT = leaderTime !== null ? leaderTime : pb.playhead + dt;
-        let finalT = pb.playhead + dt;
-        if (leaderTime !== null) {
-          const drift = finalT - leaderTime;
-          if (Math.abs(drift) > 0.25) {
-            finalT = leaderTime;
-          } else if (Math.abs(drift) > 0.015) {
-            finalT = finalT - drift * 0.12;
-          }
-        }
-
+        const t = pb.playhead + dt;
         const dur = pb.duration;
-        if (finalT >= dur && dur > 0) {
+        if (t >= dur && dur > 0) {
+          // acabou o conteúdo visível/audível → a seta PARA aqui
           usePlayback.getState().setPlayhead(dur);
           this.pause();
         } else {
-          usePlayback.getState().setPlayhead(finalT);
+          usePlayback.getState().setPlayhead(t);
         }
       }
       const cur = usePlayback.getState();
@@ -395,7 +370,7 @@ class PlaybackEngine {
     return this.elements.get(elKeyOf(c.kind, c.mediaId));
   }
 
-  /** Sincroniza os elementos com o playhead (a "setinha" da timeline) com pré-aquecimento proativo (lookahead). */
+  /** Sincroniza os elementos com o playhead (a "setinha" da timeline). */
   private syncMedia(t: number, playing: boolean) {
     const { clips } = useProject.getState();
     const active = clips.filter(
@@ -407,32 +382,6 @@ class PlaybackEngine {
         c.start <= t + 0.05 &&
         c.start + c.duration > t - 0.05
     );
-
-    // Lookahead: pré-carrega e pré-posiciona clipes que vão começar nos próximos 1.5s
-    // para que estejam prontos com 0ms de latência quando o playhead chegar
-    const upcoming = clips.filter(
-      (c) =>
-        c.kind !== "text" &&
-        c.kind !== "image" &&
-        c.mediaId &&
-        registry.hasBlob(c.mediaId) &&
-        c.start > t &&
-        c.start <= t + 1.5
-    );
-
-    for (const uClip of upcoming) {
-      const uKey = this.bindings.get(uClip.id) ?? elKeyOf(uClip.kind, uClip.mediaId!);
-      const uEl = this.elements.get(uKey) ?? this.getOrCreateEl(uClip.kind, uClip.mediaId!);
-      if (uEl instanceof HTMLMediaElement) {
-        if (Math.abs(uEl.currentTime - uClip.inPoint) > 0.08 && !uEl.seeking) {
-          try {
-            uEl.currentTime = uClip.inPoint;
-          } catch {
-            /* noop */
-          }
-        }
-      }
-    }
 
     // redistribui os elementos: quem tá ativo ganha um (cria "#2", "#3"… se o mesmo arquivo tocar 2× ao mesmo tempo)
     const newClaims = new Map<string, string>();
