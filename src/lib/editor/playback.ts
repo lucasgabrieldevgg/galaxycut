@@ -412,6 +412,18 @@ class PlaybackEngine {
       this.getOrCreateEl(clip.kind, clip.mediaId!, n - 1);
     }
     this.claims = newClaims;
+
+    let leaderKey: string | null = null;
+    for (const clip of active) {
+      if (clip.kind === "video" || clip.kind === "audio") {
+        const k = this.bindings.get(clip.id);
+        if (k) {
+          leaderKey = k;
+          break;
+        }
+      }
+    }
+
     // pausa quem não tem dono, sincroniza quem tem
     for (const [key, el] of this.elements) {
       if (!(el instanceof HTMLMediaElement)) continue;
@@ -424,6 +436,8 @@ class PlaybackEngine {
       if (!clip) continue;
       const expected = clip.inPoint + (t - clip.start) * (clip.speed || 1);
       const targetSpeed = Math.max(0.0625, Math.min(16, clip.speed || 1));
+      const isLeader = key === leaderKey;
+
       if (playing) {
         if (el.paused) {
           if (Math.abs(el.currentTime - expected) > 0.03) {
@@ -439,26 +453,39 @@ class PlaybackEngine {
           void el.play().catch(() => undefined);
         } else {
           // Elemento já está tocando:
-          // NUNCA fazer seek agressivo durante playback normal a menos que o drift seja gravíssimo!
-          const drift = el.currentTime - expected;
-          if (Math.abs(drift) > 0.6 && !el.seeking) {
-            try {
-              el.currentTime = expected;
-            } catch {
-              /* noop */
-            }
+          if (isLeader) {
+            // O líder do áudio NÃO pode ter sua playbackRate oscilando!
             if (el.playbackRate !== targetSpeed) {
               el.playbackRate = targetSpeed;
             }
-          } else if (Math.abs(drift) > 0.08) {
-            // Micro-ajuste suave com histerese para evitar oscilações no algoritmo de time-stretch
-            const rateAdjust = drift > 0 ? 0.98 : 1.02;
-            const newRate = Math.max(0.0625, Math.min(16, targetSpeed * rateAdjust));
-            if (Math.abs(el.playbackRate - newRate) > 0.005) {
-              el.playbackRate = newRate;
+            // Apenas se o drift for enorme (ex: salto de corte), faz seek pontual
+            const drift = Math.abs(el.currentTime - expected);
+            if (drift > 0.4 && !el.seeking) {
+              try {
+                el.currentTime = expected;
+              } catch {
+                /* noop */
+              }
             }
-          } else if (Math.abs(drift) < 0.03 && el.playbackRate !== targetSpeed) {
-            el.playbackRate = targetSpeed;
+          } else {
+            // Faixas secundárias (música de fundo, etc.) mantêm micro-ajuste se saírem de fase
+            const drift = el.currentTime - expected;
+            if (Math.abs(drift) > 0.4 && !el.seeking) {
+              try {
+                el.currentTime = expected;
+              } catch {
+                /* noop */
+              }
+              if (el.playbackRate !== targetSpeed) el.playbackRate = targetSpeed;
+            } else if (Math.abs(drift) > 0.06) {
+              const rateAdjust = drift > 0 ? 0.985 : 1.015;
+              const newRate = Math.max(0.0625, Math.min(16, targetSpeed * rateAdjust));
+              if (Math.abs(el.playbackRate - newRate) > 0.005) {
+                el.playbackRate = newRate;
+              }
+            } else if (el.playbackRate !== targetSpeed) {
+              el.playbackRate = targetSpeed;
+            }
           }
         }
       } else {
@@ -486,7 +513,6 @@ class PlaybackEngine {
       const el = this.elements.get(key);
       if (!el || !(el instanceof HTMLMediaElement)) continue;
       if (this.lastAttach.get(key) !== el) {
-        audioEngine.dropClip(key);
         audioEngine.attach(key, el);
         this.lastAttach.set(key, el);
       }
@@ -494,6 +520,11 @@ class PlaybackEngine {
       const isActive = c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001;
       const fade = isActive ? fadeEnvelope(c, t) : 0;
       const eff = c.muted || track?.muted ? 0 : c.volume * fade;
+      const clampedEff = Math.max(0, Math.min(1, eff));
+      if (Math.abs(el.volume - clampedEff) > 0.005) {
+        el.volume = clampedEff;
+      }
+      el.muted = eff <= 0.0001;
       audioEngine.update(key, { gain: eff, enhance: c.enhance });
       if (!isActive && !el.paused) el.pause();
     }

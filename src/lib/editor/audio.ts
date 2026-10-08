@@ -19,11 +19,13 @@ export class AudioEngine {
   private master: GainNode | null = null;
   private recDest: MediaStreamAudioDestinationNode | null = null;
   private chains = new Map<string, Chain>();
-  private linked = new WeakSet<HTMLMediaElement>();
+  private linked = new WeakMap<HTMLMediaElement, Chain>();
 
   ensureContext(): AudioContext {
     if (!this.ctx) {
-      const AC: typeof AudioContext = window.AudioContext;
+      const AC: typeof AudioContext =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AC();
       this.master = this.ctx.createGain();
       this.master.gain.value = 1;
@@ -35,8 +37,10 @@ export class AudioEngine {
 
   /** Cria (ou recupera) o grafo de um elemento. Seguro chamar repetidamente. */
   attach(key: string, el: HTMLMediaElement): Chain | null {
-    if (this.linked.has(el)) {
-      return this.chains.get(key) ?? null;
+    const existing = this.linked.get(el);
+    if (existing) {
+      this.chains.set(key, existing);
+      return existing;
     }
     try {
       const ctx = this.ensureContext();
@@ -63,7 +67,7 @@ export class AudioEngine {
       gain.gain.value = 1;
       source.connect(hp).connect(comp).connect(limiter).connect(makeup).connect(gain).connect(this.master!);
       const chain: Chain = { source, hp, comp, limiter, makeup, gain, lastGain: 1, lastEnhance: false };
-      this.linked.add(el);
+      this.linked.set(el, chain);
       this.chains.set(key, chain);
       return chain;
     } catch {
@@ -77,18 +81,6 @@ export class AudioEngine {
   }
 
   dropClip(key: string) {
-    const c = this.chains.get(key);
-    if (!c) return;
-    try {
-      c.source.disconnect();
-      c.hp.disconnect();
-      c.comp.disconnect();
-      c.limiter.disconnect();
-      c.makeup.disconnect();
-      c.gain.disconnect();
-    } catch {
-      /* noop */
-    }
     this.chains.delete(key);
   }
 
@@ -98,7 +90,6 @@ export class AudioEngine {
     if (!c || !this.ctx) return;
     const t = this.ctx.currentTime;
 
-    // Se o ganho mudou significativamente, atualiza sem empilhar setTargetAtTime eterno
     if (c.lastGain === undefined || Math.abs(c.lastGain - opts.gain) > 0.0005) {
       c.lastGain = opts.gain;
       try {
@@ -109,7 +100,6 @@ export class AudioEngine {
       }
     }
 
-    // Se o modo enhance (estúdio) mudou:
     if (c.lastEnhance !== opts.enhance) {
       c.lastEnhance = opts.enhance;
       try {
@@ -124,6 +114,10 @@ export class AudioEngine {
           c.comp.ratio.setValueAtTime(3.5, t);
           c.makeup.gain.cancelScheduledValues(t);
           c.makeup.gain.setValueAtTime(1.2, t); // compensa a compressão
+          c.limiter.threshold.cancelScheduledValues(t);
+          c.limiter.threshold.setValueAtTime(-1.5, t);
+          c.limiter.release.cancelScheduledValues(t);
+          c.limiter.release.setValueAtTime(0.1, t);
         } else {
           c.hp.frequency.cancelScheduledValues(t);
           c.hp.frequency.setValueAtTime(20, t);
@@ -135,6 +129,8 @@ export class AudioEngine {
           c.comp.ratio.setValueAtTime(1, t);
           c.makeup.gain.cancelScheduledValues(t);
           c.makeup.gain.setValueAtTime(1, t);
+          c.limiter.threshold.cancelScheduledValues(t);
+          c.limiter.threshold.setValueAtTime(0, t);
         }
       } catch {
         /* noop */
@@ -153,9 +149,12 @@ export class AudioEngine {
   }
 
   pauseAll() {
-    // ganho zero imediato evita vazamento de áudio ao pausar
     if (!this.ctx || !this.master) return;
-    this.master.gain.setTargetAtTime(1, this.ctx.currentTime, 0.001);
+    try {
+      this.master.gain.setValueAtTime(1, this.ctx.currentTime);
+    } catch {
+      /* noop */
+    }
   }
 }
 
