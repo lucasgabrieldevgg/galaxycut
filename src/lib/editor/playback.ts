@@ -85,14 +85,31 @@ class PlaybackEngine {
       this.last = now;
       const pb = usePlayback.getState();
       if (pb.playing) {
-        const t = pb.playhead + dt;
-        const dur = pb.duration;
-        if (t >= dur && dur > 0) {
-          // acabou o conteúdo visível/audível → a seta PARA aqui
-          usePlayback.getState().setPlayhead(dur);
-          this.pause();
-        } else {
-          usePlayback.getState().setPlayhead(t);
+        // Função de proteção: a agulha não avança se o áudio/vídeo ativo ainda estiver decodificando ou em seek
+        const active = this.activeClips(pb.playhead);
+        let waitingBuffer = false;
+        for (const clip of active) {
+          if (clip.kind !== "video" && clip.kind !== "audio") continue;
+          const key = this.bindings.get(clip.id);
+          const el = key ? this.elements.get(key) : undefined;
+          if (el instanceof HTMLMediaElement) {
+            if (el.seeking || el.readyState < 2) {
+              waitingBuffer = true;
+              break;
+            }
+          }
+        }
+
+        if (!waitingBuffer) {
+          const t = pb.playhead + dt;
+          const dur = pb.duration;
+          if (t >= dur && dur > 0) {
+            // acabou o conteúdo visível/audível → a seta PARA aqui
+            usePlayback.getState().setPlayhead(dur);
+            this.pause();
+          } else {
+            usePlayback.getState().setPlayhead(t);
+          }
         }
       }
       const cur = usePlayback.getState();
