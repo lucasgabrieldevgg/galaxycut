@@ -30,6 +30,7 @@ class PlaybackEngine {
   /** clipes ativos no último sync (quem "possui" cada elemento) */
   private claims = new Map<string, string>(); // elKey -> clipId
   private lastAttach = new Map<string, MediaEl>();
+  private startingPlays = new Set<HTMLMediaElement>();
   private raf = 0;
   private last = 0;
   private dirty = true;
@@ -66,6 +67,7 @@ class PlaybackEngine {
     cancelAnimationFrame(this.raf);
     cancelAnimationFrame(this.glideRaf);
     this.glideTarget = null;
+    this.startingPlays.clear();
     for (const el of this.elements.values()) {
       if (el instanceof HTMLMediaElement) el.pause();
     }
@@ -450,7 +452,14 @@ class PlaybackEngine {
           if (el.playbackRate !== targetSpeed) {
             el.playbackRate = targetSpeed;
           }
-          void el.play().catch(() => undefined);
+          if (!this.startingPlays.has(el)) {
+            this.startingPlays.add(el);
+            el.play()
+              .catch(() => undefined)
+              .finally(() => {
+                this.startingPlays.delete(el);
+              });
+          }
         } else {
           // Elemento já está tocando:
           if (isLeader) {
@@ -512,20 +521,17 @@ class PlaybackEngine {
       if (this.claims.get(key) !== c.id) continue;
       const el = this.elements.get(key);
       if (!el || !(el instanceof HTMLMediaElement)) continue;
-      if (this.lastAttach.get(key) !== el) {
-        audioEngine.attach(key, el);
-        this.lastAttach.set(key, el);
+      // WebAudio DSP só é ativado se enhance estiver habilitado ou se já estava vinculado
+      if (c.enhance) {
+        if (this.lastAttach.get(key) !== el) {
+          audioEngine.attach(key, el);
+          this.lastAttach.set(key, el);
+        }
+        audioEngine.update(key, { gain: eff, enhance: true });
+      } else if (this.lastAttach.has(key)) {
+        audioEngine.update(key, { gain: eff, enhance: false });
       }
-      const track = tracks.find((tr) => tr.id === c.trackId);
-      const isActive = c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001;
-      const fade = isActive ? fadeEnvelope(c, t) : 0;
-      const eff = c.muted || track?.muted ? 0 : c.volume * fade;
-      const clampedEff = Math.max(0, Math.min(1, eff));
-      if (Math.abs(el.volume - clampedEff) > 0.005) {
-        el.volume = clampedEff;
-      }
-      el.muted = eff <= 0.0001;
-      audioEngine.update(key, { gain: eff, enhance: c.enhance });
+
       if (!isActive && !el.paused) el.pause();
     }
   }
@@ -618,6 +624,7 @@ class PlaybackEngine {
 
   pause() {
     this.pendingPlay = false; // cancelou a espera: não começa sozinho depois
+    this.startingPlays.clear();
     usePlayback.getState().setPlaying(false);
     for (const el of this.elements.values()) {
       if (el instanceof HTMLMediaElement && !el.paused) el.pause();
