@@ -13,7 +13,7 @@ import { useT, useLang } from "@/lib/editor/i18n";
 import { APP_VERSION } from "@/lib/editor/version";
 import { desktop, isDesktopBuild } from "@/lib/editor/desktop";
 import { toast } from "sonner";
-import { MessageSquareHeart, Github, Copy, Check, Send, Loader2, ExternalLink } from "lucide-react";
+import { MessageSquareHeart, Copy, Check, Send, Loader2, ExternalLink } from "lucide-react";
 
 const REPO = "lucasgabrieldevgg/galaxycut";
 const FEEDBACK_URL = "https://galaxycut.vercel.app/api/feedback";

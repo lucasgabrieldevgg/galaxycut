@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { enUS, es } from "date-fns/locale";
-import { Plus, Settings as SettingsIcon, Film, MoreVertical, Pencil, Copy, Trash2, Github, Check, X } from "lucide-react";
+import { Plus, Settings as SettingsIcon, Film, MoreVertical, Pencil, Copy, Trash2, Check, X } from "lucide-react";
 import * as projects from "@/lib/editor/projects";
 import { ProjectCard } from "@/lib/editor/projects";
 import { useSettings } from "@/lib/editor/settings";

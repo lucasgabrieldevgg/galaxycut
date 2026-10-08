@@ -83,14 +83,30 @@ class PlaybackEngine {
       this.last = now;
       const pb = usePlayback.getState();
       if (pb.playing) {
-        const t = pb.playhead + dt;
+        // Encontra o elemento de áudio líder ativo para sincronizar a agulha com o relógio de hardware da placa de som
+        let leaderTime: number | null = null;
+        const active = this.activeClips(pb.playhead);
+        for (const clip of active) {
+          if (clip.kind !== "video" && clip.kind !== "audio") continue;
+          const key = this.bindings.get(clip.id);
+          const el = key ? this.elements.get(key) : undefined;
+          if (el instanceof HTMLMediaElement && !el.paused && !el.seeking) {
+            const elT = clip.start + (el.currentTime - clip.inPoint) / (clip.speed || 1);
+            if (isFinite(elT) && Math.abs(elT - pb.playhead) < 0.5) {
+              leaderTime = elT;
+              break;
+            }
+          }
+        }
+
+        const nextT = leaderTime !== null ? leaderTime : pb.playhead + dt;
         const dur = pb.duration;
-        if (t >= dur && dur > 0) {
+        if (nextT >= dur && dur > 0) {
           // acabou o conteúdo visível/audível → a seta PARA aqui
           usePlayback.getState().setPlayhead(dur);
           this.pause();
         } else {
-          usePlayback.getState().setPlayhead(t);
+          usePlayback.getState().setPlayhead(nextT);
         }
       }
       const cur = usePlayback.getState();
@@ -396,36 +412,42 @@ class PlaybackEngine {
       }
       const clip = useProject.getState().clips.find((c) => c.id === ownerId);
       if (!clip) continue;
-      const expected = clip.inPoint + (t - clip.start) * clip.speed;
+      const expected = clip.inPoint + (t - clip.start) * (clip.speed || 1);
       if (playing) {
-        const drift = Math.abs(el.currentTime - expected);
         if (el.paused) {
-          try {
-            el.currentTime = expected;
-          } catch {
-            /* noop */
-          }
-          el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed));
-          void el.play().catch(() => undefined);
-        } else {
-          // drift grande (>0.6s) faz seek direto
-          if (drift > 0.6 && !el.seeking) {
+          if (Math.abs(el.currentTime - expected) > 0.02) {
             try {
               el.currentTime = expected;
             } catch {
               /* noop */
             }
-          } else if (drift > 0.08) {
-            // drift leve: ajusta velocidade suavemente (+-5%) pra convergir sem pausar/engasgar
-            const rateAdjust = expected > el.currentTime ? 1.05 : 0.95;
-            el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed * rateAdjust));
+          }
+          el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
+          void el.play().catch(() => undefined);
+        } else {
+          // Elemento já está tocando:
+          // NUNCA fazer seek agressivo durante playback normal!
+          // Se o elemento estiver ligeiramente desfasado em relação ao tempo esperado (por exemplo trilha secundária):
+          const drift = el.currentTime - expected;
+          if (Math.abs(drift) > 1.2 && !el.seeking) {
+            // Apenas se o drift for gravíssimo (> 1.2s), faz seek de emergência
+            try {
+              el.currentTime = expected;
+            } catch {
+              /* noop */
+            }
+            el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
+          } else if (Math.abs(drift) > 0.06) {
+            // Micro-ajuste suave (+-1.5%) sem travamento e sem ruído de pitch
+            const rateAdjust = drift > 0 ? 0.985 : 1.015;
+            el.playbackRate = Math.max(0.0625, Math.min(16, (clip.speed || 1) * rateAdjust));
           } else {
-            el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed));
+            el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
           }
         }
       } else {
         if (!el.paused) el.pause();
-        if (Math.abs(el.currentTime - expected) > 0.04) {
+        if (Math.abs(el.currentTime - expected) > 0.02) {
           try {
             el.currentTime = expected;
           } catch {
