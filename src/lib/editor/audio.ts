@@ -10,6 +10,8 @@ interface Chain {
   limiter: DynamicsCompressorNode;
   makeup: GainNode;
   gain: GainNode;
+  lastGain?: number;
+  lastEnhance?: boolean;
 }
 
 export class AudioEngine {
@@ -58,8 +60,9 @@ export class AudioEngine {
       const makeup = ctx.createGain();
       makeup.gain.value = 1;
       const gain = ctx.createGain();
+      gain.gain.value = 1;
       source.connect(hp).connect(comp).connect(limiter).connect(makeup).connect(gain).connect(this.master!);
-      const chain: Chain = { source, hp, comp, limiter, makeup, gain };
+      const chain: Chain = { source, hp, comp, limiter, makeup, gain, lastGain: 1, lastEnhance: false };
       this.linked.add(el);
       this.chains.set(key, chain);
       return chain;
@@ -89,24 +92,53 @@ export class AudioEngine {
     this.chains.delete(key);
   }
 
-  /** Atualiza ganho/filtros por frame. */
+  /** Atualiza ganho/filtros com prevenção de sobrecarga na fila de automação do WebAudio */
   update(key: string, opts: { gain: number; enhance: boolean }) {
     const c = this.chains.get(key);
     if (!c || !this.ctx) return;
     const t = this.ctx.currentTime;
-    c.gain.gain.setTargetAtTime(opts.gain, t, 0.015);
-    if (opts.enhance) {
-      c.hp.frequency.setTargetAtTime(85, t, 0.05); // corta ruído grave (vento/ar/zumbido)
-      c.comp.threshold.setTargetAtTime(-24, t, 0.05);
-      c.comp.knee.setTargetAtTime(14, t, 0.05);
-      c.comp.ratio.setTargetAtTime(3.5, t, 0.05);
-      c.makeup.gain.setTargetAtTime(1.2, t, 0.05); // compensa a compressão
-    } else {
-      c.hp.frequency.setTargetAtTime(20, t, 0.05);
-      c.comp.threshold.setTargetAtTime(0, t, 0.05);
-      c.comp.knee.setTargetAtTime(0, t, 0.05);
-      c.comp.ratio.setTargetAtTime(1, t, 0.05);
-      c.makeup.gain.setTargetAtTime(1, t, 0.05);
+
+    // Se o ganho mudou significativamente, atualiza sem empilhar setTargetAtTime eterno
+    if (c.lastGain === undefined || Math.abs(c.lastGain - opts.gain) > 0.0005) {
+      c.lastGain = opts.gain;
+      try {
+        c.gain.gain.cancelScheduledValues(t);
+        c.gain.gain.setValueAtTime(opts.gain, t);
+      } catch {
+        c.gain.gain.value = opts.gain;
+      }
+    }
+
+    // Se o modo enhance (estúdio) mudou:
+    if (c.lastEnhance !== opts.enhance) {
+      c.lastEnhance = opts.enhance;
+      try {
+        if (opts.enhance) {
+          c.hp.frequency.cancelScheduledValues(t);
+          c.hp.frequency.setValueAtTime(85, t); // corta ruído grave (vento/ar/zumbido)
+          c.comp.threshold.cancelScheduledValues(t);
+          c.comp.threshold.setValueAtTime(-24, t);
+          c.comp.knee.cancelScheduledValues(t);
+          c.comp.knee.setValueAtTime(14, t);
+          c.comp.ratio.cancelScheduledValues(t);
+          c.comp.ratio.setValueAtTime(3.5, t);
+          c.makeup.gain.cancelScheduledValues(t);
+          c.makeup.gain.setValueAtTime(1.2, t); // compensa a compressão
+        } else {
+          c.hp.frequency.cancelScheduledValues(t);
+          c.hp.frequency.setValueAtTime(20, t);
+          c.comp.threshold.cancelScheduledValues(t);
+          c.comp.threshold.setValueAtTime(0, t);
+          c.comp.knee.cancelScheduledValues(t);
+          c.comp.knee.setValueAtTime(0, t);
+          c.comp.ratio.cancelScheduledValues(t);
+          c.comp.ratio.setValueAtTime(1, t);
+          c.makeup.gain.cancelScheduledValues(t);
+          c.makeup.gain.setValueAtTime(1, t);
+        }
+      } catch {
+        /* noop */
+      }
     }
   }
 

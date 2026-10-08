@@ -87,7 +87,6 @@ export function MediaPanel() {
   const pasteMedia = useProject((s) => s.pasteMedia);
   const clearMediaClipboard = useProject((s) => s.clearMediaClipboard);
 
-  const playhead = usePlayback((s) => s.playhead);
   const [importing, setImporting] = useState(0);
   const [confirmRemove, setConfirmRemove] = useState<MediaMeta | null>(null);
   const [confirmDeleteFolder, setConfirmDeleteFolder] = useState<MediaFolder | null>(null);
@@ -948,7 +947,7 @@ export function MediaPanel() {
           <div className="space-y-4">
             <Button
               onClick={() => {
-                addTextClip(playhead);
+                addTextClip(usePlayback.getState().playhead);
                 toast.success(t("mp.textAdded"));
               }}
               className="w-full gap-2 bg-[var(--gc-accent)] font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
@@ -983,7 +982,7 @@ export function MediaPanel() {
                   <button
                     key={p.id}
                     onClick={() => {
-                      addTextClip(playhead, p.props);
+                      addTextClip(usePlayback.getState().playhead, p.props);
                       toast.success(t("mp.styleAdded", { name: p.name }));
                     }}
                     className="flex flex-col items-center gap-1 rounded-lg border border-[#232d3d] bg-[#121722] px-2 py-2.5 transition hover:border-[#3a4759]"

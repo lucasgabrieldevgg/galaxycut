@@ -232,11 +232,11 @@ export function StockSearch() {
   }
 
   const activeTab = TYPE_TABS.find((tb) => tb.id === type)!;
-  const playhead = usePlayback((s) => s.playhead);
 
   /** sticker de emoji: entra na faixa de texto como figurinha grande */
   function addSticker(emoji: string) {
-    useProject.getState().addTextClip(playhead, {
+    const at = usePlayback.getState().playhead;
+    useProject.getState().addTextClip(at, {
       content: emoji,
       size: 200,
       bold: false,

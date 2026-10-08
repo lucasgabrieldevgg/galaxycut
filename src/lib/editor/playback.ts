@@ -92,14 +92,24 @@ class PlaybackEngine {
           const el = key ? this.elements.get(key) : undefined;
           if (el instanceof HTMLMediaElement && !el.paused && !el.seeking) {
             const elT = clip.start + (el.currentTime - clip.inPoint) / (clip.speed || 1);
-            if (isFinite(elT) && Math.abs(elT - pb.playhead) < 0.5) {
+            if (isFinite(elT) && Math.abs(elT - pb.playhead) < 0.6) {
               leaderTime = elT;
               break;
             }
           }
         }
 
-        const nextT = leaderTime !== null ? leaderTime : pb.playhead + dt;
+        let nextT = pb.playhead + dt;
+        if (leaderTime !== null) {
+          const drift = nextT - leaderTime;
+          if (Math.abs(drift) > 0.25) {
+            nextT = leaderTime;
+          } else if (Math.abs(drift) > 0.015) {
+            // Slew suave em 12% por quadro — fluidez de 60/120fps sem saltos ou engasgos
+            nextT = nextT - drift * 0.12;
+          }
+        }
+
         const dur = pb.duration;
         if (nextT >= dur && dur > 0) {
           // acabou o conteúdo visível/audível → a seta PARA aqui
@@ -413,36 +423,42 @@ class PlaybackEngine {
       const clip = useProject.getState().clips.find((c) => c.id === ownerId);
       if (!clip) continue;
       const expected = clip.inPoint + (t - clip.start) * (clip.speed || 1);
+      const targetSpeed = Math.max(0.0625, Math.min(16, clip.speed || 1));
       if (playing) {
         if (el.paused) {
-          if (Math.abs(el.currentTime - expected) > 0.02) {
+          if (Math.abs(el.currentTime - expected) > 0.03) {
             try {
               el.currentTime = expected;
             } catch {
               /* noop */
             }
           }
-          el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
+          if (el.playbackRate !== targetSpeed) {
+            el.playbackRate = targetSpeed;
+          }
           void el.play().catch(() => undefined);
         } else {
           // Elemento já está tocando:
-          // NUNCA fazer seek agressivo durante playback normal!
-          // Se o elemento estiver ligeiramente desfasado em relação ao tempo esperado (por exemplo trilha secundária):
+          // NUNCA fazer seek agressivo durante playback normal a menos que o drift seja gravíssimo!
           const drift = el.currentTime - expected;
-          if (Math.abs(drift) > 1.2 && !el.seeking) {
-            // Apenas se o drift for gravíssimo (> 1.2s), faz seek de emergência
+          if (Math.abs(drift) > 0.6 && !el.seeking) {
             try {
               el.currentTime = expected;
             } catch {
               /* noop */
             }
-            el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
-          } else if (Math.abs(drift) > 0.06) {
-            // Micro-ajuste suave (+-1.5%) sem travamento e sem ruído de pitch
-            const rateAdjust = drift > 0 ? 0.985 : 1.015;
-            el.playbackRate = Math.max(0.0625, Math.min(16, (clip.speed || 1) * rateAdjust));
-          } else {
-            el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
+            if (el.playbackRate !== targetSpeed) {
+              el.playbackRate = targetSpeed;
+            }
+          } else if (Math.abs(drift) > 0.08) {
+            // Micro-ajuste suave com histerese para evitar oscilações no algoritmo de time-stretch
+            const rateAdjust = drift > 0 ? 0.98 : 1.02;
+            const newRate = Math.max(0.0625, Math.min(16, targetSpeed * rateAdjust));
+            if (Math.abs(el.playbackRate - newRate) > 0.005) {
+              el.playbackRate = newRate;
+            }
+          } else if (Math.abs(drift) < 0.03 && el.playbackRate !== targetSpeed) {
+            el.playbackRate = targetSpeed;
           }
         }
       } else {
