@@ -521,6 +521,12 @@ class PlaybackEngine {
       if (this.claims.get(key) !== c.id) continue;
       const el = this.elements.get(key);
       if (!el || !(el instanceof HTMLMediaElement)) continue;
+
+      const track = tracks.find((tr) => tr.id === c.trackId);
+      const isActive = c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001;
+      const fade = isActive ? fadeEnvelope(c, t) : 0;
+      const eff = c.muted || track?.muted ? 0 : c.volume * fade;
+
       // WebAudio DSP só é ativado se enhance estiver habilitado ou se já estava vinculado
       if (c.enhance) {
         if (this.lastAttach.get(key) !== el) {
@@ -530,6 +536,12 @@ class PlaybackEngine {
         audioEngine.update(key, { gain: eff, enhance: true });
       } else if (this.lastAttach.has(key)) {
         audioEngine.update(key, { gain: eff, enhance: false });
+      } else {
+        const targetVol = Math.max(0, Math.min(1, eff));
+        if (Math.abs(el.volume - targetVol) > 0.01) {
+          el.volume = targetVol;
+        }
+        el.muted = eff === 0;
       }
 
       if (!isActive && !el.paused) el.pause();
