@@ -631,100 +631,102 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
           )}
         </div>
       </div>
-      <div className="flex h-12 shrink-0 items-center gap-1.5 border-t border-[#1c2430] bg-[#0c1017] px-3">
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400" onClick={() => engine.seek(0)} aria-label={t("pv.start")}>
-          <SkipBack className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400" onClick={() => engine.nudgeFrames(-1)} aria-label={t("pv.prevFrame")}>
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <PlayButton />
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400" onClick={() => engine.nudgeFrames(1)} aria-label={t("pv.nextFrame")}>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <div className="ml-2">
-          <TimeDisplay />
-        </div>
-        {editMode && (
-          <span className="ml-2 hidden items-center gap-1 rounded border border[var(--gc-accent-30)] bg[var(--gc-accent-10)] px-1.5 py-0.5 text-[10px] text-[var(--gc-accent)] sm:flex" title={t("pv.editOn")}>
-            <Move className="h-3 w-3" />
-            {t("pv.editOn")}
-          </span>
-        )}
-        {!editMode && draggable && !dragging && (
-          <span className="ml-2 hidden items-center gap-1 rounded border border[var(--gc-accent-30)] bg[var(--gc-accent-10)] px-1.5 py-0.5 text-[10px] text-[var(--gc-accent)] sm:flex" title={t("pv.clickToEdit")}>
-            <Move className="h-3 w-3" />
-            {selected?.kind === "text"
-              ? selected.isCaption
-                ? selected.posLock
-                  ? t("pv.dragCapLock")
-                  : t("pv.dragCapAll")
-                : t("pv.dragText")
-              : t("pv.clickToEdit")}
-          </span>
-        )}
-        {/* ímã: ligado, o clipe gruda no centro e nas bordas perto delas;
-            desligado, movimento 100% livre. Fica salvo nas configurações. */}
-        {(draggable || editMode) && (
-          <button
-            type="button"
-            data-gc-keepedit
-            onClick={() => useSettings.getState().set({ magnetMove: !magnet })}
-            title={magnet ? t("pv.magnetOn") : t("pv.magnetOff")}
-            aria-pressed={magnet}
-            className={`ml-1 flex h-7 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium transition ${
-              magnet
-                ? "border[var(--gc-accent-40)] bg[var(--gc-accent-10)] text-[var(--gc-accent)]"
-                : "border-[#2a3546] bg-transparent text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            <Magnet className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{t("pv.magnet")}</span>
-          </button>
-        )}
-        {/* Controles rápidos de Keyframe (Losango ◆ estilo CapCut) */}
-        {selected && selected.kind !== "audio" && (
-          <div className="ml-1 flex items-center gap-0.5 rounded-md border border-[#2a3546] bg-[#121722] p-0.5" data-gc-keepedit>
-            <button
-              type="button"
-              onClick={() => prevKf && jumpToKf(prevKf.time)}
-              disabled={!prevKf}
-              className="flex h-6 w-5 items-center justify-center text-zinc-400 hover:text-amber-300 disabled:opacity-25 transition"
-              title="Losango anterior (◀◆)"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={toggleKeyframeAtPlayhead}
-              className={`flex h-6 items-center gap-1 rounded px-1.5 text-[10px] font-medium transition ${
-                currentKf
-                  ? "bg-amber-500 text-black shadow-[0_0_6px_rgba(245,158,11,0.5)] font-bold"
-                  : "text-zinc-400 hover:text-amber-300 hover:bg-amber-500/10"
-              }`}
-              title={currentKf ? "Remover Losango ◆ neste ponto" : "Marcar Losango ◆ de animação aqui"}
-            >
-              <Diamond className={`h-3 w-3 ${currentKf ? "fill-current" : ""}`} />
-              <span className="hidden sm:inline">{currentKf ? "◆ Ativo" : "+ ◆"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => nextKf && jumpToKf(nextKf.time)}
-              disabled={!nextKf}
-              className="flex h-6 w-5 items-center justify-center text-zinc-400 hover:text-amber-300 disabled:opacity-25 transition"
-              title="Próximo losango (◆▶)"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-t border-[#1c2430] bg-[#0c1017] px-3 overflow-hidden select-none">
+        <div className="flex items-center gap-1.5 shrink-0 min-w-0">
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-white" onClick={() => engine.seek(0)} aria-label={t("pv.start")} title={t("pv.start")}>
+            <SkipBack className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-white" onClick={() => engine.nudgeFrames(-1)} aria-label={t("pv.prevFrame")} title={t("pv.prevFrame")}>
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </Button>
+          <PlayButton />
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-white" onClick={() => engine.nudgeFrames(1)} aria-label={t("pv.nextFrame")} title={t("pv.nextFrame")}>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+          <div className="ml-1.5 shrink-0">
+            <TimeDisplay />
           </div>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          {/* medidor de áudio horizontal estilo OBS — som no ponto da seta, em decibéis */}
-          <DbMeter className="w-44 shrink-0 lg:w-56" label={t("pv.sound")} />
-          <span className="hidden rounded border border-[#2a3546] px-1.5 py-0.5 font-mono text-[10px] text-zinc-500 xl:inline">{aspect}</span>
-          <span className="hidden rounded border border-[#2a3546] px-1.5 py-0.5 font-mono text-[10px] text-zinc-500 lg:inline">{project.fps}fps</span>
+          {editMode && (
+            <span className="ml-1.5 hidden items-center gap-1 rounded border border-[var(--gc-accent-30)] bg-[var(--gc-accent-10)] px-1.5 py-0.5 text-[10px] text-[var(--gc-accent)] md:flex" title={t("pv.editOn")}>
+              <Move className="h-3 w-3" />
+              {t("pv.editOn")}
+            </span>
+          )}
+          {!editMode && draggable && !dragging && (
+            <span className="ml-1.5 hidden items-center gap-1 rounded border border-[var(--gc-accent-30)] bg-[var(--gc-accent-10)] px-1.5 py-0.5 text-[10px] text-[var(--gc-accent)] md:flex" title={t("pv.clickToEdit")}>
+              <Move className="h-3 w-3" />
+              {selected?.kind === "text"
+                ? selected.isCaption
+                  ? selected.posLock
+                    ? t("pv.dragCapLock")
+                    : t("pv.dragCapAll")
+                  : t("pv.dragText")
+                : t("pv.clickToEdit")}
+            </span>
+          )}
+          {/* ímã */}
+          {(draggable || editMode) && (
+            <button
+              type="button"
+              data-gc-keepedit
+              onClick={() => useSettings.getState().set({ magnetMove: !magnet })}
+              title={magnet ? t("pv.magnetOn") : t("pv.magnetOff")}
+              aria-pressed={magnet}
+              className={`ml-1 flex h-7 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium transition ${
+                magnet
+                  ? "border-[var(--gc-accent-40)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)]"
+                  : "border-[#2a3546] bg-transparent text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <Magnet className="h-3 w-3" />
+              <span className="hidden lg:inline">{t("pv.magnet")}</span>
+            </button>
+          )}
+          {/* Keyframes */}
+          {selected && selected.kind !== "audio" && (
+            <div className="ml-1 flex items-center gap-0.5 rounded-md border border-[#2a3546] bg-[#121722] p-0.5" data-gc-keepedit>
+              <button
+                type="button"
+                onClick={() => prevKf && jumpToKf(prevKf.time)}
+                disabled={!prevKf}
+                className="flex h-5 w-5 items-center justify-center text-zinc-400 hover:text-amber-300 disabled:opacity-25 transition"
+                title="Losango anterior (◀◆)"
+              >
+                <ChevronLeft className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                onClick={toggleKeyframeAtPlayhead}
+                className={`flex h-5 items-center gap-1 rounded px-1.5 text-[9px] font-medium transition ${
+                  currentKf
+                    ? "bg-amber-500 text-black shadow-[0_0_6px_rgba(245,158,11,0.5)] font-bold"
+                    : "text-zinc-400 hover:text-amber-300 hover:bg-amber-500/10"
+                }`}
+                title={currentKf ? "Remover Losango ◆ neste ponto" : "Marcar Losango ◆ de animação aqui"}
+              >
+                <Diamond className={`h-2.5 w-2.5 ${currentKf ? "fill-current" : ""}`} />
+                <span className="hidden lg:inline">{currentKf ? "◆ Ativo" : "+ ◆"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => nextKf && jumpToKf(nextKf.time)}
+                disabled={!nextKf}
+                className="flex h-5 w-5 items-center justify-center text-zinc-400 hover:text-amber-300 disabled:opacity-25 transition"
+                title="Próximo losango (◆▶)"
+              >
+                <ChevronRight className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {/* medidor de áudio horizontal estilo OBS */}
+          <DbMeter className="w-28 sm:w-36 md:w-44 shrink-0" label={t("pv.sound")} />
+          <span className="hidden rounded border border-[#2a3546] px-1.5 py-0.5 font-mono text-[9px] text-zinc-500 2xl:inline">{aspect}</span>
+          <span className="hidden rounded border border-[#2a3546] px-1.5 py-0.5 font-mono text-[9px] text-zinc-500 2xl:inline">{project.fps}fps</span>
           {duration > 0 && (
-            <span className="hidden rounded border border[var(--gc-accent-30)] bg[var(--gc-accent-10)] px-1.5 py-0.5 text-[10px] text-[var(--gc-accent)] lg:inline">
+            <span className="hidden rounded border border-[var(--gc-accent-30)] bg-[var(--gc-accent-10)] px-1.5 py-0.5 text-[9px] text-[var(--gc-accent)] 2xl:inline">
               {t("pv.videoOf", { t: fmtTime(duration) })}
             </span>
           )}

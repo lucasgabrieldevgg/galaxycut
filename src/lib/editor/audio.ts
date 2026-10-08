@@ -3,6 +3,8 @@
 // → compressor (-24dB, suave) → limitador (não deixa estourar) → +20% de ganho.
 "use client";
 
+import type { AudioFilterConfig } from "./types";
+
 interface Chain {
   source: MediaElementAudioSourceNode;
   hp: BiquadFilterNode;
@@ -12,6 +14,7 @@ interface Chain {
   gain: GainNode;
   lastGain?: number;
   lastEnhance?: boolean;
+  lastFiltersSig?: string;
 }
 
 export class AudioEngine {
@@ -81,60 +84,112 @@ export class AudioEngine {
   }
 
   dropClip(key: string) {
+    // Apenas desassocia a chave da cadeia sem desconectar o nó físico do elemento
     this.chains.delete(key);
   }
 
-  /** Atualiza ganho/filtros com prevenção de sobrecarga na fila de automação do WebAudio */
-  update(key: string, opts: { gain: number; enhance: boolean }) {
+  /** Atualiza ganho/filtros estilo OBS por frame sem sobrecarregar a fila DSP do WebAudio */
+  update(key: string, opts: { gain: number; enhance: boolean; filters?: AudioFilterConfig }) {
     const c = this.chains.get(key);
     if (!c || !this.ctx) return;
     const t = this.ctx.currentTime;
-
-    if (c.lastGain === undefined || Math.abs(c.lastGain - opts.gain) > 0.0005) {
-      c.lastGain = opts.gain;
+    
+    // Multiplicador de ganho de volume (dB para escala linear)
+    let effGain = Math.max(0, opts.gain);
+    if (opts.filters?.gainDb) {
+      effGain *= Math.pow(10, opts.filters.gainDb / 20);
+    }
+    
+    if (c.lastGain === undefined || Math.abs(c.lastGain - effGain) > 0.0005) {
+      c.lastGain = effGain;
       try {
         c.gain.gain.cancelScheduledValues(t);
-        c.gain.gain.setValueAtTime(opts.gain, t);
+        c.gain.gain.setValueAtTime(effGain, t);
       } catch {
-        c.gain.gain.value = opts.gain;
+        c.gain.gain.value = effGain;
       }
     }
 
-    if (c.lastEnhance !== opts.enhance) {
-      c.lastEnhance = opts.enhance;
-      try {
-        if (opts.enhance) {
-          c.hp.frequency.cancelScheduledValues(t);
-          c.hp.frequency.setValueAtTime(85, t); // corta ruído grave (vento/ar/zumbido)
-          c.comp.threshold.cancelScheduledValues(t);
-          c.comp.threshold.setValueAtTime(-24, t);
-          c.comp.knee.cancelScheduledValues(t);
-          c.comp.knee.setValueAtTime(14, t);
-          c.comp.ratio.cancelScheduledValues(t);
-          c.comp.ratio.setValueAtTime(3.5, t);
-          c.makeup.gain.cancelScheduledValues(t);
-          c.makeup.gain.setValueAtTime(1.2, t); // compensa a compressão
-          c.limiter.threshold.cancelScheduledValues(t);
-          c.limiter.threshold.setValueAtTime(-1.5, t);
-          c.limiter.release.cancelScheduledValues(t);
-          c.limiter.release.setValueAtTime(0.1, t);
+    const filtersSig = JSON.stringify(opts.filters ?? null) + ":" + opts.enhance;
+    if (c.lastFiltersSig === filtersSig) return;
+    c.lastFiltersSig = filtersSig;
+
+    const f = opts.filters;
+    try {
+      if (f && f.enabled) {
+        // 1. Passa-Alta (High-Pass / Corte de Ruído Grave)
+        c.hp.frequency.cancelScheduledValues(t);
+        if (f.highpassEnabled) {
+          c.hp.frequency.setValueAtTime(Math.max(20, Math.min(1000, f.highpassFrequency || 85)), t);
         } else {
-          c.hp.frequency.cancelScheduledValues(t);
           c.hp.frequency.setValueAtTime(20, t);
-          c.comp.threshold.cancelScheduledValues(t);
+        }
+
+        // 2. Compressor de Dinâmica (Estilo OBS Studio)
+        c.comp.threshold.cancelScheduledValues(t);
+        c.comp.ratio.cancelScheduledValues(t);
+        c.comp.attack.cancelScheduledValues(t);
+        c.comp.release.cancelScheduledValues(t);
+        c.makeup.gain.cancelScheduledValues(t);
+        if (f.compressorEnabled) {
+          c.comp.threshold.setValueAtTime(f.compressorThreshold ?? -24, t);
+          c.comp.ratio.setValueAtTime(f.compressorRatio ?? 3.5, t);
+          c.comp.attack.setValueAtTime(Math.max(0.001, (f.compressorAttack ?? 6) / 1000), t);
+          c.comp.release.setValueAtTime(Math.max(0.01, (f.compressorRelease ?? 250) / 1000), t);
+          const makeup = Math.pow(10, (f.compressorMakeupGain ?? 2) / 20);
+          c.makeup.gain.setValueAtTime(makeup, t);
+        } else {
           c.comp.threshold.setValueAtTime(0, t);
-          c.comp.knee.cancelScheduledValues(t);
-          c.comp.knee.setValueAtTime(0, t);
-          c.comp.ratio.cancelScheduledValues(t);
           c.comp.ratio.setValueAtTime(1, t);
-          c.makeup.gain.cancelScheduledValues(t);
           c.makeup.gain.setValueAtTime(1, t);
-          c.limiter.threshold.cancelScheduledValues(t);
+        }
+
+        // 3. Limitador de Picos (Evita Distorção / Limiter)
+        c.limiter.threshold.cancelScheduledValues(t);
+        c.limiter.release.cancelScheduledValues(t);
+        if (f.limiterEnabled) {
+          c.limiter.threshold.setValueAtTime(f.limiterThreshold ?? -1.5, t);
+          c.limiter.release.setValueAtTime(Math.max(0.01, (f.limiterRelease ?? 100) / 1000), t);
+        } else {
           c.limiter.threshold.setValueAtTime(0, t);
         }
-      } catch {
-        /* noop */
+      } else if (opts.enhance) {
+        // Padrão OBS Voz Clara
+        c.hp.frequency.cancelScheduledValues(t);
+        c.hp.frequency.setValueAtTime(85, t);
+        c.comp.threshold.cancelScheduledValues(t);
+        c.comp.threshold.setValueAtTime(-24, t);
+        c.comp.knee.cancelScheduledValues(t);
+        c.comp.knee.setValueAtTime(14, t);
+        c.comp.ratio.cancelScheduledValues(t);
+        c.comp.ratio.setValueAtTime(3.5, t);
+        c.comp.attack.cancelScheduledValues(t);
+        c.comp.attack.setValueAtTime(0.006, t);
+        c.comp.release.cancelScheduledValues(t);
+        c.comp.release.setValueAtTime(0.25, t);
+        c.makeup.gain.cancelScheduledValues(t);
+        c.makeup.gain.setValueAtTime(1.2, t);
+        c.limiter.threshold.cancelScheduledValues(t);
+        c.limiter.threshold.setValueAtTime(-1.5, t);
+        c.limiter.release.cancelScheduledValues(t);
+        c.limiter.release.setValueAtTime(0.1, t);
+      } else {
+        // Bypass neutro
+        c.hp.frequency.cancelScheduledValues(t);
+        c.hp.frequency.setValueAtTime(20, t);
+        c.comp.threshold.cancelScheduledValues(t);
+        c.comp.threshold.setValueAtTime(0, t);
+        c.comp.knee.cancelScheduledValues(t);
+        c.comp.knee.setValueAtTime(0, t);
+        c.comp.ratio.cancelScheduledValues(t);
+        c.comp.ratio.setValueAtTime(1, t);
+        c.makeup.gain.cancelScheduledValues(t);
+        c.makeup.gain.setValueAtTime(1, t);
+        c.limiter.threshold.cancelScheduledValues(t);
+        c.limiter.threshold.setValueAtTime(0, t);
       }
+    } catch {
+      /* noop */
     }
   }
 
@@ -149,13 +204,11 @@ export class AudioEngine {
   }
 
   pauseAll() {
+    // ganho zero imediato evita vazamento de áudio ao pausar
     if (!this.ctx || !this.master) return;
-    try {
-      this.master.gain.setValueAtTime(1, this.ctx.currentTime);
-    } catch {
-      /* noop */
-    }
+    this.master.gain.setTargetAtTime(1, this.ctx.currentTime, 0.001);
   }
 }
 
 export const audioEngine = new AudioEngine();
+

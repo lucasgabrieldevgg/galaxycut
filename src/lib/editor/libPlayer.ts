@@ -11,6 +11,11 @@ export interface LibItem {
   kind: "video" | "audio";
   thumb?: string;
   isIa?: boolean; // Internet Archive: resolve o arquivo de verdade antes de tocar
+  provider?: string;
+  creator?: string;
+  license?: string;
+  duration?: number;
+  rawStockItem?: any;
 }
 
 interface LibPlayerState {
@@ -42,7 +47,7 @@ export const useLibPlayer = create<LibPlayerState>((set, get) => ({
           const videos = files
             .filter((f) => /\.(mp4|m4v|webm|mkv)$/i.test(f.name) && !/sample/i.test(f.name))
             .sort((a, b) => Number(b.size ?? 0) - Number(a.size ?? 0));
-          const pick = audios[0] ?? videos[0];
+          const pick = it.kind === "video" ? (videos[0] ?? audios[0]) : (audios[0] ?? videos[0]);
           if (!pick) throw new Error("sem arquivo");
           const url = `https://archive.org/download/${it.id.replace(/^ia-/, "")}/${encodeURIComponent(pick.name)}`;
           if (get().item?.id === it.id) set({ src: url, loading: false });

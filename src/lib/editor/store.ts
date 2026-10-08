@@ -11,6 +11,7 @@ import {
   MediaFolder,
   MediaMeta,
   ProjectMeta,
+  TextProps,
   Track,
   Transition,
   clipEnd,
@@ -19,6 +20,7 @@ import {
   uid,
 } from "./types";
 import { registry } from "./media";
+import { engine } from "./playback";
 import { spansToTimeline, SilenceSpan } from "./silence";
 import { decodeAudioOf, encodeWav, peaksFromBuffer } from "./wav";
 import * as projects from "./projects";
@@ -74,9 +76,11 @@ interface ProjectState extends Snapshot {
   dropMediaAt: (mediaId: string, trackId: string, start: number) => { clip: Clip; redirected: boolean } | null;
   /** depois de arrastar livre: empurra os clipes que ficaram por baixo (inserção estilo CapCut). Devolve quantos empurrou. */
   settleOverlaps: (clipId: string) => number;
-  addTextClip: (at: number, preset?: Partial<ReturnType<typeof defaultTextProps>>) => void;
+  addTextClip: (at?: number | Partial<TextProps> | string, preset?: Partial<TextProps>) => Clip | void;
   updateClip: (id: string, patch: Partial<Clip>, opts?: { history?: boolean }) => void;
+  updateClips: (ids: string[], patch: Partial<Clip>, opts?: { history?: boolean }) => void;
   moveClipLive: (id: string, start: number, trackId: string) => void;
+  moveClipsLive: (moves: { id: string; start: number; trackId?: string }[]) => void;
   /** apaga o clipe. ripple=true puxa os da frente pra fechar o espaço junto com o de trás */
   deleteClip: (id: string, ripple?: boolean) => void;
   /** move ESTE clipe pra encostar no de trás (fecha o espaço que ficou) */
@@ -480,31 +484,86 @@ export const useProject = create<ProjectState>((set, get) => ({
     }
     return pushed;
   },
-  addTextClip: (at, preset) => {
+  addTextClip: (at?: number | Partial<TextProps> | string, preset?: Partial<TextProps>) => {
     const s = get();
-    const track = s.tracks.find((t) => t.kind === "text");
-    if (!track) return;
-    const onTrack = s.clips.filter((c) => c.trackId === track.id);
-    const start = onTrack.reduce((acc, c) => Math.max(acc, clipEnd(c)), Math.max(0, at));
-    const text = { ...defaultTextProps(), ...(preset ?? {}), content: preset?.content ?? defaultTextProps().content };
+    let track = s.tracks.find((t) => t.kind === "text");
+    if (!track) {
+      track = { id: "T-texto", kind: "text", name: "Texto", muted: false, hidden: false };
+      set((st) => ({ tracks: [track!, ...st.tracks] }));
+    }
+
+    let pos = 0;
+    let customProps: Partial<TextProps> = {};
+
+    if (typeof at === "number" && !isNaN(at)) {
+      pos = Math.max(0, at);
+      if (preset && typeof preset === "object") customProps = preset;
+    } else if (typeof at === "string") {
+      customProps = { content: at };
+      const pb = usePlayback.getState().playhead;
+      pos = typeof pb === "number" && !isNaN(pb) ? pb : 0;
+    } else if (typeof at === "object" && at !== null) {
+      customProps = at;
+      const pb = usePlayback.getState().playhead;
+      pos = typeof pb === "number" && !isNaN(pb) ? pb : 0;
+    } else {
+      const pb = usePlayback.getState().playhead;
+      pos = typeof pb === "number" && !isNaN(pb) ? pb : 0;
+    }
+
+    const base = defaultTextProps();
+    const text: TextProps = {
+      ...base,
+      ...customProps,
+      content: customProps.content || "Seu Texto Aqui",
+    };
+
     const clip = makeClip({
       kind: "text",
       trackId: track.id,
-      start,
-      duration: 4,
+      start: pos,
+      duration: 3,
       inPoint: 0,
-      outPoint: 4,
+      outPoint: 3,
+      x: 0,
+      y: 0,
       text,
     });
+
     get().pushHistory();
-    set((st) => ({ clips: [...st.clips, clip], selectedId: clip.id, selectedIds: [clip.id] }));
+    set((st) => ({
+      clips: [...st.clips, clip],
+      selectedId: clip.id,
+      selectedIds: [clip.id],
+    }));
+    engine.markDirty();
+    return clip;
   },
   updateClip: (id, patch, opts) => {
     if (opts?.history !== false) get().pushHistory();
     set((s) => ({ clips: s.clips.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
   },
+  updateClips: (ids, patch, opts) => {
+    if (opts?.history !== false) get().pushHistory();
+    const setIds = new Set(ids);
+    set((s) => ({ clips: s.clips.map((c) => (setIds.has(c.id) ? { ...c, ...patch } : c)) }));
+  },
   moveClipLive: (id, start, trackId) =>
     set((s) => ({ clips: s.clips.map((c) => (c.id === id ? { ...c, start, trackId } : c)) })),
+  moveClipsLive: (moves) => {
+    const moveMap = new Map(moves.map((m) => [m.id, m]));
+    set((s) => ({
+      clips: s.clips.map((c) => {
+        const m = moveMap.get(c.id);
+        if (!m) return c;
+        return {
+          ...c,
+          start: m.start,
+          trackId: m.trackId ?? c.trackId,
+        };
+      }),
+    }));
+  },
   deleteClip: (id, ripple = false) => {
     const s0 = get();
     const clip = s0.clips.find((c) => c.id === id);

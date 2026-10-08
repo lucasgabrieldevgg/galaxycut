@@ -21,7 +21,7 @@ export interface AppSettings {
   snapEnabled: boolean; // encaixe ao arrastar clipes
   showWaveOnVideo: boolean; // waveform dentro do clipe de vídeo
   captionPreset: string; // id do CAPTION_PRESETS
-  captionMaxWords: 2 | 3 | 4; // palavras por caixa de legenda (anti-inundação)
+  captionMaxWords: 1 | 2 | 3 | 4; // palavras por caixa de legenda (anti-inundação)
   captionPos: { x: number; y: number }; // posição global das legendas (-1..1)
   whisperModel: "tiny" | "base" | "small";
   keys: { pexels: string; pixabay: string };

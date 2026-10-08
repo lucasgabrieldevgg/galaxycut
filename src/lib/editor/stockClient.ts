@@ -44,6 +44,14 @@ const PT_EN: Record<string, string> = {
   "violino": "violin", "flauta": "flute", "trompete": "trumpet", "saxofone": "saxophone",
   "sintetizador": "synthesizer", "acordeão": "accordion", "harpa": "harp",
   "trilha sonora": "soundtrack", "fundo": "background", "música de fundo": "background music",
+  "shorts": "shorts background music instrumental", "áudio shorts": "shorts background music instrumental",
+  "audio shorts": "shorts background music instrumental", "fundo shorts": "shorts background music instrumental",
+  "fundo de shorts": "shorts background music instrumental", "fundo neutro": "neutral background music instrumental",
+  "fundo de vídeo": "video background music instrumental", "fundo de video": "video background music instrumental",
+  "sem voz": "instrumental no vocals", "sem vozes": "instrumental no vocals", "sem fala": "instrumental no vocals",
+  "curiosidade": "curiosity mystery background instrumental", "curiosidades": "curiosity mystery background instrumental",
+  "fatos": "curiosity documentary ambient instrumental", "storytelling": "storytelling ambient tension pulse instrumental",
+  "música para shorts": "shorts background music instrumental", "musica para shorts": "shorts background music instrumental",
   // estilos / clima
   "épico": "epic", "epico": "epic", "épica": "epic", "epica": "epic",
   "cinematográfico": "cinematic", "cinematografico": "cinematic", "cinematográfica": "cinematic",
@@ -201,9 +209,16 @@ function inDuration(item: StockItem, preset: DurPreset, dmin: number, dmax: numb
   return item.duration >= lo && item.duration <= hi;
 }
 
-// ---------- gêneros musicais (estilo CapCut) ----------
+// ---------- gêneros musicais (estilo CapCut + Shorts Backgrounds) ----------
 export const MUSIC_GENRES: Record<string, { label: string; terms: string }> = {
   all: { label: "Todos", terms: "" },
+  shorts: { label: "Áudio Shorts", terms: "instrumental background music beat ambient no vocals clean vlog" },
+  shorts_curiosity: { label: "Curiosidades & Fatos", terms: "curiosity mystery ambient synth pulse documentary background instrumental" },
+  shorts_lofi: { label: "Lo-Fi & Calmo", terms: "lofi chill hip hop beat study relaxing instrumental no vocals" },
+  shorts_comedy: { label: "Cômico & Memes", terms: "sneaky funny whimsical upbeat quirky comedy instrumental" },
+  shorts_tech: { label: "Tech & Tutoriais", terms: "tech modern clean minimal ambient beat corporate instrumental" },
+  shorts_cinematic: { label: "Tensão & Retenção", terms: "cinematic ambient pulse soundtrack tension build instrumental" },
+  shorts_gaming: { label: "Gaming & Chiptune", terms: "8bit chiptune retro game arcade beat instrumental" },
   epic: { label: "Épico", terms: "epic cinematic orchestral trailer" },
   calm: { label: "Calmo", terms: "calm chill relaxing peaceful" },
   electronic: { label: "Eletrônica", terms: "electronic synth dance edm" },

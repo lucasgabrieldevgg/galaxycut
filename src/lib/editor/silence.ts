@@ -1,6 +1,8 @@
 // GaláxiaCut — detector de trechos sem áudio (análise local de energia, 100% no navegador)
 "use client";
 
+import { decodeAudioOf } from "./wav";
+
 export interface SilenceSpan {
   start: number; // segundos NO ARQUIVO de origem
   end: number;
@@ -26,10 +28,8 @@ export const SENSITIVITY_PRESETS: { id: string; label: string; opts: SilenceOpti
  * Roda local (WebAudio) — não usa IA, não pesa o PC, não sai do navegador.
  */
 export async function detectSilence(blob: Blob, opts: SilenceOptions): Promise<SilenceSpan[]> {
-  const AC: typeof AudioContext = window.AudioContext;
-  const ctx = new AC();
   try {
-    const buf = await ctx.decodeAudioData(await blob.slice(0).arrayBuffer());
+    const buf = await decodeAudioOf(blob);
     const chans = buf.numberOfChannels;
     const len = buf.length;
     // mistura todos os canais num só (mono)
@@ -71,8 +71,8 @@ export async function detectSilence(blob: Blob, opts: SilenceOptions): Promise<S
       }
     }
     return spans;
-  } finally {
-    void ctx.close();
+  } catch {
+    return [];
   }
 }
 

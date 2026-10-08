@@ -20,19 +20,26 @@ export interface TextProps {
   strokeColor: string;
   strokeW: number;
   shadow: boolean;
+  shadowColor?: string;
+  shadowBlur?: number;
+  shadowOffsetY?: number;
   bg: string; // "" = sem caixa
   bgPad: number;
   bgRadius: number;
   // ---- efeito de máquina de escrever (typewriter) ----
   typewriter?: boolean;
   typewriterSpeed?: number;
-  // ---- karaokê (destacar a palavra sendo falada) ----
+  // ---- karaokê / destaque de palavra ativa ----
   words?: KaraokeWord[]; // tempos por palavra (gerado pela IA ou estimado)
   highlight: boolean; // destacar palavra atual
   highlightColor: string; // cor da palavra ativa ("" = usar highlightGradient)
   highlightGradient: string; // cores separadas por "," p/ modo arco-íris
   highlightScale: number; // 1 = normal, 1.15 = pop
-  highlightAnim: "none" | "pop" | "bounce" | "pulse";
+  highlightAnim: "none" | "colorOnly" | "pop" | "bounce" | "pulse" | "box" | "glow" | "typewriter";
+  highlightBg?: string; // cor de fundo da palavra ativa (quando highlightAnim === "box")
+  highlightBgPad?: number;
+  highlightBgRadius?: number;
+  uppercase?: boolean;
 }
 
 // ---------- transições ----------
@@ -273,6 +280,47 @@ export const EFFECT_CATALOG: EffectMeta[] = [
   { type: "emboss", name: "Relevo 3D Metálico", category: "stylize", icon: "🗿", description: "Textura escultural em baixo-relevo de metal escovado", defaultIntensity: 1 },
 ];
 
+export interface AudioFilterConfig {
+  enabled: boolean;
+  // 1. Passa-Alta (High-Pass / Corte de Ruído Grave)
+  highpassEnabled: boolean;
+  highpassFrequency: number; // Hz (20..300, padrão OBS 85)
+  // 2. Compressor de Dinâmica (Estilo OBS Studio)
+  compressorEnabled: boolean;
+  compressorThreshold: number; // dB (-60..0, padrão OBS -24)
+  compressorRatio: number; // 1..20 (padrão OBS 3.5)
+  compressorAttack: number; // ms (1..100, padrão OBS 6)
+  compressorRelease: number; // ms (10..1000, padrão OBS 250)
+  compressorMakeupGain: number; // dB (0..24, padrão OBS 2)
+  // 3. Limitador de Picos (Evita Distorção / Limiter)
+  limiterEnabled: boolean;
+  limiterThreshold: number; // dB (-20..0, padrão OBS -1.5)
+  limiterRelease: number; // ms (10..500, padrão OBS 100)
+  // 4. Ganho em dB
+  gainDb: number; // dB (-20..+20, padrão 0)
+  // 5. Portão de Ruído (Noise Gate)
+  noiseGateEnabled: boolean;
+  noiseGateThreshold: number; // dB (-60..-10, padrão -40)
+}
+
+export const DEFAULT_AUDIO_FILTERS: AudioFilterConfig = {
+  enabled: true,
+  highpassEnabled: true,
+  highpassFrequency: 85,
+  compressorEnabled: true,
+  compressorThreshold: -24,
+  compressorRatio: 3.5,
+  compressorAttack: 6,
+  compressorRelease: 250,
+  compressorMakeupGain: 2,
+  limiterEnabled: true,
+  limiterThreshold: -1.5,
+  limiterRelease: 100,
+  gainDb: 0,
+  noiseGateEnabled: false,
+  noiseGateThreshold: -40,
+};
+
 export interface Clip {
   id: string;
   kind: ClipKind;
@@ -311,6 +359,7 @@ export interface Clip {
   volume: number; // 0..2
   muted: boolean;
   enhance: boolean; // melhoria de áudio (highpass + compressor)
+  audioFilters?: AudioFilterConfig; // filtros de áudio estilo OBS Studio
   transitionIn?: Transition; // transição na entrada (na junção com o clipe anterior da faixa)
   text?: TextProps;
   keyframes?: Keyframe[]; // CapCut Keyframes (losangos ◆)
@@ -359,7 +408,7 @@ export interface MediaMeta {
   peaks?: number[]; // picos de áudio 0..1
   missing?: boolean; // blob não disponível (após recarregar)
   decodeError?: boolean; // o navegador não consegue decodificar este arquivo (formato/exceção)
-  source?: "local" | "stock";
+  source?: "local" | "stock" | "sticker";
   stockUrl?: string;
   folderId?: string | null; // id da pasta onde esta mídia está guardada (null = raiz)
   // ---- licença / direitos autorais ----
@@ -498,8 +547,41 @@ export interface CaptionPreset {
 
 export const CAPTION_PRESETS: CaptionPreset[] = [
   {
+    id: "seca",
+    name: "Seca (Sem Saltos)",
+    props: {
+      font: "Anton, Impact, sans-serif",
+      size: 68,
+      color: "#FFFFFF",
+      strokeColor: "#000000",
+      strokeW: 8,
+      shadow: true,
+      bold: true,
+      highlight: false,
+      highlightScale: 1.0,
+      highlightAnim: "none",
+    },
+  },
+  {
+    id: "karaoke-suave",
+    name: "Karaokê Suave",
+    props: {
+      font: "Anton, Impact, sans-serif",
+      size: 70,
+      color: "#FFFFFF",
+      strokeColor: "#000000",
+      strokeW: 8,
+      shadow: true,
+      bold: true,
+      highlight: true,
+      highlightColor: "#FACC15",
+      highlightScale: 1.0,
+      highlightAnim: "colorOnly",
+    },
+  },
+  {
     id: "amarelo",
-    name: "Amarelão",
+    name: "TikTok Reels",
     props: {
       font: "Anton, Impact, sans-serif",
       size: 72,
@@ -512,6 +594,26 @@ export const CAPTION_PRESETS: CaptionPreset[] = [
       highlightColor: "#FACC15",
       highlightScale: 1.18,
       highlightAnim: "pop",
+    },
+  },
+  {
+    id: "box-word",
+    name: "Caixa na Palavra",
+    props: {
+      font: "Impact, Haettenschweiler, 'Arial Black', sans-serif",
+      size: 70,
+      color: "#FFFFFF",
+      strokeColor: "#000000",
+      strokeW: 0,
+      shadow: true,
+      bold: true,
+      highlight: true,
+      highlightColor: "#000000",
+      highlightBg: "#FACC15",
+      highlightBgPad: 8,
+      highlightBgRadius: 6,
+      highlightScale: 1.12,
+      highlightAnim: "box",
     },
   },
   {
@@ -535,19 +637,68 @@ export const CAPTION_PRESETS: CaptionPreset[] = [
     },
   },
   {
-    id: "karaokeGold",
-    name: "Karaokê Ouro",
+    id: "typewriterStyle",
+    name: "Máquina de Escrever",
     props: {
-      font: "'Luckiest Guy', cursive",
-      size: 70,
+      font: "'Courier New', Courier, monospace",
+      size: 58,
+      color: "#34D399",
+      bg: "#064E3BCC",
+      bgPad: 16,
+      bgRadius: 6,
+      strokeW: 0,
+      bold: true,
+      typewriter: true,
+      highlight: false,
+    },
+  },
+  {
+    id: "cinema-box",
+    name: "Tarja de Cinema",
+    props: {
+      font: "Arial, Helvetica, sans-serif",
+      size: 54,
       color: "#FFFFFF",
-      strokeColor: "#78350F",
-      strokeW: 9,
+      strokeW: 0,
+      shadow: false,
+      bg: "#000000B3",
+      bgPad: 18,
+      bgRadius: 8,
+      bold: true,
+      highlight: false,
+    },
+  },
+  {
+    id: "comic",
+    name: "Comic / HQ",
+    props: {
+      font: "Bangers, Impact, cursive",
+      size: 76,
+      color: "#FFFFFF",
+      strokeColor: "#000000",
+      strokeW: 10,
+      shadow: true,
+      bold: true,
+      highlight: true,
+      highlightColor: "#EF4444",
+      highlightScale: 1.25,
+      highlightAnim: "bounce",
+    },
+  },
+  {
+    id: "neon-glow",
+    name: "Neon Cyber Glow",
+    props: {
+      font: "Bebas Neue, Arial, sans-serif",
+      size: 76,
+      color: "#38BDF8",
+      strokeColor: "#0369A1",
+      strokeW: 6,
       shadow: true,
       highlight: true,
-      highlightColor: "#F59E0B",
-      highlightScale: 1.22,
-      highlightAnim: "bounce",
+      highlightColor: "#38BDF8",
+      highlightScale: 1.15,
+      highlightAnim: "glow",
     },
   },
   {
@@ -567,179 +718,22 @@ export const CAPTION_PRESETS: CaptionPreset[] = [
     },
   },
   {
-    id: "cyberpunk",
-    name: "Cyber Neon",
-    props: {
-      font: "Bebas Neue, Arial, sans-serif",
-      size: 76,
-      color: "#38BDF8",
-      strokeColor: "#0369A1",
-      strokeW: 7,
-      shadow: true,
-      highlight: true,
-      highlightColor: "#F43F5E",
-      highlightScale: 1.24,
-      highlightAnim: "pop",
-    },
-  },
-  {
-    id: "netflix",
-    name: "Cinema / Netflix",
-    props: {
-      font: "Arial, Helvetica, sans-serif",
-      size: 54,
-      color: "#FFFFFF",
-      strokeW: 0,
-      shadow: false,
-      bg: "#00000099",
-      bgPad: 18,
-      bgRadius: 8,
-      bold: true,
-      highlight: true,
-      highlightColor: "#FCD34D",
-      highlightScale: 1.08,
-      highlightAnim: "pulse",
-    },
-  },
-  {
-    id: "comic",
-    name: "HQ / Quadrinhos",
-    props: {
-      font: "Bangers, Impact, cursive",
-      size: 76,
-      color: "#FFFFFF",
-      strokeColor: "#000000",
-      strokeW: 10,
-      shadow: true,
-      bold: true,
-      highlight: true,
-      highlightColor: "#EF4444",
-      highlightScale: 1.25,
-      highlightAnim: "bounce",
-    },
-  },
-  {
-    id: "highlighter",
-    name: "Marca-Texto",
-    props: {
-      font: "'Arial Black', Arial, sans-serif",
-      size: 60,
-      color: "#000000",
-      strokeW: 0,
-      shadow: false,
-      bg: "#BEF264",
-      bgPad: 18,
-      bgRadius: 4,
-      bold: true,
-      highlight: true,
-      highlightColor: "#FFFFFF",
-      highlightScale: 1.15,
-      highlightAnim: "pop",
-    },
-  },
-  {
-    id: "arcade",
-    name: "Arcade 8-Bit",
-    props: {
-      font: "'Courier New', Courier, monospace",
-      size: 62,
-      color: "#22D3EE",
-      strokeColor: "#000000",
-      strokeW: 8,
-      shadow: true,
-      bold: true,
-      highlight: true,
-      highlightColor: "#F472B6",
-      highlightScale: 1.18,
-      highlightAnim: "pulse",
-    },
-  },
-  {
-    id: "typewriterStyle",
-    name: "Escrevendo",
-    props: {
-      font: "'Courier New', Courier, monospace",
-      size: 58,
-      color: "#34D399",
-      bg: "#064E3BCC",
-      bgPad: 16,
-      bgRadius: 6,
-      strokeW: 0,
-      bold: true,
-      typewriter: true,
-    },
-  },
-  {
-    id: "arcoiris",
-    name: "Arco-íris",
-    props: {
-      font: "'Luckiest Guy', cursive",
-      size: 68,
-      color: "#FFFFFF",
-      strokeColor: "#000000",
-      strokeW: 9,
-      shadow: true,
-      highlight: true,
-      highlightGradient: "#F87171,#FACC15,#4ADE80,#60A5FA,#C084FC",
-      highlightScale: 1.15,
-      highlightAnim: "pop",
-    },
-  },
-  {
-    id: "branco",
-    name: "Branco clássico",
+    id: "minimal",
+    name: "Minimalista Clean",
     props: {
       font: "Arial, Helvetica, sans-serif",
       size: 60,
       color: "#FFFFFF",
       strokeColor: "#000000",
-      strokeW: 5,
+      strokeW: 4,
       shadow: true,
-      bold: true,
-      highlight: true,
-      highlightColor: "#FDE047",
-      highlightScale: 1.08,
-      highlightAnim: "pulse",
-    },
-  },
-  {
-    id: "caixa",
-    name: "Caixa escura",
-    props: {
-      font: "Arial, Helvetica, sans-serif",
-      size: 56,
-      color: "#FFFFFF",
-      strokeW: 0,
-      shadow: false,
-      bg: "#000000CC",
-      bgPad: 22,
-      bgRadius: 12,
-      bold: true,
-      highlight: true,
-      highlightColor: "#7DD3FC",
-      highlightScale: 1.06,
-      highlightAnim: "none",
-    },
-  },
-  {
-    id: "neon",
-    name: "Neon rosa",
-    props: {
-      font: "Bebas Neue, Arial, sans-serif",
-      size: 78,
-      color: "#FFFFFF",
-      strokeColor: "#831843",
-      strokeW: 8,
-      shadow: true,
-      highlight: true,
-      highlightColor: "#F472B6",
-      highlightScale: 1.2,
-      highlightAnim: "pop",
+      bold: false,
+      highlight: false,
     },
   },
   {
     id: "vermelho",
-    name: "Alerta vermelho",
+    name: "Alerta Vermelho",
     props: {
       font: "'Luckiest Guy', cursive",
       size: 66,
@@ -751,20 +745,6 @@ export const CAPTION_PRESETS: CaptionPreset[] = [
       highlightColor: "#EF4444",
       highlightScale: 1.2,
       highlightAnim: "bounce",
-    },
-  },
-  {
-    id: "thumbnail",
-    name: "Thumbnail amarelo",
-    props: {
-      font: "Impact, Haettenschweiler, 'Arial Black', sans-serif",
-      size: 80,
-      color: "#FACC15",
-      strokeColor: "#000000",
-      strokeW: 12,
-      shadow: true,
-      bold: true,
-      highlight: false,
     },
   },
 ];

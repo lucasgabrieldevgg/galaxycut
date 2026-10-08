@@ -13,13 +13,14 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useProject, usePlayback } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
 import { Clip, FONTS, TextProps, TRANSITIONS, TransitionType, clipEnd } from "@/lib/editor/types";
-import { AlignLeft, AlignCenter, AlignRight, Bold, Italic, RotateCcw, Wand2, ArrowRightFromLine, Paintbrush, Pin } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Bold, Italic, RotateCcw, Wand2, ArrowRightFromLine, Paintbrush, Pin, Sliders } from "lucide-react";
 import { engine } from "@/lib/editor/playback";
 import { toast } from "sonner";
 import { useT } from "@/lib/editor/i18n";
 import { KeyframeInspector } from "./KeyframeInspector";
 import { AnimationInspector } from "./AnimationInspector";
 import { EffectsInspector } from "./EffectsInspector";
+import { AudioFiltersDialog } from "./AudioFiltersDialog";
 
 export function Inspector() {
   const t = useT();
@@ -29,6 +30,7 @@ export function Inspector() {
   const project = useProject((s) => s.project);
   const clipCount = useProject((s) => s.clips.length);
   const resetInspectorOnSelect = useSettings((s) => s.resetInspectorOnSelect ?? true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -221,24 +223,42 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
   );
 }
 
-function ColorRow({ label, value, onChange, allowNone }: { label: string; value: string; onChange: (v: string) => void; allowNone?: boolean }) {
+function ColorRow({ label, value, onChange, allowNone, swatches }: { label: string; value: string; onChange: (v: string) => void; allowNone?: boolean; swatches?: string[] }) {
+  const palette = swatches || ["#FFFFFF", "#FACC15", "#22C55E", "#38BDF8", "#F43F5E", "#FB923C", "#EF4444", "#A855F7", "#000000"];
   return (
-    <div className="flex items-center justify-between">
-      <Label className="text-[11px] text-zinc-400">{label}</Label>
-      <div className="flex items-center gap-1.5">
-        {allowNone && value && (
-          <button className="rounded border border-[#2a3546] px-1.5 py-0.5 text-[9px] text-zinc-500 hover:text-red-400" onClick={() => onChange("")}>
-            remover
-          </button>
-        )}
-        <input
-          type="color"
-          value={value ? value.slice(0, 7) : "#000000"}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => useProject.getState().pushHistory()}
-          className="h-6 w-10 cursor-pointer rounded border border-[#2a3546] bg-transparent p-0.5"
-          aria-label={label}
-        />
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <Label className="text-[11px] text-zinc-400">{label}</Label>
+        <div className="flex items-center gap-1.5">
+          {allowNone && value && (
+            <button className="rounded border border-[#2a3546] px-1.5 py-0.5 text-[9px] text-zinc-500 hover:text-red-400" onClick={() => onChange("")}>
+              remover
+            </button>
+          )}
+          <input
+            type="color"
+            value={value ? value.slice(0, 7) : "#000000"}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => useProject.getState().pushHistory()}
+            className="h-5 w-8 cursor-pointer rounded border border-[#2a3546] bg-transparent p-0.5"
+            aria-label={label}
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-1 flex-wrap pt-0.5">
+        {palette.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => {
+              useProject.getState().pushHistory();
+              onChange(c);
+            }}
+            style={{ backgroundColor: c || "transparent" }}
+            className={`h-4 w-4 rounded-sm border transition ${value === c ? "border-white ring-1 ring-[var(--gc-accent)] scale-110" : "border-zinc-700 hover:scale-105"}`}
+            title={c || "Nenhum"}
+          />
+        ))}
       </div>
     </div>
   );
@@ -304,6 +324,7 @@ function CaptionPosRows({ clip, update }: { clip: Clip; update: (patch: Partial<
 
 function ClipInspector({ clip }: { clip: Clip }) {
   const t = useT();
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const update = (patch: Partial<Clip>, history = true) => {
     useProject.getState().updateClip(clip.id, patch, { history });
     engine.markDirty();
@@ -591,25 +612,50 @@ function ClipInspector({ clip }: { clip: Clip }) {
         <Section title={t("ins.audio")}>
           <SliderRow label={t("ins.volume")} value={clip.volume} min={0} max={2} step={0.02} onChange={(v) => update({ volume: v }, false)} fmt={(v) => `${Math.round(v * 100)}%`} />
           <ToggleRow label={t("ins.mute")} checked={clip.muted} onChange={(v) => update({ muted: v })} />
-          <div className="flex items-center justify-between rounded-lg border border[var(--gc-accent-30)] bg[var(--gc-accent-5)] px-2.5 py-2">
-            <div className="flex items-center gap-1.5">
-              <Wand2 className="h-3.5 w-3.5 text-[var(--gc-accent)]" />
-              <div>
-                <p className="text-[11px] font-medium text-zinc-200">Melhorar áudio</p>
-                <p className="text-[9px] text-zinc-500">corta ruído grave + comprime + limita (voz firme, sem estourar)</p>
+          
+          <div className="rounded-lg border border-[var(--gc-accent)]/30 bg-[var(--gc-accent)]/5 p-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Wand2 className="h-3.5 w-3.5 text-[var(--gc-accent)]" />
+                <div>
+                  <p className="text-[11px] font-semibold text-zinc-200">Melhorar áudio</p>
+                  <p className="text-[9px] text-zinc-400">Filtros de estúdio estilo OBS Studio</p>
+                </div>
               </div>
+              <Switch
+                checked={clip.enhance}
+                onCheckedChange={(v) => update({ enhance: v })}
+                className="data-[state=checked]:bg-[var(--gc-accent)]"
+              />
             </div>
-            <Switch
-              checked={clip.enhance}
-              onCheckedChange={(v) => update({ enhance: v })}
-              className="data-[state=checked]:bg-[var(--gc-accent)]"
-            />
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setFiltersOpen(true)}
+              className="w-full h-7 text-[11px] font-medium border-[#2c364c] bg-[#121824] hover:bg-[#1a2233] text-zinc-200 flex items-center justify-center gap-1.5"
+            >
+              <Sliders className="h-3 w-3 text-sky-400" /> Configurar Filtros OBS (Compressor, High-pass...)
+            </Button>
           </div>
-          <p className="text-[9px] leading-relaxed text-zinc-600">
-            Funciona de verdade: é uma cadeia de estúdio (filtro grave 85Hz → compressor −24dB → limitador → +20% de
-            ganho) aplicada no som deste clipe — aparece o ícone de varinha no clipe da timeline.
-            {clip.kind === "audio" ? " Áudio não tem transição visual — use os fades de entrada/saída aqui embaixo em Tempo." : ""}
+
+          <p className="text-[9px] leading-relaxed text-zinc-500">
+            Processamento de sinal em tempo real (filtro passa-alta + compressor de dinâmica + limitador anti-distorção + ganho).
+            {clip.kind === "audio" ? " Para transições de áudio, use os fades de entrada/saída abaixo." : ""}
           </p>
+
+          <AudioFiltersDialog
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            filters={clip.audioFilters}
+            onApply={(f) => {
+              update({ enhance: true, audioFilters: f });
+              toast.success("Filtros de áudio atualizados no clipe!");
+            }}
+            title="Filtros de Áudio do Clipe (Estilo OBS)"
+            description="Personalize o processamento de áudio com as ferramentas clássicas do OBS Studio."
+          />
         </Section>
       )}
 

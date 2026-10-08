@@ -1,7 +1,32 @@
 {
   "name": "GalaxyCut",
-  "version": "7.8.0",
+  "version": "8.3.0",
   "changelog": [
+    {
+      "version": "8.3.0",
+      "date": "2026-10-08",
+      "items": [
+        "OBS-STUDIO AUDIO FILTERS & BATCH AUDIO: Professional dynamic compressor, peak limiter, highpass filter, makeup gain, and noise gate with batch application across multiple clips",
+        "FAST MEDIA CONVERTER & CANVAS TRANSCODER: 100% progress real-time video/audio transcoding for MKV, MOV, WebM, and AVI without freezing",
+        "FAVORITES SYSTEM & CATEGORY FOLDERS: 1-click favorite bookmarking on sound effects and stock audio, auto-synchronized with Media panel folders",
+        "ENHANCED SUBTITLES & REALTIME TYPEWRITER: Kinetic typewriter animation with smooth cursor, active word background box highlight, neon glow, and 8 modern subtitle presets",
+        "NATIVE HARDWARE AUDIO PIPELINE: Zero-stutter smooth scrubbing synced directly with hardware audio clock at 60/120 FPS"
+      ],
+      "items_pt": [
+        "FILTROS DE ÁUDIO OBS STUDIO & PROCESSAMENTO EM LOTE: Compressor dinâmico profissional, limitador de picos, filtro passa-alta e ganho em dB com aplicação em lote",
+        "CONVERSOR DE MÍDIA & TRANSCODER ULTRARRÁPIDO: Conversão de vídeos MKV, MOV, WebM e AVI com progresso contínuo e preciso até 100%",
+        "SISTEMA DE FAVORITOS & SINCRONIZAÇÃO DE PASTAS: Marque músicas e efeitos sonoros como favoritos com sincronização automática nas pastas da aba Mídia",
+        "LEGENDAS EXPANDIDAS & MÁQUINA DE ESCREVER: Efeito de digitação em tempo real, destaque de palavra ativa em caixa/brilho e 8 novos estilos de legenda",
+        "MOTOR DE ÁUDIO NATIVO DE HARDWARE: Reprodução e arraste da agulha 100% fluida e sem estalos sincronizada ao relógio da placa de som"
+      ],
+      "items_es": [
+        "FILTROS DE AUDIO OBS STUDIO Y PROCESAMIENTO EN LOTE: Compresor dinámico, limitador de picos y filtro paso alto con procesamiento por lotes",
+        "CONVERSOR DE MEDIOS Y TRANSCODER RÁPIDO: Conversión fluida de MKV, MOV, WebM y AVI con progreso real hasta el 100%",
+        "SISTEMA DE FAVORITOS: Marcado de sonidos favoritos con sincronización automática en carpetas del panel de Medios",
+        "SUBTÍTULOS EXPANDIDOS Y MÁQUINA DE ESCRIBIR: Efecto máquina de escribir en tiempo real, resaltado dinámico de palabras y nuevos estilos",
+        "MOTOR DE AUDIO NATIVO DE HARDWARE: Reproducción fluida sin cortes sincronizada al reloj de hardware"
+      ]
+    },
     {
       "version": "7.8.0",
       "date": "2026-10-04",
@@ -19,273 +44,64 @@
       ]
     },
     {
-      "version": "7.3.0",
-      "date": "2026-09-28",
+      "version": "7.7.1",
+      "date": "2026-10-03",
       "items": [
-        "NEW EXPORT ENGINE: renders frame by frame and encodes with your GPU/processor (WebCodecs) — a 30s short does NOT take 30s anymore, it finishes as fast as your PC can go, and a weak PC no longer drops frames (nothing is recorded in real time anymore)",
-        "FIX: the exported video always comes out in the project's aspect ratio at ANY resolution (before, exporting below the project size made the video overflow/stick out of the frame)",
-        "FIX: 'media not loaded' can never be burned into the exported file anymore — every frame is only encoded after the video finishes seeking for real",
-        "Export: you can CANCEL while it renders (button in the progress card), and it shows the current frame, the speed (x real time) and the estimated time left",
-        "Export (desktop app): a native Save dialog asks WHERE to save BEFORE rendering starts — pick any folder, cancel without wasting the render (no more dumping everything into the media folder)",
-        "Export: the dialog now tells you that more resolutions (480p to 8K), 60fps and other formats live under \"More options\"",
-        "FIX: AI captions froze at exactly 10% — the progress now runs on the main thread (the AI's engine blocks the worker's clock, so the old heartbeat never fired). The bar moves nonstop with an estimate of the time left",
-        "FIX: the AI model is loaded ONCE per session (persistent worker) and the app remembers it's already downloaded — no more \"downloading the model\" on every caption",
-        "FIX: the project menu (3 dots) on the home screen opens right next to the button (it used to fly to the top-left corner) — and clicking Rename/Duplicate/Delete no longer OPENS THE EDITOR by accident (clicks were leaking through the menu to the card)",
-        "FIX: the 'media not loaded' flash in the preview that kept appearing and disappearing is gone — the preloader no longer jumps around the file, and a frame that's still arriving shows a loading percentage instead of a scary error",
-        "Media that can't be decoded now shows ONE clear warning listing all the files at once (before: one error toast per file, 3 popups on startup)",
-        "Preview: TEXT clips get the same scale/rotate handles as video and images — resize adjusts the font size, rotate spins the text",
-        "Timeline: clips with effects applied now show an 'fx' badge, and clips with speed applied show a '2x' badge — you can see at a glance where things were applied",
-        "FIX: caption style samples (Amarelão, Karaokê verde…) are painted in their REAL colors now — they're drawn on a canvas exactly like the video renders them (yellow really looks yellow), with the second word in the karaoke highlight color"
+        "NEW EDITING-SUITE IDENTITY: Archivo for the interface and Martian Mono for timecodes — no more template-default system font binding (the UI font now actually applies)",
+        "INTERNAL HYGIENE: Vercel link ids removed from the repository and a repository hygiene step added to CI"
       ],
       "items_pt": [
-        "NOVO MOTOR DE EXPORTAÇÃO: renderiza quadro a quadro e codifica com sua GPU/processador (WebCodecs) — um short de 30s NÃO leva mais 30s, termina na velocidade que o PC aguenta, e PC fraco não derruba mais quadros (nada de gravar em tempo real)",
-        "CORRIGIDO: o vídeo exportado sai SEMPRE na proporção do projeto em QUALQUER resolução (antes, exportar abaixo do tamanho do projeto estourava o vídeo pra fora do quadro)",
-        "CORRIGIDO: 'mídia não carregada' nunca mais é queimado no arquivo exportado — cada quadro só é codificado depois o seek do vídeo terminar DE VERDADE",
-        "Exportar: dá pra CANCELAR durante o render (botão no cartel de progresso), e mostra o quadro atual, a velocidade (× tempo real) e o tempo restante estimado",
-        "Exportar (app de desktop): um diálogo nativo de salvar pergunta ONDE gravar ANTES do render começar — escolha qualquer pasta, cancele sem desperdiçar o render (nada de tacar tudo na pasta de mídia)",
-        "Exportar: o diálogo agora avisa que mais resoluções (480p a 8K), 60fps e outros formatos ficam em \"Mais opções\"",
-        "CORRIGIDO: as legendas de IA congelavam exatamente em 10% — o progresso agora roda na thread principal (o motor de IA bloqueia o relógio do worker, então o heartbeat antigo nunca disparava). A barra anda sem parar com estimativa do que falta",
-        "CORRIGIDO: o modelo de IA é carregado UMA vez por sessão (worker persistente) e o app lembra que já foi baixado — chega de 'baixando o modelo' a cada legenda",
-        "CORRIGIDO: o menu do projeto (3 pontinhos) da home abre do lado do botão (voava pro canto superior esquerdo) — e clicar em Renomear/Duplicar/Excluir não ABRE MAIS O EDITOR por acidente (os cliques estavam vazando pelo menu pro card)",
-        "CORRIGIDO: o piscar de 'mídia não carregada' na prévia que vivia aparecer e sumir acabou — o pré-carregador não pula mais pelo arquivo, e um quadro que ainda está chegando mostra a porcentagem de carregamento em vez de um erro assustador",
-        "Mídia que não dá pra decodificar agora mostra UM aviso claro listando todos os arquivos de uma vez (antes: um toast de erro por arquivo, 3 avisos ao iniciar o app)",
-        "Prévia: clipes de TEXTO ganham as mesmas alças de escala/rotação de vídeo e imagem — esticar ajusta o tamanho da fonte, girar roda o texto",
-        "Timeline: clipe com efeito aplicado agora mostra um selo 'fx', e clipe com velocidade mostra o selo '2×' — dá pra ver de relance onde as coisas foram aplicadas",
-        "CORRIGIDO: os exemplos de estilo de legenda (Amarelão, Karaokê verde…) são pintados com as cores REAIS — desenhados em canvas exatamente como o vídeo renderiza (amarelo parece amarelo de verdade), com a segunda palavra na cor do karaokê"
-      ]
-    },
-    {
-      "version": "7.2.0",
-      "date": "2026-09-28",
-      "items": [
-        "FIX: the submenu of the right-click menu (transitions!) opens UPWARD on hover — all options visible at once, no more dragging sideways to see them",
-        "Preview: MAGNETIC move — get close to the center (or an edge) and the clip snaps to it, lighting up the center guide lines; a Magnet button in the playback bar toggles it off for 100% free movement (your choice is saved)",
-        "FIX: moving things in the preview is smooth now (the drag updates once per frame instead of flooding the app)",
-        "Preview: click an element to select THAT element — when two overlap, the one on top wins; drag it and it's the one that moves",
-        "Preview: clicking anywhere outside the video exits move mode and leaves the clip where you dropped it",
-        "Media guarantee: playback only starts when EVERY clip's media is 100% loaded — press play during loading and it starts by itself the moment the last byte arrives; the browser is now forced to buffer the whole file (that 'loading' flash while scrubbing is gone too)",
-        "FIX: custom format fields can be fully cleared now — no more ghost '0' that refused to be deleted",
-        "The logo next to the GalaxyCut name (website AND app) is now the real round logo from the repository — galaxy orbit, planet and all",
-        "Repository banner is now in English",
-        "CapCut mentions removed from the app, README and repo description — GalaxyCut speaks for itself",
-        "Older GitHub releases (v6, v7.0) rewritten in English, matching the new ones"
-      ],
-      "items_pt": [
-        "CORRIGIDO: o submenu do menu de botão direito (transições!) abre PRA CIMA no hover — todas as opções visíveis de uma vez, sem ter que arrastar pro lado pra vê-las",
-        "Prévia: modo magnético — chegue perto do centro (ou de uma borda) e o clipe gruda, acendendo as linhas de centralização; o botão Ímã na barra do player desliga pra movimento 100% livre (sua escolha fica salva)",
-        "CORRIGIDO: mover coisas na prévia agora é liso (o arraste atualiza 1× por quadro em vez de inundar o app)",
-        "Prévia: clique num elemento pra selecionar ELE — com 2 sobrepostos, o de cima ganha; arrastar move o que você clicou",
-        "Prévia: clicar em qualquer lugar fora do vídeo sai do modo de mexer e deixa o clipe onde você soltou",
-        "Garantia de mídia: a reprodução só começa quando a mídia de TODOS os clipes está 100% carregada — deu play durante o carregamento? Começa sozinha no instante em que o último byte chega; o navegador agora é OBRIGADO a bufar o arquivo inteiro (o piscar de 'carregando' ao navecar também acabou)",
-        "CORRIGIDO: os campos de formato personalizado agora apagam tudo — sem o '0' fantasma que não deixava apagar",
-        "A logo do lado do nome GalaxyCut (site E app) agora é a logo redondinha de verdade do repositório — com a órbita da galáxia e o planeta",
-        "O banner do repositório agora está em inglês",
-        "Menções ao CapCut removidas do app, do README e da descrição do repo — o GalaxyCut se apresenta sozinho",
-        "As releases antigas do GitHub (v6, v7.0) reescritas em inglês, igual às novas"
+        "IDENTIDADE SALA DE MONTAGEM: Archivo na interface e Martian Mono nos timecodes — a fonte do app agora liga de verdade (antes caía na fonte do sistema)",
+        "HIGIENE INTERNA: ids internos do vercel link removidos do repositório e passo de higiene adicionado ao CI"
       ],
       "items_es": [
-        "CORREGIDO: el submenú del menú de clic derecho (¡transiciones!) se abre HACIA ARRIBA al pasar el mouse — todas las opciones visibles de una vez, sin arrastrar hacia el lado para verlas",
-        "Preview: movimiento magnético — acércate al centro (o a un borde) y el clip se pega, encendiendo las líneas de centrado; el botón Imán en la barra del reproductor lo apaga para un movimiento 100% libre (tu elección se guarda)",
-        "CORREGIDO: mover cosas en la preview ahora es fluido (el arrastre actualiza 1× por cuadro en vez de inundar la app)",
-        "Preview: haz clic en un elemento para seleccionar ESE elemento — con 2 superpuestos, gana el de arriba; arrastrar mueve el que tocaste",
-        "Preview: hacer clic en cualquier lugar fuera del vídeo sale del modo de mover y deja el clip donde lo soltaste",
-        "Garantía de medios: la reproducción solo empieza cuando el archivo de TODOS los clips está 100% cargado — ¿diste play durante la carga? Empieza solo en el instante en que llega el último byte; el navegador ahora está OBLIGADO a almacenar el archivo entero (el parpadeo de 'cargando' al navegar también se acabó)",
-        "CORREGIDO: los campos de formato personalizado ahora se borran del todo — sin el '0' fantasma que no se dejaba borrar",
-        "El logo al lado del nombre GalaxyCut (web Y app) ahora es el logo redondo de verdad del repositorio — con la órbita de la galaxia y el planeta",
-        "El banner del repositorio ahora está en inglés",
-        "Menciones a CapCut eliminadas de la app, el README y la descripción del repo — GalaxyCut se presenta solo",
-        "Los releases antiguos de GitHub (v6, v7.0) reescritos en inglés, igual que los nuevos"
+        "IDENTIDAD SALA DE MONTAJE: Archivo en la interfaz y Martian Mono en los timecodes — la fuente del app ahora se aplica de verdad",
+        "HIGIENE INTERNA: ids internos de vercel link eliminados del repositorio y paso de higiene añadido al CI"
       ]
     },
     {
-      "version": "7.1.0",
-      "date": "2026-09-28",
+      "version": "7.7.0",
+      "date": "2026-09-30",
       "items": [
-        "Desktop app updates ITSELF now: it downloads the new version in the background and installs it when you accept — no more downloading another AppImage and deleting the old one",
-        "First-run setup screen: pick your language, the app color and (optionally) the AI subtitle models — then a 'ready to use' screen with a start button (web version too, minus the AI step)",
-        "App color of your choice (8 accents): buttons, markers, selection handles and the preview frame all follow it",
-        "FIX: AI subtitles finished with nothing — the previous models had no word timings; the new ones work great (verified with real audio), download faster and show real progress",
-        "AI subtitles much faster in the desktop app (the embedded server now enables multi-core WASM)",
-        "Subtitles panel rebuilt: everything stacked (no more side-scrolling), language picker in a dropdown with automatic detection and more languages (Chinese, Arabic, Polish, Dutch, Vietnamese, Ukrainian…)",
-        "FIX: right-click menu no longer overflows the screen — it flips upward when there's no room below, so every option (and submenu) is reachable",
-        "The '…' button on a project card now opens that project's menu (rename / duplicate / delete) instead of opening the editor",
-        "Website: the 'check for updates' button is gone (the web updates itself on reload); the desktop app keeps it",
-        "Changelogs are now in English on GitHub, and the app shows them translated to your language (English by default)",
-        "Feedback button now sends DIRECTLY to us in one click (it lands in our inbox as an automatic issue); manual GitHub route still there as a fallback",
-        "Full app translation (Portuguese / English / Spanish): editor, timelines, menus, dialogs and toasts — not just the settings screen",
-        "'made for gaming creators' is gone — GalaxyCut is free for every kind of video",
-        "New project: CUSTOM format — any width/height you want (120–7680)",
-        "Preview: the video frame is now exact, with a clear border in your app color — the weird oversized selection box is gone",
-        "Preview: move/resize handles only appear when you CLICK the clip on the preview (CapCut style); a click outside still plays/pauses",
-        "Media loads fully the moment you drop it on the timeline (with the % on screen) — no more buffering in the middle of playback",
-        "Stickers tab is now a REAL sticker search (transparent PNGs from open libraries), with a tidy Emoji tab inside it",
-        "Silence detector: after applying, only the SILENT parts stay selected — press Delete to remove exactly those",
-        "Round app logo in the title bars (goodbye, little lightning bolt)",
-        "The web editor invites you to install the desktop app (AI subtitles, projects saved on disk)"
+        "AUTO-ORGANIZE STOCK MEDIA INTO CATEGORY FOLDERS: Downloading any item from the Stock Search tab automatically creates and assigns it to its dedicated category folder",
+        "QUICK SOUND EFFECTS & SMART MUSIC FILTERS: Quick 1-click sound effect presets (Whoosh, Boom, Ding, Laughter, Applause, Glitch, Pop, Laser)",
+        "SMART EXPORT DURATION & FLAWLESS STEREO AUDIO: Intelligent duration trimming to end exactly at the last video frame with 1024-sample interleaved WebCodecs AAC audio encoding",
+        "COMPACT EXPORT DIALOG: Redesigned export interface fitting comfortably on any display",
+        "SILENCE DETECTION DEFAULT: 'Excluir só o áudio' is now selected by default as option #1 in the silence detector"
       ],
       "items_pt": [
-        "App de desktop se ATUALIZA SOZINHO: baixa a versão nova em 2º plano e instala quando você aceita — sem baixar outro AppImage e apagar o antigo",
-        "Tela de configuração inicial: escolha o idioma, a cor do app e (opcional) os modelos de IA de legendas — depois uma tela 'tudo pronto' com botão de começar (no navegador também, sem a etapa de IA)",
-        "Cor do app a sua escolha (8 opções): botões, marcações, alças de seleção e a moldura da prévia acompanham",
-        "CORRIGIDO: legendas com IA terminavam sem nada — os modelos antigos não tinham tempo por palavra; os novos funcionam (testado com áudio real), baixam mais rápido e mostram progresso de verdade",
-        "Legendas com IA bem mais rápidas no app de desktop (o servidor embutido agora libera o WASM multinúcleo)",
-        "Painel de legendas reformulado: tudo empilhado (sem rolar pro lado), idioma num menu com detecção automática e mais idiomas (chinês, árabe, polonês, holandês, vietnamita, ucraniano…)",
-        "CORRIGIDO: menu do botão direito não passa mais da borda — vira pra cima quando não cabe embaixo, com todas as opções (e submenus) visíveis",
-        "O botão '…' do cartão de projeto agora abre o menu daquele projeto (renomear / duplicar / excluir) em vez de abrir o editor",
-        "Site: o botão 'procurar atualizações' saiu (a web se atualiza sozinha ao recarregar); o app de desktop continua com ele",
-        "Changelogs agora em inglês no GitHub, e o app mostra traduzido no seu idioma (inglês por padrão)",
-        "Botão de feedback agora envia DIRETO pra gente num clique (vira uma issue automática); o caminho manual pelo GitHub continua de reserva",
-        "App todo traduzido (português / inglês / espanhol): editor, timelines, menus, diálogos e avisos — não só a tela de configurações",
-        "'feito pra quem cria vídeos de game' saiu — o GalaxyCut é livre pra todo tipo de vídeo",
-        "Novo projeto: formato PERSONALIZADO — a largura/altura que você quiser (120–7680)",
-        "Prévia: o quadro do vídeo agora é exato, com uma moldura clara na cor do seu app — acabou a caixa de seleção gigante e esquisita",
-        "Prévia: as alças de mover/redimensionar só aparecem quando você CLICA no clipe na prévia (estilo CapCut); clique fora continua tocando/pausando",
-        "A mídia carrega inteira na hora que você solta na timeline (com a % na tela) — sem 'carregando' no meio da reprodução",
-        "Aba Stickers agora é uma BUSCA de figurinhas de verdade (PNGs com transparência de bancos livres), com uma aba de Emojis organizada dentro dela",
-        "Detector de silêncio: depois de aplicar, só os trechos SEM SOM ficam selecionados — Delete apaga exatamente eles",
-        "Logo do app redondinha nas barras de título (adeus, raizinho)",
-        "O editor no navegador convida pra instalar o app de desktop (legendas com IA, projetos no disco)"
+        "ORGANIZAÇÃO AUTOMÁTICA EM PASTAS NA BUSCA: Ao adicionar qualquer item da aba Busca, o editor cria a pasta da categoria automaticamente",
+        "EFEITOS SONOROS RÁPIDOS & FILTROS DE MÚSICA: Barra de botões com sons clássicos de 1-clique (Whoosh, Boom, Ding, Risada, Aplauso, Glitch, Pop, Laser)",
+        "DURAÇÃO INTELIGENTE & ÁUDIO PERFEITO NA EXPORTAÇÃO: Corte automático no final do último clipe de vídeo e codificação estéreo AAC intercalada em 1024 amostras",
+        "PAINEL DE EXPORTAÇÃO COMPACTO: Layout responsivo e compacto sem barras de rolagem desnecessárias",
+        "DETECTOR DE SILÊNCIO: 'Excluir só o áudio' agora é a opção nº 1 e já vem marcada por padrão"
       ],
       "items_es": [
-        "La app de escritorio se ACTUALIZA SOLA: descarga la versión nueva en 2º plano e instala cuando aceptas — sin descargar otro AppImage y borrar el viejo",
-        "Pantalla de configuración inicial: elige idioma, color de la app y (opcional) los modelos de IA de subtítulos — luego una pantalla 'todo listo' con botón de empezar (también en navegador, sin la etapa de IA)",
-        "Color de la app a tu elección (8 opciones): botones, marcas, asas de selección y el marco de la preview lo siguen",
-        "CORREGIDO: los subtítulos con IA terminaban en nada — los modelos viejos no tenían tiempo por palabra; los nuevos funcionan (probado con audio real), descargan más rápido y muestran progreso real",
-        "Subtítulos con IA mucho más rápidos en la app de escritorio (el servidor integrado ahora libera el WASM multinúcleo)",
-        "Panel de subtítulos rehecho: todo apilado (sin desplazar hacia el lado), idioma en un menú con detección automática y más idiomas (chino, árabe, polaco, holandés, vietnamita, ucraniano…)",
-        "CORREGIDO: el menú del clic derecho ya no se sale de la pantalla — gira hacia arriba cuando no cabe abajo, con todas las opciones (y submenús) visibles",
-        "El botón '…' de la tarjeta de proyecto ahora abre el menú de ESE proyecto (renombrar / duplicar / eliminar) en vez de abrir el editor",
-        "Web: el botón 'buscar actualizaciones' desapareció (la web se actualiza sola al recargar); la app de escritorio lo conserva",
-        "Los changelogs ahora van en inglés en GitHub, y la app los muestra traducidos a tu idioma (inglés por defecto)",
-        "El botón de comentarios ahora envía DIRECTO a nosotros en un clic (se vuelve una issue automática); la ruta manual por GitHub queda de reserva",
-        "La app completa traducida (portugués / inglés / español): editor, timelines, menús, diálogos y avisos — no solo la pantalla de ajustes",
-        "'hecho para creadores de gaming' desapareció — GalaxyCut es libre para todo tipo de vídeo",
-        "Proyecto nuevo: formato PERSONALIZADO — el ancho/alto que quieras (120–7680)",
-        "Preview: el marco del vídeo ahora es exacto, con un borde claro del color de tu app — se acabó la caja de selección gigante y rara",
-        "Preview: las asas de mover/redimensionar solo aparecen al hacer CLIC en el clip de la preview (estilo CapCut); clic fuera sigue reproduciendo/pausando",
-        "El medio carga completo al soltarlo en la timeline (con el % en pantalla) — sin 'cargando' en mitad de la reproducción",
-        "La pestaña Stickers ahora es una BÚSQUEDA de pegatinas de verdad (PNG con transparencia de bancos libres), con una pestaña de Emojis ordenada dentro",
-        "Detector de silencio: tras aplicar, solo los tramos SIN SONIDO quedan seleccionados — Supr borra exactamente esos",
-        "Logo de la app redondita en las barras de título (adiós, rayito)",
-        "El editor en el navegador invita a instalar la app de escritorio (subtítulos con IA, proyectos en disco)"
+        "ORGANIZACIÓN AUTOMÁTICA EN CARPETAS: Al añadir elementos de la búsqueda se crea automáticamente la carpeta de su categoría",
+        "EFECTOS DE SONIDO RÁPIDOS Y FILTROS: Botones de 1-clic con efectos de sonido clásicos",
+        "DURACIÓN INTELIGENTE Y AUDIO PERFECTO: Corte automático al final del último clip de vídeo",
+        "DETECTOR DE SILENCIO: 'Eliminar sólo el audio' es ahora la opción nº 1 por defecto"
       ]
     },
     {
-      "version": "7.0.0",
+      "version": "7.6.0",
       "date": "2026-09-28",
       "items": [
-        "Desktop app: your projects now live in a dedicated FOLDER on disk (one per edit, files included) — nothing is lost when the app closes",
-        "Configurable on-disk autosave (1/2/3/5/10 min) — and Ctrl+Z survives a restart",
-        "Auto subtitles without freezing: the AI runs in the background, with real progress and a CANCEL button",
-        "More auto-subtitle languages (French, German, Italian, Japanese, Korean, Russian and more)",
-        "On the browser, auto subtitles point to the desktop app (the AI freezes the web page)",
-        "CapCut-style visual editing in the preview: drag to move, resize from the corners, ROTATE from the top handle",
-        "Number steppers (▲▼) on every adjustment — hold to accelerate; synced with the sliders both ways",
-        "Export overhaul: 240p to 8K, 24–60 fps and formats MP4, WebM, animated GIF, audio WAV and frame PNG",
-        "Fixed: vertical 1080p export is now a TRUE 1080×1920 (it used to come out 608×1080)",
-        "New edits start by picking the FORMAT (with visual thumbnails) and an optional title",
-        "Video with a different aspect ratio than the project? The app offers to switch formats on the spot",
-        "Loading media now shows the PERCENTAGE on screen (with a bar) instead of blinking forever",
-        "Selection mode: double-click a clip to enable, click to mark as many as you want, delete them all at once",
-        "JOIN clips button: closes the gaps of one track or all of them at once",
-        "Silence detector: REMOVE AUDIO ONLY mode (video keeps playing, all silent audio is deleted)",
-        "Emoji stickers in the Search tab (faces, hearts, fire, crown and more)",
-        "FEEDBACK button in the editor — becomes a GitHub issue straight away",
-        "App in PORTUGUESE, ENGLISH and SPANISH (selector in settings)",
-        "Right-click menu fix: the transition list no longer disappears off-screen",
-        "Star-on-GitHub invite for happy users (home + after export)",
-        "On the browser, a card to download the free desktop app",
-        "Every shortcut listed in Settings → Shortcuts (including the new ones)"
+        "CAPCUT KEYFRAME SYSTEM (◆): Mark keyframe diamonds at timestamps to animate zoom, scale, position X/Y, rotation, and opacity",
+        "PRESET ANIMATIONS LIBRARY: 1-click animations for Entrance, Exit, and Combo/Loop with custom duration sliders",
+        "VISUAL EFFECTS ENGINE: 25+ real-time post-processing effects with intensity and speed controls"
       ],
       "items_pt": [
-        "App: seus projetos agora moram numa PASTA no disco (uma por edição, com os arquivos dentro) — nada mais some quando o app fecha",
-        "Autosave em disco configurável (1/2/3/5/10 min) e o Ctrl+Z sobrevive ao reinício",
-        "Legendas automáticas sem travar: a IA roda em 2º plano, com progresso real e botão de CANCELAR",
-        "Legendas automáticas em mais idiomas (francês, alemão, italiano, japonês, coreano, russo e outros)",
-        "No navegador, as legendas automáticas apontam pro app baixado (a IA congela a página web)",
-        "Edição visual na prévia estilo CapCut: arraste, mude o tamanho pelos cantos e GIRE pela alça",
-        "Números com setinhas (▲▼) em todos os ajustes — segure e ele acelera sozinho; sincronizado com as barras",
-        "Exportação reformulada: 240p até 8K, fps 24–60 e formatos MP4, WebM, GIF animado, WAV do áudio e PNG do quadro",
-        "Corrigido: exportação vertical em 1080p agora sai 1080×1920 DE VERDADE (antes saía 608×1080)",
-        "Nova edição começa escolhendo o FORMATO (com quadradinhos demonstrando) e título opcional",
-        "Vídeo de proporção diferente do projeto? O app pergunta se quer mudar o formato na hora",
-        "Carregando mídia agora mostra a PORCENTAGEM na própria tela (com barrinha), em vez de ficar piscando",
-        "Modo seleção: duplo clique no clipe ativa, clique marca quantos quiser e apaga tudo de uma vez",
-        "Botão JUNTAR clipes: fecha os espaços de uma faixa ou de todas de uma vez",
-        "Detector de silêncio: opção EXCLUIR SÓ O ÁUDIO (vídeo continua, todo áudio sem som é apagado)",
-        "Stickers de emoji na aba Busca (caras, corações, fogo, coroa e mais)",
-        "Botão de FEEDBACK no editor — vira issue no GitHub e chega direto",
-        "App em PORTUGUÊS, INGLÊS e ESPANHOL (seletor nas configurações)",
-        "Fix do menu do botão direito: a lista de transições não some mais pra fora da tela",
-        "Convite pra deixar uma ⭐ no GitHub pra quem gostou (home e pós-exportação)",
-        "No navegador, um cartão pra baixar o app de graça",
-        "Todos os atalhos listados nas Configurações → Atalhos (inclusive os novos)"
-      ]
-    },
-    {
-      "version": "6.0.0",
-      "date": "2026-09-27",
-      "items": [
-        "New home screen: your edits are saved — create, rename, duplicate and delete",
-        "Fixed: clips now land EXACTLY where you drop them on the timeline",
-        "No more stacking clips on top of each other — only on free space (above, below or between clips)",
-        "Stable right-click menu: one click and it stays",
-        "Horizontal OBS-style audio meter, with a decibel scale",
-        "Voice recording right in the editor (becomes audio on the timeline)",
-        "Video preview in the Media tab + fixed player below with pause, seek and free scrubbing",
-        "Update checker with changelog (web and desktop)",
-        "AI module removed (subtitles keep using local Whisper, in your own browser)",
-        "Desktop app (AppImage) with its own exported-videos folder",
-        "General optimizations and static build (loads faster)"
+        "SISTEMA DE KEYFRAMES CAPCUT (◆): Marque losangos na linha do tempo para animar zoom, escala, posição X/Y, rotação e opacidade",
+        "BIBLIOTECA DE ANIMAÇÕES PRONTAS (1-CLIQUE): Animações de Entrada, Saída e Combo/Loop com barra de duração",
+        "MOTOR DE EFEITOS VISUAIS: Mais de 25 efeitos visuais profissionais com controle de intensidade e velocidade"
       ],
-      "items_pt": [
-        "Nova página inicial: suas edições ficam salvas — criar, renomear, duplicar e excluir",
-        "Corrigido: o clipe agora cai EXATAMENTE onde você solta na timeline",
-        "Não dá mais pra empilhar clipe em cima de outro — só em espaço livre (cima, baixo ou entre clipes)",
-        "Menu do botão direito estável: um clique e ele fica",
-        "Medidor de áudio horizontal estilo OBS, com escala em decibéis",
-        "Gravação de voz direto no editor (vira áudio na timeline)",
-        "Prévia de vídeo na aba Mídia + player fixo embaixo com pausar, avançar e mexer livre",
-        "Verificador de atualizações com changelog (web e desktop)",
-        "Módulo de IA removido (as legendas continuam com Whisper local, no próprio navegador)",
-        "App de desktop (AppImage) com pasta própria de vídeos exportados",
-        "Otimizações gerais e build estático (carrega mais rápido)"
-      ]
-    },
-    {
-      "version": "5.0.0",
-      "date": "2026-09-26",
-      "items": [
-        "Silence detector applies to EVERY clip that uses the file",
-        "Broom: deletes all the silent audio clips at once",
-        "Extract audio becomes its own WAV file in the Audio tab",
-        "The screen follows the red playhead",
-        "End of zombie clips with unloaded media"
-      ],
-      "items_pt": [
-        "Detector de silêncio aplica em TODOS os clipes do arquivo",
-        "Vassoura: apaga de uma vez os clipes de áudio sem som",
-        "Extrair áudio vira arquivo WAV próprio na aba Áudio",
-        "A tela acompanha a setinha vermelha",
-        "Fim do clipe zumbi com mídia não carregada"
-      ]
-    },
-    {
-      "version": "4.0.0",
-      "date": "2026-09-25",
-      "items": [
-        "Editable keyboard shortcuts",
-        "Persistent media in the browser (reloading loses nothing)",
-        "Multi-selection with Ctrl+A and Delete",
-        "Search with music genres and duration filter"
-      ],
-      "items_pt": [
-        "Atalhos de teclado editáveis",
-        "Mídia persistente no navegador (recarregar não perde nada)",
-        "Seleção múltipla com Ctrl+A e Delete",
-        "Busca com gêneros musicais e filtro de duração"
+      "items_es": [
+        "SISTEMA DE KEYFRAMES CAPCUT (◆): Marca rombos en la línea de tiempo para animar parámetros",
+        "BIBLIOTECA DE ANIMACIONES LISTAS: Animaciones de Entrada, Salida y Combo con duración ajustable",
+        "MOTOR DE EFECTOS VISUALES: Más de 25 efectos visuales con controles de intensidad y velocidad"
       ]
     }
   ],
-  "date": "2026-10-08T21:35:30.184Z"
+  "date": "2026-10-08T22:01:30.220Z"
 }

@@ -30,7 +30,6 @@ class PlaybackEngine {
   /** clipes ativos no último sync (quem "possui" cada elemento) */
   private claims = new Map<string, string>(); // elKey -> clipId
   private lastAttach = new Map<string, MediaEl>();
-  private startingPlays = new Set<HTMLMediaElement>();
   private raf = 0;
   private last = 0;
   private dirty = true;
@@ -67,7 +66,6 @@ class PlaybackEngine {
     cancelAnimationFrame(this.raf);
     cancelAnimationFrame(this.glideRaf);
     this.glideTarget = null;
-    this.startingPlays.clear();
     for (const el of this.elements.values()) {
       if (el instanceof HTMLMediaElement) el.pause();
     }
@@ -85,7 +83,7 @@ class PlaybackEngine {
       this.last = now;
       const pb = usePlayback.getState();
       if (pb.playing) {
-        // Encontra o elemento de áudio líder ativo para sincronizar a agulha com o relógio de hardware da placa de som
+        // Encontra o elemento de áudio líder ativo para travar o relógio no hardware de som
         let leaderTime: number | null = null;
         const active = this.activeClips(pb.playhead);
         for (const clip of active) {
@@ -94,31 +92,30 @@ class PlaybackEngine {
           const el = key ? this.elements.get(key) : undefined;
           if (el instanceof HTMLMediaElement && !el.paused && !el.seeking) {
             const elT = clip.start + (el.currentTime - clip.inPoint) / (clip.speed || 1);
-            if (isFinite(elT) && Math.abs(elT - pb.playhead) < 0.6) {
+            if (isFinite(elT) && Math.abs(elT - pb.playhead) < 0.5) {
               leaderTime = elT;
               break;
             }
           }
         }
 
-        let nextT = pb.playhead + dt;
+        const nextT = leaderTime !== null ? leaderTime : pb.playhead + dt;
+        let finalT = pb.playhead + dt;
         if (leaderTime !== null) {
-          const drift = nextT - leaderTime;
+          const drift = finalT - leaderTime;
           if (Math.abs(drift) > 0.25) {
-            nextT = leaderTime;
+            finalT = leaderTime;
           } else if (Math.abs(drift) > 0.015) {
-            // Slew suave em 12% por quadro — fluidez de 60/120fps sem saltos ou engasgos
-            nextT = nextT - drift * 0.12;
+            finalT = finalT - drift * 0.12;
           }
         }
 
         const dur = pb.duration;
-        if (nextT >= dur && dur > 0) {
-          // acabou o conteúdo visível/audível → a seta PARA aqui
+        if (finalT >= dur && dur > 0) {
           usePlayback.getState().setPlayhead(dur);
           this.pause();
         } else {
-          usePlayback.getState().setPlayhead(nextT);
+          usePlayback.getState().setPlayhead(finalT);
         }
       }
       const cur = usePlayback.getState();
@@ -396,9 +393,45 @@ class PlaybackEngine {
     return this.elements.get(elKeyOf(c.kind, c.mediaId));
   }
 
-  /** Sincroniza os elementos com o playhead (a "setinha" da timeline). */
+  /** Sincroniza os elementos com o playhead (a "setinha" da timeline) com pré-aquecimento proativo (lookahead). */
   private syncMedia(t: number, playing: boolean) {
-    const active = this.activeClips(t).filter((c) => c.kind !== "text" && c.mediaId && registry.hasBlob(c.mediaId));
+    const { clips } = useProject.getState();
+    const active = clips.filter(
+      (c) =>
+        c.kind !== "text" &&
+        c.kind !== "image" &&
+        c.mediaId &&
+        registry.hasBlob(c.mediaId) &&
+        c.start <= t + 0.05 &&
+        c.start + c.duration > t - 0.05
+    );
+
+    // Lookahead: pré-carrega e pré-posiciona clipes que vão começar nos próximos 1.5s
+    // para que estejam prontos com 0ms de latência quando o playhead chegar
+    const upcoming = clips.filter(
+      (c) =>
+        c.kind !== "text" &&
+        c.kind !== "image" &&
+        c.mediaId &&
+        registry.hasBlob(c.mediaId) &&
+        c.start > t &&
+        c.start <= t + 1.5
+    );
+
+    for (const uClip of upcoming) {
+      const uKey = this.bindings.get(uClip.id) ?? elKeyOf(uClip.kind, uClip.mediaId!);
+      const uEl = this.elements.get(uKey) ?? this.getOrCreateEl(uClip.kind, uClip.mediaId!);
+      if (uEl instanceof HTMLMediaElement) {
+        if (Math.abs(uEl.currentTime - uClip.inPoint) > 0.08 && !uEl.seeking) {
+          try {
+            uEl.currentTime = uClip.inPoint;
+          } catch {
+            /* noop */
+          }
+        }
+      }
+    }
+
     // redistribui os elementos: quem tá ativo ganha um (cria "#2", "#3"… se o mesmo arquivo tocar 2× ao mesmo tempo)
     const newClaims = new Map<string, string>();
     for (const clip of active) {
@@ -415,17 +448,6 @@ class PlaybackEngine {
     }
     this.claims = newClaims;
 
-    let leaderKey: string | null = null;
-    for (const clip of active) {
-      if (clip.kind === "video" || clip.kind === "audio") {
-        const k = this.bindings.get(clip.id);
-        if (k) {
-          leaderKey = k;
-          break;
-        }
-      }
-    }
-
     // pausa quem não tem dono, sincroniza quem tem
     for (const [key, el] of this.elements) {
       if (!(el instanceof HTMLMediaElement)) continue;
@@ -434,12 +456,10 @@ class PlaybackEngine {
         if (!el.paused) el.pause();
         continue;
       }
-      const clip = useProject.getState().clips.find((c) => c.id === ownerId);
+      const clip = clips.find((c) => c.id === ownerId);
       if (!clip) continue;
       const expected = clip.inPoint + (t - clip.start) * (clip.speed || 1);
       const targetSpeed = Math.max(0.0625, Math.min(16, clip.speed || 1));
-      const isLeader = key === leaderKey;
-
       if (playing) {
         if (el.paused) {
           if (Math.abs(el.currentTime - expected) > 0.03) {
@@ -452,49 +472,28 @@ class PlaybackEngine {
           if (el.playbackRate !== targetSpeed) {
             el.playbackRate = targetSpeed;
           }
-          if (!this.startingPlays.has(el)) {
-            this.startingPlays.add(el);
-            el.play()
-              .catch(() => undefined)
-              .finally(() => {
-                this.startingPlays.delete(el);
-              });
-          }
+          void el.play().catch(() => undefined);
         } else {
           // Elemento já está tocando:
-          if (isLeader) {
-            // O líder do áudio NÃO pode ter sua playbackRate oscilando!
+          const drift = el.currentTime - expected;
+          if (Math.abs(drift) > 0.6 && !el.seeking) {
+            try {
+              el.currentTime = expected;
+            } catch {
+              /* noop */
+            }
             if (el.playbackRate !== targetSpeed) {
               el.playbackRate = targetSpeed;
             }
-            // Apenas se o drift for enorme (ex: salto de corte), faz seek pontual
-            const drift = Math.abs(el.currentTime - expected);
-            if (drift > 0.4 && !el.seeking) {
-              try {
-                el.currentTime = expected;
-              } catch {
-                /* noop */
-              }
+          } else if (Math.abs(drift) > 0.08) {
+            // Micro-ajuste suave com histerese para evitar oscilações no algoritmo de time-stretch
+            const rateAdjust = drift > 0 ? 0.98 : 1.02;
+            const newRate = Math.max(0.0625, Math.min(16, targetSpeed * rateAdjust));
+            if (Math.abs(el.playbackRate - newRate) > 0.005) {
+              el.playbackRate = newRate;
             }
-          } else {
-            // Faixas secundárias (música de fundo, etc.) mantêm micro-ajuste se saírem de fase
-            const drift = el.currentTime - expected;
-            if (Math.abs(drift) > 0.4 && !el.seeking) {
-              try {
-                el.currentTime = expected;
-              } catch {
-                /* noop */
-              }
-              if (el.playbackRate !== targetSpeed) el.playbackRate = targetSpeed;
-            } else if (Math.abs(drift) > 0.06) {
-              const rateAdjust = drift > 0 ? 0.985 : 1.015;
-              const newRate = Math.max(0.0625, Math.min(16, targetSpeed * rateAdjust));
-              if (Math.abs(el.playbackRate - newRate) > 0.005) {
-                el.playbackRate = newRate;
-              }
-            } else if (el.playbackRate !== targetSpeed) {
-              el.playbackRate = targetSpeed;
-            }
+          } else if (Math.abs(drift) < 0.03 && el.playbackRate !== targetSpeed) {
+            el.playbackRate = targetSpeed;
           }
         }
       } else {
@@ -521,30 +520,17 @@ class PlaybackEngine {
       if (this.claims.get(key) !== c.id) continue;
       const el = this.elements.get(key);
       if (!el || !(el instanceof HTMLMediaElement)) continue;
-
+      if (this.lastAttach.get(key) !== el) {
+        audioEngine.dropClip(key);
+        audioEngine.attach(key, el);
+        this.lastAttach.set(key, el);
+      }
       const track = tracks.find((tr) => tr.id === c.trackId);
-      const isActive = c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001;
+      const isActive = c.start <= t + 0.05 && c.start + c.duration > t - 0.05;
       const fade = isActive ? fadeEnvelope(c, t) : 0;
       const eff = c.muted || track?.muted ? 0 : c.volume * fade;
-
-      // WebAudio DSP só é ativado se enhance estiver habilitado ou se já estava vinculado
-      if (c.enhance) {
-        if (this.lastAttach.get(key) !== el) {
-          audioEngine.attach(key, el);
-          this.lastAttach.set(key, el);
-        }
-        audioEngine.update(key, { gain: eff, enhance: true });
-      } else if (this.lastAttach.has(key)) {
-        audioEngine.update(key, { gain: eff, enhance: false });
-      } else {
-        const targetVol = Math.max(0, Math.min(1, eff));
-        if (Math.abs(el.volume - targetVol) > 0.01) {
-          el.volume = targetVol;
-        }
-        el.muted = eff === 0;
-      }
-
-      if (!isActive && !el.paused) el.pause();
+      audioEngine.update(key, { gain: eff, enhance: c.enhance, filters: c.audioFilters });
+      if (t > c.start + c.duration + 0.1 && !el.paused) el.pause();
     }
   }
 
@@ -630,13 +616,27 @@ class PlaybackEngine {
     this.pendingPlay = false;
     const from = pb.playhead >= pb.duration - 0.01 ? 0 : pb.playhead;
     usePlayback.getState().setPlayhead(from);
+
+    const active = this.activeClips(from);
+    for (const clip of active) {
+      if (clip.kind === "text" || clip.kind === "image") continue;
+      const key = this.bindings.get(clip.id) ?? elKeyOf(clip.kind, clip.mediaId!);
+      const el = this.elements.get(key);
+      if (el instanceof HTMLMediaElement) {
+        try {
+          el.currentTime = clip.inPoint + (from - clip.start) * (clip.speed || 1);
+        } catch {}
+        el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
+        void el.play().catch(() => undefined);
+      }
+    }
+
     usePlayback.getState().setPlaying(true);
     this.dirty = true;
   }
 
   pause() {
     this.pendingPlay = false; // cancelou a espera: não começa sozinho depois
-    this.startingPlays.clear();
     usePlayback.getState().setPlaying(false);
     for (const el of this.elements.values()) {
       if (el instanceof HTMLMediaElement && !el.paused) el.pause();
@@ -682,7 +682,23 @@ class PlaybackEngine {
     cancelAnimationFrame(this.glideRaf);
     this.glideRaf = 0;
     usePlayback.getState().setPlayhead(target);
-    this.dirty = true;
+
+    const active = this.activeClips(target);
+    for (const clip of active) {
+      if (clip.kind === "text" || clip.kind === "image") continue;
+      const key = this.bindings.get(clip.id) ?? elKeyOf(clip.kind, clip.mediaId!);
+      const el = this.elements.get(key);
+      if (el instanceof HTMLMediaElement) {
+        try {
+          el.currentTime = clip.inPoint + (target - clip.start) * (clip.speed || 1);
+        } catch {}
+      }
+    }
+
+    this.syncMedia(target, pb.playing);
+    this.updateAudio(target);
+    this.renderPreview(target);
+    this.dirty = false;
   }
 
   /** seta deslizando com inércia até o alvo */

@@ -15,11 +15,12 @@ import { useProject, usePlayback, findFreeSlot } from "@/lib/editor/store";
 import { useSettings, PLAYHEAD_MODES, PlayheadMode } from "@/lib/editor/settings";
 import { useComboLabel } from "@/lib/editor/shortcuts";
 import { engine } from "@/lib/editor/playback";
-import { Clip, Track, TRANSITIONS, TransitionType, aspectDiff, clipEnd } from "@/lib/editor/types";
+import { Clip, Track, TRANSITIONS, TransitionType, aspectDiff, clipEnd, DEFAULT_AUDIO_FILTERS } from "@/lib/editor/types";
 import { toast } from "sonner";
 import { registry } from "@/lib/editor/media";
 import { gcDrag } from "@/lib/editor/dnd";
 import { SilenceDialog } from "./SilenceDialog";
+import { BatchAudioDialog } from "./BatchAudioDialog";
 import { useT, t as tr, useLang } from "@/lib/editor/i18n";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -59,14 +60,15 @@ function snapInfoLive(t: number, excludeId: string, zoom: number): { t: number; 
   return { t: best, hit: bestD < th };
 }
 
-/** Arraste de clipe com estado vivo — clica uma vez, lê a store em cada evento. */
+/** Arraste de clipe com suporte a múltiplos clipes/faixas e auto-scroll suave nas bordas */
 function startClipDrag(
   e: React.PointerEvent,
   clip: Clip,
   mode: "move" | "left" | "right",
   zoom: number,
   trackAtY: (clientY: number) => Track | null,
-  setSnapX: (v: number | null) => void
+  setSnapX: (v: number | null) => void,
+  scrollEl: HTMLDivElement | null
 ) {
   if (e.button !== 0) return;
   e.stopPropagation();
@@ -80,39 +82,75 @@ function startClipDrag(
     useProject.getState().toggleSelect(clip.id);
     return;
   }
-  const st = useProject.getState();
-  st.select(clip.id);
-  st.pushHistory();
-  const orig = { ...clip };
-  const startX = e.clientX;
 
-  const onMove = (ev: PointerEvent) => {
+  const st = useProject.getState();
+  const isMulti = st.selectedIds.includes(clip.id) && st.selectedIds.length > 1;
+
+  if (!isMulti) {
+    st.select(clip.id);
+  }
+  st.pushHistory();
+
+  // Coleta todos os clipes que se moverão juntos
+  const currentSelectedIds = isMulti ? st.selectedIds : [clip.id];
+  const movingClips = st.clips.filter((c) => currentSelectedIds.includes(c.id));
+  const origMap = new Map<string, { start: number; duration: number; inPoint: number; trackId: string }>();
+  movingClips.forEach((c) => origMap.set(c.id, { start: c.start, duration: c.duration, inPoint: c.inPoint, trackId: c.trackId }));
+
+  const minStart = Math.min(...movingClips.map((c) => c.start));
+  const orig = origMap.get(clip.id) || { ...clip };
+  const startX = e.clientX;
+  let lastClientX = e.clientX;
+  let lastClientY = e.clientY;
+  let autoScrollRaf = 0;
+
+  const updatePositions = () => {
     const pbs = useProject.getState();
     const live = pbs.clips.find((c) => c.id === clip.id);
     if (!live) return;
-    const m = pbs.media.find((x) => x.id === clip.mediaId);
-    const srcDur = m?.duration ?? Infinity;
+
     if (mode === "move") {
-      const dx = (ev.clientX - startX) / zoom;
-      let s = Math.max(0, orig.start + dx);
-      const snapped = snapInfoLive(s, clip.id, zoom);
-      s = snapped.t;
-      setSnapX(snapped.hit ? s * zoom : null);
-      // faixa destino (mesmo tipo de conteúdo)
-      const hit = trackAtY(ev.clientY);
-      const compatible =
-        hit &&
-        ((hit.kind === "video" && (clip.kind === "video" || clip.kind === "image")) ||
-          (hit.kind === "audio" && clip.kind === "audio") ||
-          (hit.kind === "text" && clip.kind === "text"));
-      const trackId = compatible && hit ? hit.id : orig.trackId;
-      // movimento LIVRE: o clipe segue o mouse; ao soltar, o settleOverlaps empurra quem ficou por baixo
-      useProject.getState().moveClipLive(clip.id, s, trackId);
+      const dx = (lastClientX - startX) / zoom;
+      const effectiveDx = Math.max(-minStart, dx);
+      let targetStart = Math.max(0, orig.start + effectiveDx);
+      const snapped = snapInfoLive(targetStart, clip.id, zoom);
+
+      let finalDx = effectiveDx;
+      if (snapped.hit) {
+        finalDx = Math.max(-minStart, snapped.t - orig.start);
+        setSnapX(snapped.t * zoom);
+      } else {
+        setSnapX(null);
+      }
+
+      if (isMulti) {
+        // Move todos os clipes selecionados juntos em suas respectivas faixas
+        const moves = movingClips.map((c) => {
+          const o = origMap.get(c.id)!;
+          return {
+            id: c.id,
+            start: Math.max(0, o.start + finalDx),
+            trackId: o.trackId,
+          };
+        });
+        useProject.getState().moveClipsLive(moves);
+      } else {
+        const hit = trackAtY(lastClientY);
+        const compatible =
+          hit &&
+          ((hit.kind === "video" && (clip.kind === "video" || clip.kind === "image")) ||
+            (hit.kind === "audio" && clip.kind === "audio") ||
+            (hit.kind === "text" && clip.kind === "text"));
+        const trackId = compatible && hit ? hit.id : orig.trackId;
+        useProject.getState().moveClipLive(clip.id, Math.max(0, orig.start + finalDx), trackId);
+      }
     } else if (mode === "left") {
-      const dx = (ev.clientX - startX) / zoom;
+      const m = pbs.media.find((x) => x.id === clip.mediaId);
+      const srcDur = m?.duration ?? Infinity;
+      const dx = (lastClientX - startX) / zoom;
       let ns = Math.min(orig.start + dx, orig.start + orig.duration - 0.1);
       ns = Math.max(ns, 0);
-      if (clip.kind === "video" || clip.kind === "audio") ns = Math.max(ns, orig.start - orig.inPoint / orig.speed);
+      if (clip.kind === "video" || clip.kind === "audio") ns = Math.max(ns, orig.start - orig.inPoint / (clip.speed || 1));
       ns = Math.max(
         ns,
         ...pbs.clips
@@ -124,34 +162,82 @@ function startClipDrag(
       ns = snappedL.t;
       setSnapX(snappedL.hit ? ns * zoom : null);
       const d = ns - orig.start;
-      useProject.getState().updateClip(clip.id, { start: ns, duration: orig.duration - d, inPoint: Math.max(0, orig.inPoint + d * orig.speed) }, { history: false });
+      useProject.getState().updateClip(
+        clip.id,
+        { start: ns, duration: orig.duration - d, inPoint: Math.max(0, orig.inPoint + d * (clip.speed || 1)) },
+        { history: false }
+      );
     } else {
-      const dx = (ev.clientX - startX) / zoom;
+      const m = pbs.media.find((x) => x.id === clip.mediaId);
+      const srcDur = m?.duration ?? Infinity;
+      const dx = (lastClientX - startX) / zoom;
       let ne = Math.max(orig.start + orig.duration + dx, orig.start + 0.1);
-      if (clip.kind === "video" || clip.kind === "audio") ne = Math.min(ne, orig.start + (srcDur - orig.inPoint) / orig.speed);
+      if (clip.kind === "video" || clip.kind === "audio") ne = Math.min(ne, orig.start + (srcDur - orig.inPoint) / (clip.speed || 1));
       const nextStart = Math.min(
-        ...pbs.clips.filter((c) => c.trackId === orig.trackId && c.id !== clip.id && c.start >= clipEnd(orig) - 0.001).map((c) => c.start),
+        ...pbs.clips.filter((c) => c.trackId === orig.trackId && c.id !== clip.id && c.start >= (orig.start + orig.duration) - 0.001).map((c) => c.start),
         Infinity
       );
       ne = Math.min(ne, nextStart);
       const snappedR = snapInfoLive(ne, clip.id, zoom);
       ne = snappedR.t;
       setSnapX(snappedR.hit ? ne * zoom : null);
-      useProject.getState().updateClip(clip.id, { duration: ne - orig.start, outPoint: Math.max(0, orig.inPoint + (ne - orig.start) * orig.speed) }, { history: false });
+      useProject.getState().updateClip(
+        clip.id,
+        { duration: ne - orig.start, outPoint: Math.max(0, orig.inPoint + (ne - orig.start) * (clip.speed || 1)) },
+        { history: false }
+      );
     }
     engine.markDirty();
   };
+
+  // Loop de auto-scroll suave na timeline ao arrastar perto das bordas
+  const stepDragAutoScroll = () => {
+    if (scrollEl) {
+      const viewRect = scrollEl.getBoundingClientRect();
+      let scrollDelta = 0;
+
+      // Perto da borda direita -> rola a timeline pra frente
+      if (lastClientX > viewRect.right - 70) {
+        const intensity = Math.min(40, (lastClientX - (viewRect.right - 70)) * 0.75);
+        scrollDelta = Math.max(4, intensity);
+      }
+      // Perto da borda esquerda -> rola a timeline pra trás
+      else if (lastClientX < viewRect.left + HEADER_W + 70) {
+        const intensity = Math.min(40, (viewRect.left + HEADER_W + 70 - lastClientX) * 0.75);
+        scrollDelta = -Math.max(4, intensity);
+      }
+
+      if (scrollDelta !== 0) {
+        scrollEl.scrollLeft += scrollDelta;
+        updatePositions();
+      }
+    }
+    autoScrollRaf = requestAnimationFrame(stepDragAutoScroll);
+  };
+  autoScrollRaf = requestAnimationFrame(stepDragAutoScroll);
+
+  const onMove = (ev: PointerEvent) => {
+    lastClientX = ev.clientX;
+    lastClientY = ev.clientY;
+    updatePositions();
+  };
+
   const onUp = () => {
+    cancelAnimationFrame(autoScrollRaf);
     setSnapX(null);
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     if (mode === "move") {
-      // inserção estilo CapCut: empurra os clipes que ficaram por baixo
-      const pushed = useProject.getState().settleOverlaps(clip.id);
-      if (pushed > 0) toast.info(`${pushed} clipe(s) da frente empurrado(s) pra abrir espaço`);
+      if (isMulti) {
+        movingClips.forEach((c) => useProject.getState().settleOverlaps(c.id));
+      } else {
+        const pushed = useProject.getState().settleOverlaps(clip.id);
+        if (pushed > 0) toast.info(`${pushed} clipe(s) da frente empurrado(s) pra abrir espaço`);
+      }
     }
     engine.markDirty();
   };
+
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
 }
@@ -173,6 +259,7 @@ export function Timeline() {
   const [snapX, setSnapX] = useState<number | null>(null); // guia de encaixe (px)
   const [dropHint, setDropHint] = useState<{ t: number; trackId: string; occupied: boolean } | null>(null);
   const [silenceOpen, setSilenceOpen] = useState(false);
+  const [batchAudioOpen, setBatchAudioOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [showTrackTip, setShowTrackTip] = useState(true);
   /** Retângulo de seleção múltipla (estilo área de trabalho do Windows) */
@@ -235,8 +322,13 @@ export function Timeline() {
   // abre o detector de silêncio a pedido de um menu de contexto de clipe
   useEffect(() => {
     const open = () => setSilenceOpen(true);
+    const openBatch = () => setBatchAudioOpen(true);
     window.addEventListener("galaxiacut:opensilence", open);
-    return () => window.removeEventListener("galaxiacut:opensilence", open);
+    window.addEventListener("galaxiacut:openbatchaudio", openBatch);
+    return () => {
+      window.removeEventListener("galaxiacut:opensilence", open);
+      window.removeEventListener("galaxiacut:openbatchaudio", openBatch);
+    };
   }, []);
 
   // ---------- pontos de encaixe (snap) ----------
@@ -287,7 +379,7 @@ export function Timeline() {
     trackAtYRef.current = trackAtY;
   });
   const onDownStable = useCallback((e: React.PointerEvent, clip: Clip, mode: "move" | "left" | "right") => {
-    startClipDrag(e, clip, mode, zoomRef.current, trackAtYRef.current, setSnapX);
+    startClipDrag(e, clip, mode, zoomRef.current, trackAtYRef.current, setSnapX, scrollRef.current);
   }, []);
 
   // ---------- soltar mídia (arrastada do painel ou do PC) ----------
@@ -345,7 +437,13 @@ export function Timeline() {
     }
     // 2) arquivos do computador (ou de dentro de uma pasta)
     if (e.dataTransfer.files?.length) {
-      const files = Array.from(e.dataTransfer.files).filter((f) => /^(video|audio|image)\//.test(f.type) || /\.(mp4|webm|mov|mkv|m4v|avi|png|jpe?g|webp|gif|avif|mp3|wav|ogg|m4a|aac|flac|opus)$/i.test(f.name));
+      const files = Array.from(e.dataTransfer.files).filter(
+        (f) =>
+          /^(video|audio|image)\//i.test(f.type) ||
+          /\.(mp4|m4v|webm|mov|mkv|avi|wmv|flv|f4v|ts|mts|m2ts|vob|ogv|3gp|3g2|mpe?g|mpe|mpv|m2v|mxf|rmvb?|rm|asf|divx|xvid|y4m|nut|png|jpe?g|jfif|jif|jpe|jfi|webp|gif|avif|bmp|dib|svg|svgz|ico|tiff?|tif|heic|heif|raw|cr2|nef|arw|dng|psd|ai|eps|hdr|mp3|wav|ogg|oga|m4a|aac|flac|opus|wma|aiff?|aifc|alac|caf|mka|ac3|dts|amr|midi?|weba)$/i.test(
+            f.name
+          )
+      );
       if (!files.length) return;
       let offset = 0;
       let ok = 0;
@@ -576,6 +674,16 @@ export function Timeline() {
           >
             <AudioWaveform className="h-3.5 w-3.5 text-[var(--gc-accent)]" /> {t("tl.silence")}
           </Button>
+          {/* Melhorar áudio em lote (estilo OBS Studio em faixas e clipes) */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs text-zinc-300 hover:bg-[#1c2430]"
+            onClick={() => setBatchAudioOpen(true)}
+            title="Melhorar áudio em lote / Filtros de estúdio estilo OBS Studio"
+          >
+            <Wand2 className="h-3.5 w-3.5 text-[var(--gc-accent)]" /> Melhorar Áudio em Lote
+          </Button>
           {/* vassoura: exclusor de todos os clipes de áudio sem som */}
           <Button
             variant="ghost"
@@ -758,11 +866,18 @@ export function Timeline() {
                 }
               }}
               onPointerDown={(e) => {
+                const wasPlaying = usePlayback.getState().playing;
+                if (wasPlaying) {
+                  engine.pause();
+                }
                 scrubTo(e.clientX);
                 const move = (ev: PointerEvent) => scrubTo(ev.clientX);
                 const up = () => {
                   window.removeEventListener("pointermove", move);
                   window.removeEventListener("pointerup", up);
+                  if (wasPlaying) {
+                    engine.play();
+                  }
                 };
                 window.addEventListener("pointermove", move);
                 window.addEventListener("pointerup", up);
@@ -982,6 +1097,7 @@ export function Timeline() {
       )}
 
       <SilenceDialog open={silenceOpen} onOpenChange={setSilenceOpen} />
+      <BatchAudioDialog open={batchAudioOpen} onOpenChange={setBatchAudioOpen} />
 
       {/* juntar clipes: todas as faixas ou uma específica */}
       <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
@@ -1315,6 +1431,26 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
       onClick: () => {
         useProject.getState().select(clip.id);
         window.dispatchEvent(new CustomEvent("galaxiacut:opensilence"));
+      },
+    });
+    items.push({
+      label: clip.enhance ? "Desativar Melhoria de Áudio" : "Melhorar Áudio (Estilo OBS)",
+      icon: <Wand2 className="h-3.5 w-3.5 text-[var(--gc-accent)]" />,
+      onClick: () => {
+        const nextState = !clip.enhance;
+        useProject.getState().updateClip(clip.id, {
+          enhance: nextState,
+          audioFilters: nextState ? (clip.audioFilters || DEFAULT_AUDIO_FILTERS) : undefined,
+        });
+        engine.markDirty();
+        toast.success(nextState ? "Melhoria de áudio ativada!" : "Melhoria de áudio desativada.");
+      },
+    });
+    items.push({
+      label: "Melhorar Áudio em Lote...",
+      icon: <Wand2 className="h-3.5 w-3.5 text-sky-400" />,
+      onClick: () => {
+        window.dispatchEvent(new CustomEvent("galaxiacut:openbatchaudio"));
       },
     });
   }

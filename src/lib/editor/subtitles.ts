@@ -3,7 +3,8 @@
 
 import { create } from "zustand";
 import { registry } from "./media";
-import { KaraokeWord } from "./types";
+import { KaraokeWord, Clip } from "./types";
+import { decodeAudioOf } from "./wav";
 
 export interface SubSegment {
   start: number;
@@ -321,17 +322,69 @@ async function transcribeLegacy(
   return polish(chunkToSegments(chunks));
 }
 
-/** Extrai PCM mono 16 kHz de um blob de áudio/vídeo. */
-async function extractPcm16k(blob: Blob): Promise<Float32Array> {
-  const AC: typeof AudioContext = window.AudioContext;
-  const ctx = new AC({ sampleRate: 16000 });
-  try {
-    const buf = await ctx.decodeAudioData(await blob.slice(0).arrayBuffer());
-    const ch = buf.getChannelData(0);
-    return new Float32Array(ch);
-  } finally {
-    void ctx.close();
+/** Renderiza o áudio composto da timeline (todos os clipes em seus devidos pontos e velocidades) a 16 kHz mono */
+export async function extractTimelinePcm16k(
+  targetClips: Clip[],
+  totalDuration: number
+): Promise<Float32Array> {
+  const dur = Math.max(0.5, totalDuration);
+  const OAC: typeof OfflineAudioContext =
+    window.OfflineAudioContext ||
+    (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext;
+  const off = new OAC(1, Math.max(1, Math.ceil(dur * 16000)), 16000);
+
+  // Decodifica áudios únicos para não decodificar o mesmo blob 2 vezes
+  const audioBufferCache = new Map<string, AudioBuffer>();
+  for (const c of targetClips) {
+    if (!c.mediaId || c.muted || c.videoHidden) continue;
+    if (!audioBufferCache.has(c.mediaId)) {
+      const blob = registry.getBlob(c.mediaId);
+      if (blob) {
+        try {
+          const ab = await decodeAudioOf(blob, 5);
+          if (ab) audioBufferCache.set(c.mediaId, ab);
+        } catch {}
+      }
+    }
   }
+
+  for (const c of targetClips) {
+    if (!c.mediaId || c.muted || c.videoHidden) continue;
+    const buf = audioBufferCache.get(c.mediaId);
+    if (!buf) continue;
+
+    const src = off.createBufferSource();
+    src.buffer = buf;
+    const speed = c.speed || 1;
+    src.playbackRate.value = speed;
+
+    const gainNode = off.createGain();
+    gainNode.gain.value = c.volume ?? 1;
+    src.connect(gainNode);
+    gainNode.connect(off.destination);
+
+    const playDuration = Math.min(c.duration, Math.max(0, buf.duration - c.inPoint) / speed);
+    if (playDuration > 0.05) {
+      src.start(c.start, Math.max(0, c.inPoint), playDuration * speed);
+    }
+  }
+
+  const resampled = await off.startRendering();
+  return new Float32Array(resampled.getChannelData(0));
+}
+
+/** Extrai PCM mono 16 kHz de qualquer arquivo de áudio ou vídeo */
+async function extractPcm16k(blob: Blob): Promise<Float32Array> {
+  const buf = await decodeAudioOf(blob);
+  const OAC: typeof OfflineAudioContext =
+    window.OfflineAudioContext || (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext;
+  const off = new OAC(1, Math.max(1, Math.ceil(buf.duration * 16000)), 16000);
+  const src = off.createBufferSource();
+  src.buffer = buf;
+  src.connect(off.destination);
+  src.start(0);
+  const resampled = await off.startRendering();
+  return new Float32Array(resampled.getChannelData(0));
 }
 
 interface RawWord {
@@ -449,6 +502,33 @@ export async function downloadModel(
     est.stop();
     pendingCancel = null;
     workerListener = null;
+  }
+}
+
+/**
+ * Transcreve toda a composição da timeline (ou grupo de clipes) com timestamps
+ * absolutos 100% alinhados com o relógio da timeline.
+ */
+export async function transcribeTimeline(
+  targetClips: Clip[],
+  totalDuration: number,
+  lang: string,
+  onProgress: (p: WhisperProgress) => void,
+  model: WhisperModelId = "base",
+  maxWords: number = 4
+): Promise<SubSegment[]> {
+  onProgress({ stage: "prepare", pct: 0.02 });
+  const pcm = await extractTimelinePcm16k(targetClips, totalDuration);
+  onProgress({ stage: "prepare", pct: 0.08 });
+
+  try {
+    const segs = await transcribeInWorkerWithFallback(pcm, lang, model, onProgress, maxWords);
+    if (segs.length) return segs;
+    throw new Error("sem fala detectada");
+  } catch (err) {
+    const msg = String((err as Error)?.message ?? err);
+    if (msg.includes("cancel")) throw err;
+    return transcribeLegacy(pcm.slice(), lang, model, onProgress, maxWords);
   }
 }
 

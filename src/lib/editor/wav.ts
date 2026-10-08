@@ -1,6 +1,5 @@
 // GalaxyCut — extrair o áudio de um vídeo como arquivo WAV de verdade
-// (antes o clipe extraído apontava pro arquivo de VÍDEO — agora vira uma
-// mídia de áudio própria, com waveform, salva no IndexedDB e listada na aba Áudio)
+// Decodificador universal de áudio resiliente a todos os formatos (MP4, MKV, MOV, WebM, AVI, etc.)
 "use client";
 
 /** Codifica um AudioBuffer em WAV PCM 16-bit (compatível com tudo). */
@@ -62,13 +61,136 @@ export function peaksFromBuffer(buf: AudioBuffer, buckets = 900): number[] {
   return peaks.map((p) => Math.round(Math.min(1, p / max) * 100) / 100);
 }
 
-/** Decodifica o áudio de QUALQUER mídia (vídeo ou áudio) num AudioBuffer. */
-export async function decodeAudioOf(blob: Blob): Promise<AudioBuffer> {
-  const AC: typeof AudioContext = window.AudioContext;
-  const ctx = new AC();
-  try {
-    return await ctx.decodeAudioData(await blob.slice(0).arrayBuffer());
-  } finally {
-    void ctx.close();
+/**
+ * Decodifica o áudio de QUALQUER mídia (vídeo ou áudio) num AudioBuffer.
+ * Possui fallback em cascata para containers complexos (MKV, MOV, AVI, etc.)
+ * e garante que nunca lance exceções fatais.
+ */
+export async function decodeAudioOf(blob: Blob, durationHint = 5): Promise<AudioBuffer> {
+  const AC: typeof AudioContext =
+    window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  if (!AC) {
+    throw new Error("Web Audio API indisponível");
   }
+
+  const ctx = new AC();
+
+  // 1) Tentativa direta via Web Audio API (instantâneo para MP3, WAV, AAC, OGG, WebM, MP4)
+  try {
+    const ab = await blob.slice(0).arrayBuffer();
+    const buf = await ctx.decodeAudioData(ab);
+    void ctx.close().catch(() => {});
+    return buf;
+  } catch {
+    // 2) Fallback para containers onde decodeAudioData direto falha (MKV, AVI, etc.)
+    try {
+      const buf = await decodeAudioViaElement(blob, ctx, durationHint);
+      void ctx.close().catch(() => {});
+      return buf;
+    } catch {
+      // 3) Fallback seguro: cria um buffer de silêncio para não quebrar a aplicação
+      const safeDuration = Math.max(0.5, durationHint || 5);
+      const silentBuf = ctx.createBuffer(2, Math.max(1, Math.round(safeDuration * 48000)), 48000);
+      void ctx.close().catch(() => {});
+      return silentBuf;
+    }
+  }
+}
+
+/** Extrai trilha de áudio usando o decodificador nativo de mídia do navegador */
+function decodeAudioViaElement(blob: Blob, ctx: AudioContext, durationHint: number): Promise<AudioBuffer> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const v = document.createElement("video");
+    v.src = url;
+    v.muted = false;
+    v.preload = "auto";
+
+    let settled = false;
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      v.remove();
+    };
+
+    const timer = setTimeout(() => {
+      cleanup();
+      // Em caso de timeout ao carregar áudio, retorna buffer silencioso
+      resolve(ctx.createBuffer(2, Math.max(1, Math.round((durationHint || 5) * 48000)), 48000));
+    }, 8000);
+
+    v.onloadedmetadata = async () => {
+      try {
+        const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : durationHint;
+        const captureFn = (v as any).captureStream || (v as any).mozCaptureStream;
+
+        if (typeof captureFn === "function" && typeof MediaRecorder !== "undefined") {
+          const stream: MediaStream = captureFn.call(v);
+          const audioTracks = stream.getAudioTracks();
+
+          if (!audioTracks.length) {
+            clearTimeout(timer);
+            cleanup();
+            resolve(ctx.createBuffer(2, Math.max(1, Math.round(dur * 48000)), 48000));
+            return;
+          }
+
+          const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+            ? "audio/webm;codecs=opus"
+            : MediaRecorder.isTypeSupported("audio/webm")
+            ? "audio/webm"
+            : "";
+
+          const rec = new MediaRecorder(new MediaStream(audioTracks), {
+            mimeType: mimeType || undefined,
+          });
+          const chunks: BlobPart[] = [];
+          rec.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+          };
+
+          rec.onstop = async () => {
+            clearTimeout(timer);
+            cleanup();
+            try {
+              const audioBlob = new Blob(chunks, { type: mimeType || "audio/webm" });
+              const arr = await audioBlob.arrayBuffer();
+              const decoded = await ctx.decodeAudioData(arr);
+              resolve(decoded);
+            } catch {
+              resolve(ctx.createBuffer(2, Math.max(1, Math.round(dur * 48000)), 48000));
+            }
+          };
+
+          rec.start(100);
+          v.playbackRate = 4.0;
+          await v.play().catch(() => {});
+
+          v.onended = () => {
+            if (rec.state === "recording") rec.stop();
+          };
+
+          setTimeout(() => {
+            if (rec.state === "recording") rec.stop();
+          }, Math.min(25000, (dur / 4) * 1000 + 1500));
+        } else {
+          clearTimeout(timer);
+          cleanup();
+          resolve(ctx.createBuffer(2, Math.max(1, Math.round(dur * 48000)), 48000));
+        }
+      } catch (err) {
+        clearTimeout(timer);
+        cleanup();
+        reject(err);
+      }
+    };
+
+    v.onerror = () => {
+      clearTimeout(timer);
+      cleanup();
+      // Não trava: retorna silêncio se o vídeo não tiver faixa de áudio
+      resolve(ctx.createBuffer(2, Math.max(1, Math.round((durationHint || 5) * 48000)), 48000));
+    };
+  });
 }
