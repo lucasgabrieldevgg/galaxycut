@@ -30,6 +30,7 @@ class PlaybackEngine {
   /** clipes ativos no último sync (quem "possui" cada elemento) */
   private claims = new Map<string, string>(); // elKey -> clipId
   private lastAttach = new Map<string, MediaEl>();
+  private startingPlays = new Set<HTMLMediaElement>();
   private raf = 0;
   private last = 0;
   private dirty = true;
@@ -66,6 +67,7 @@ class PlaybackEngine {
     cancelAnimationFrame(this.raf);
     cancelAnimationFrame(this.glideRaf);
     this.glideTarget = null;
+    this.startingPlays.clear();
     for (const el of this.elements.values()) {
       if (el instanceof HTMLMediaElement) el.pause();
     }
@@ -448,6 +450,17 @@ class PlaybackEngine {
     }
     this.claims = newClaims;
 
+    let leaderKey: string | null = null;
+    for (const clip of active) {
+      if (clip.kind === "video" || clip.kind === "audio") {
+        const k = this.bindings.get(clip.id);
+        if (k) {
+          leaderKey = k;
+          break;
+        }
+      }
+    }
+
     // pausa quem não tem dono, sincroniza quem tem
     for (const [key, el] of this.elements) {
       if (!(el instanceof HTMLMediaElement)) continue;
@@ -460,6 +473,8 @@ class PlaybackEngine {
       if (!clip) continue;
       const expected = clip.inPoint + (t - clip.start) * (clip.speed || 1);
       const targetSpeed = Math.max(0.0625, Math.min(16, clip.speed || 1));
+      const isLeader = key === leaderKey;
+
       if (playing) {
         if (el.paused) {
           if (Math.abs(el.currentTime - expected) > 0.03) {
@@ -472,28 +487,48 @@ class PlaybackEngine {
           if (el.playbackRate !== targetSpeed) {
             el.playbackRate = targetSpeed;
           }
-          void el.play().catch(() => undefined);
+          if (!this.startingPlays.has(el)) {
+            this.startingPlays.add(el);
+            el.play()
+              .catch(() => undefined)
+              .finally(() => {
+                this.startingPlays.delete(el);
+              });
+          }
         } else {
           // Elemento já está tocando:
-          const drift = el.currentTime - expected;
-          if (Math.abs(drift) > 0.6 && !el.seeking) {
-            try {
-              el.currentTime = expected;
-            } catch {
-              /* noop */
-            }
+          if (isLeader) {
+            // O líder do áudio NÃO pode ter sua playbackRate oscilando!
             if (el.playbackRate !== targetSpeed) {
               el.playbackRate = targetSpeed;
             }
-          } else if (Math.abs(drift) > 0.08) {
-            // Micro-ajuste suave com histerese para evitar oscilações no algoritmo de time-stretch
-            const rateAdjust = drift > 0 ? 0.98 : 1.02;
-            const newRate = Math.max(0.0625, Math.min(16, targetSpeed * rateAdjust));
-            if (Math.abs(el.playbackRate - newRate) > 0.005) {
-              el.playbackRate = newRate;
+            const drift = Math.abs(el.currentTime - expected);
+            if (drift > 0.4 && !el.seeking) {
+              try {
+                el.currentTime = expected;
+              } catch {
+                /* noop */
+              }
             }
-          } else if (Math.abs(drift) < 0.03 && el.playbackRate !== targetSpeed) {
-            el.playbackRate = targetSpeed;
+          } else {
+            // Faixas secundárias:
+            const drift = el.currentTime - expected;
+            if (Math.abs(drift) > 0.4 && !el.seeking) {
+              try {
+                el.currentTime = expected;
+              } catch {
+                /* noop */
+              }
+              if (el.playbackRate !== targetSpeed) el.playbackRate = targetSpeed;
+            } else if (Math.abs(drift) > 0.06) {
+              const rateAdjust = drift > 0 ? 0.985 : 1.015;
+              const newRate = Math.max(0.0625, Math.min(16, targetSpeed * rateAdjust));
+              if (Math.abs(el.playbackRate - newRate) > 0.005) {
+                el.playbackRate = newRate;
+              }
+            } else if (el.playbackRate !== targetSpeed) {
+              el.playbackRate = targetSpeed;
+            }
           }
         }
       } else {
@@ -520,17 +555,30 @@ class PlaybackEngine {
       if (this.claims.get(key) !== c.id) continue;
       const el = this.elements.get(key);
       if (!el || !(el instanceof HTMLMediaElement)) continue;
-      if (this.lastAttach.get(key) !== el) {
-        audioEngine.dropClip(key);
-        audioEngine.attach(key, el);
-        this.lastAttach.set(key, el);
-      }
+
       const track = tracks.find((tr) => tr.id === c.trackId);
-      const isActive = c.start <= t + 0.05 && c.start + c.duration > t - 0.05;
+      const isActive = c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001;
       const fade = isActive ? fadeEnvelope(c, t) : 0;
       const eff = c.muted || track?.muted ? 0 : c.volume * fade;
-      audioEngine.update(key, { gain: eff, enhance: c.enhance, filters: c.audioFilters });
-      if (t > c.start + c.duration + 0.1 && !el.paused) el.pause();
+
+      const needsDsp = !!c.enhance || !!(c.audioFilters && c.audioFilters.enabled);
+      if (needsDsp) {
+        if (this.lastAttach.get(key) !== el) {
+          audioEngine.attach(key, el);
+          this.lastAttach.set(key, el);
+        }
+        audioEngine.update(key, { gain: eff, enhance: !!c.enhance, filters: c.audioFilters });
+      } else if (this.lastAttach.has(key)) {
+        audioEngine.update(key, { gain: eff, enhance: false });
+      } else {
+        const targetVol = Math.max(0, Math.min(1, eff));
+        if (Math.abs(el.volume - targetVol) > 0.01) {
+          el.volume = targetVol;
+        }
+        el.muted = eff === 0;
+      }
+
+      if (!isActive && !el.paused) el.pause();
     }
   }
 
@@ -637,6 +685,7 @@ class PlaybackEngine {
 
   pause() {
     this.pendingPlay = false; // cancelou a espera: não começa sozinho depois
+    this.startingPlays.clear();
     usePlayback.getState().setPlaying(false);
     for (const el of this.elements.values()) {
       if (el instanceof HTMLMediaElement && !el.paused) el.pause();

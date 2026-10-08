@@ -204,9 +204,12 @@ export class AudioEngine {
   }
 
   pauseAll() {
-    // ganho zero imediato evita vazamento de áudio ao pausar
     if (!this.ctx || !this.master) return;
-    this.master.gain.setTargetAtTime(1, this.ctx.currentTime, 0.001);
+    try {
+      this.master.gain.setValueAtTime(1, this.ctx.currentTime);
+    } catch {
+      /* noop */
+    }
   }
 }
 
