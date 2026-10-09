@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Undo2, Redo2, Settings, Settings2, Download, FilePlus2, House, MessageSquareHeart } from "lucide-react";
 import { useProject } from "@/lib/editor/store";
-import { ASPECTS } from "@/lib/editor/types";
+import { ASPECTS, ASPECT_CHOICES } from "@/lib/editor/types";
 import { exportFormatLabel } from "@/lib/editor/exporter";
 import { SettingsDialog } from "./SettingsDialog";
 import { FeedbackDialog } from "./FeedbackDialog";
@@ -114,24 +114,30 @@ export function TopBar({
             <span>{exportFormatLabel()}</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-56 border-[#232d3d] bg-[#0c1017] p-2 text-zinc-200">
+        <PopoverContent className="w-64 border-[#232d3d] bg-[#0c1017] p-2 text-zinc-200">
           <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{t("tb.aspectRatio")}</p>
-          <div className="space-y-1">
-            {Object.entries(ASPECTS).map(([k, a]) => (
-              <button
-                key={k}
-                onClick={() => {
-                  setProject({ width: a.w, height: a.h });
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition ${
-                  currentAspect === k ? "bg-[var(--gc-accent)] text-black font-semibold" : "text-zinc-300 hover:bg-[#141a24]"
-                }`}
-              >
-                <span>{a.label}</span>
-                <span className="font-mono text-[10px] text-zinc-400">{a.w}×{a.h}</span>
-              </button>
-            ))}
+          <div className="space-y-1 max-h-72 overflow-y-auto">
+            {ASPECT_CHOICES.map((a) => {
+              const isSelected = project.width === a.w && project.height === a.h;
+              return (
+                <button
+                  key={a.key}
+                  onClick={() => {
+                    setProject({ width: a.w, height: a.h });
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition ${
+                    isSelected ? "bg-[var(--gc-accent)] text-black font-semibold" : "text-zinc-300 hover:bg-[#141a24]"
+                  }`}
+                >
+                  <div className="flex flex-col text-left">
+                    <span className="leading-tight font-medium">{a.label}</span>
+                    <span className={`text-[10px] leading-tight ${isSelected ? "text-zinc-900 font-normal" : "text-zinc-400"}`}>{a.hint}</span>
+                  </div>
+                  <span className={`font-mono text-[10px] ${isSelected ? "text-black font-semibold" : "text-zinc-400"}`}>{a.w}×{a.h}</span>
+                </button>
+              );
+            })}
           </div>
         </PopoverContent>
       </Popover>

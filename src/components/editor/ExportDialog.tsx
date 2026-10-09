@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import {
   Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen, Star,
   Image as ImageIcon, Music4, FileVideo, XCircle, Volume2, VolumeX, Film, Camera, Clock, AlertTriangle,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
 import { clipEnd } from "@/lib/editor/types";
 import { computeEffectiveDuration } from "@/lib/editor/store";
@@ -31,13 +32,28 @@ function fmtDur(d: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-const RESOLUTIONS: { id: number; label: string; hint: string }[] = [
+const PRIMARY_RESOLUTIONS: { id: number; label: string; hint: string }[] = [
+  { id: 2160, label: "4K (2160p)", hint: "Ultra HD" },
+  { id: 1440, label: "2K (1440p)", hint: "Quad HD" },
   { id: 1080, label: "1080p", hint: "Full HD (Padrão)" },
   { id: 720, label: "720p", hint: "HD Leve" },
-  { id: 2160, label: "4K", hint: "Ultra HD" },
-  { id: 480, label: "480p", hint: "Rápido / SD" },
+  { id: 480, label: "480p", hint: "SD Rápido" },
 ];
-const ALL_RESOLUTIONS = [4320, 2160, 1440, 1080, 720, 480, 360, 240];
+
+const SECONDARY_RESOLUTIONS: { id: number; label: string; hint: string }[] = [
+  { id: 1800, label: "3K (1800p)", hint: "QHD+ / Retina" },
+  { id: 1600, label: "1600p", hint: "WQXGA (16:10)" },
+  { id: 1200, label: "1200p", hint: "WUXGA (16:10)" },
+  { id: 960, label: "960p", hint: "4:3 HD Quad" },
+  { id: 900, label: "900p", hint: "HD+ (1600×900)" },
+  { id: 768, label: "768p", hint: "WXGA (1366×768)" },
+  { id: 576, label: "576p", hint: "PAL / DVD" },
+  { id: 540, label: "540p", hint: "qHD (960×540)" },
+  { id: 360, label: "360p", hint: "nHD Leve" },
+  { id: 240, label: "240p", hint: "Ultra Leve" },
+  { id: 144, label: "144p", hint: "Miniatura / Teste" },
+];
+
 const FPS_OPTIONS = [24, 25, 30, 50, 60];
 
 type ExportCategory = "video" | "audio" | "gif" | "photo";
@@ -347,28 +363,91 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <p className="text-[11px] font-medium text-zinc-400">{t("ex.resolution")}</p>
-                  <span className="text-[10px] text-zinc-500">
-                    {W}×{H} ({project.width >= project.height ? "Horizontal" : project.width === project.height ? "Quadrado" : "Vertical"})
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {W}×{H} ({project.width >= project.height ? (project.width === project.height ? "Quadrado" : "Horizontal") : "Vertical"})
                   </span>
                 </div>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {RESOLUTIONS.map((r) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => setShortSide(r.id)}
-                      disabled={busy}
-                      className={`rounded-md border px-1.5 py-1.5 text-center text-xs transition ${
-                        shortSide === r.id
-                          ? "border-[var(--gc-accent)] bg[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
-                          : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
-                      }`}
-                    >
-                      <span className="block font-semibold leading-tight">{r.label}</span>
-                      <span className="block text-[8.5px] opacity-70 leading-tight">{r.hint}</span>
-                    </button>
-                  ))}
+
+                {/* Resoluções Principais */}
+                <div className="grid grid-cols-5 gap-1.5">
+                  {PRIMARY_RESOLUTIONS.map((r) => {
+                    const isSelected = shortSide === r.id;
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setShortSide(r.id)}
+                        disabled={busy}
+                        className={`rounded-md border px-1.5 py-1.5 text-center text-xs transition ${
+                          isSelected
+                            ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold shadow-sm"
+                            : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759] hover:text-zinc-200"
+                        }`}
+                      >
+                        <span className="block font-semibold leading-tight text-[11px]">{r.label}</span>
+                        <span className="block text-[8.5px] opacity-70 leading-tight">{r.hint}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {/* Botão Expandir/Recolher "Ver Mais" */}
+                <button
+                  type="button"
+                  onClick={() => setShowMoreRes(!showMoreRes)}
+                  className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-[#2a3546] bg-[#0e1320] py-1 text-[11px] font-medium text-zinc-400 transition hover:border-[var(--gc-accent-60)] hover:text-zinc-200"
+                >
+                  {showMoreRes ? (
+                    <>
+                      <ChevronUp className="h-3.5 w-3.5 text-[var(--gc-accent)]" />
+                      <span>{t("ex.showLessRes")}</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3.5 w-3.5 text-[var(--gc-accent)]" />
+                      <span>{t("ex.showMoreRes")} ({SECONDARY_RESOLUTIONS.length} resoluções adicionais)</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Resoluções Secundárias (Expandidas) */}
+                {showMoreRes && (
+                  <div className="mt-2 rounded-lg border border-[#1e2633] bg-[#0c1017] p-2 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                        Resoluções Secundárias
+                      </span>
+                      <span className="text-[9px] text-zinc-500">
+                        Abaixo de 4K e formatos específicos
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-h-40 overflow-y-auto pr-0.5">
+                      {SECONDARY_RESOLUTIONS.map((r) => {
+                        const size = outputSize(project, r.id);
+                        const isSelected = shortSide === r.id;
+                        return (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setShortSide(r.id)}
+                            disabled={busy}
+                            className={`rounded-md border p-1.5 text-left text-xs transition ${
+                              isSelected
+                                ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold shadow-sm"
+                                : "border-[#232d3d] bg-[#121722] text-zinc-400 hover:border-[#3a4759] hover:text-zinc-200"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-[10.5px] leading-tight">{r.label}</span>
+                              <span className="font-mono text-[8.5px] text-zinc-500">{size.W}×{size.H}</span>
+                            </div>
+                            <span className="mt-0.5 block truncate text-[8.5px] opacity-70">{r.hint}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* FPS & Qualidade (Lado a Lado) */}
