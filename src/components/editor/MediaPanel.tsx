@@ -779,29 +779,23 @@ export function MediaPanel() {
                           type="button"
                           onClick={async (e) => {
                             e.stopPropagation();
-                            let playUrl = registry.getUrl(m.id);
-                            if (!playUrl) {
-                              const blob = await registry.getBlob(m.id);
-                              if (blob) {
-                                playUrl = URL.createObjectURL(blob);
-                              }
-                            }
+                            let playUrl = await registry.ensureUrl(m.id);
                             if (!playUrl && m.stockUrl) {
                               playUrl = m.stockUrl;
                             }
                             if (!playUrl && m.id.startsWith("fav-")) {
                               const rawFavId = m.id.replace(/^fav-/, "");
                               const fav = useFavorites.getState().items.find((f) => f.id === rawFavId || f.id === m.id);
-                              if (fav) {
+                              if (fav?.url) {
                                 playUrl = fav.url;
+                              } else if (fav?.id) {
+                                playUrl = await registry.ensureUrl(fav.id);
                               }
                             }
                             if (playUrl) {
                               const isIa =
                                 playUrl.startsWith("ia:") ||
-                                playUrl.includes("archive.org") ||
-                                m.id.startsWith("ia-") ||
-                                m.id.startsWith("fav-ia-");
+                                playUrl.includes("archive.org/details/");
                               openLibPlayer({
                                 id: m.id,
                                 title: m.name,

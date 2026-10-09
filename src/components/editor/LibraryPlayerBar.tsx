@@ -77,9 +77,16 @@ function PlayerCore({
     if (!el || !src) return;
     el.src = src;
     el.currentTime = 0;
+    el.volume = muted ? 0 : 1;
+    try {
+      el.load();
+    } catch {}
     const p = el.play();
     if (p !== undefined) {
-      p.then(() => setPlaying(true)).catch(() => setPlaying(false));
+      p.then(() => setPlaying(true)).catch((e) => {
+        console.warn("Playback auto-start notice:", e);
+        setPlaying(false);
+      });
     }
   }, [src, item.kind]);
 
@@ -137,29 +144,37 @@ function PlayerCore({
     <>
       <div className="flex shrink-0 flex-col gap-1.5 border-t border-[#1c2430] bg-[#0e1320] px-3 py-2 shadow-xl select-none">
         {/* Elemento de Áudio/Vídeo invisível ou mini */}
-        <div className="hidden">
+        <div className="sr-only pointer-events-none">
           {item.kind === "video" ? (
             <video
               ref={videoRef}
               playsInline
+              preload="auto"
               muted={muted}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
               onTimeUpdate={() => setTime(videoRef.current?.currentTime ?? 0)}
               onLoadedMetadata={() => setDur(videoRef.current?.duration || 0)}
               onEnded={() => setPlaying(false)}
-              onError={() => setPlaying(false)}
+              onError={(e) => {
+                console.warn("Video element playback warning:", e);
+                setPlaying(false);
+              }}
             />
           ) : (
             <audio
               ref={audioRef}
+              preload="auto"
               muted={muted}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
               onTimeUpdate={() => setTime(audioRef.current?.currentTime ?? 0)}
               onLoadedMetadata={() => setDur(audioRef.current?.duration || 0)}
               onEnded={() => setPlaying(false)}
-              onError={() => setPlaying(false)}
+              onError={(e) => {
+                console.warn("Audio element playback warning:", e);
+                setPlaying(false);
+              }}
             />
           )}
         </div>

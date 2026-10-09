@@ -23,6 +23,27 @@ class MediaRegistry {
     return this.blobs.get(id);
   }
 
+  async ensureBlob(id: string): Promise<Blob | undefined> {
+    const existing = this.blobs.get(id);
+    if (existing) return existing;
+    try {
+      const blob = await idbGet(id);
+      if (blob) {
+        this.put(id, blob, { persist: false });
+        return blob;
+      }
+    } catch {}
+    return undefined;
+  }
+
+  async ensureUrl(id: string): Promise<string | undefined> {
+    const existing = this.urls.get(id);
+    if (existing) return existing;
+    const blob = await this.ensureBlob(id);
+    if (blob) return this.urls.get(id);
+    return undefined;
+  }
+
   put(id: string, blob: Blob, opts?: { persist?: boolean }) {
     if (this.blobs.get(id) !== blob && this.urls.has(id)) {
       URL.revokeObjectURL(this.urls.get(id)!);

@@ -71,9 +71,29 @@ export function StockPreviewModal({ item, open, onOpenChange, onAddStock }: Stoc
     }
 
     let active = true;
-    if (item.provider.includes("Internet Archive") || item.id.startsWith("ia-")) {
+
+    const isDirect =
+      item.url &&
+      (item.url.startsWith("blob:") ||
+        item.url.startsWith("data:") ||
+        item.url.includes("/download/") ||
+        /\.(mp3|wav|ogg|m4a|aac|flac|opus|weba|mp4|webm|mov)(\?.*)?$/i.test(item.url));
+
+    if (isDirect) {
+      setResolvedUrl(item.url);
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    if (
+      (item.provider.includes("Internet Archive") || item.id.startsWith("ia-")) &&
+      (item.url?.includes("archive.org/details/") || item.id.startsWith("ia-"))
+    ) {
       setLoading(true);
-      void resolveIaFile(item.id.replace(/^ia-/, ""))
+      const rawId = item.id.replace(/^ia-/, "");
+      void resolveIaFile(rawId)
         .then((res) => {
           if (active) {
             setResolvedUrl(res.url);
