@@ -34,11 +34,20 @@ export const useLibPlayer = create<LibPlayerState>((set, get) => ({
   loading: false,
   open: (it) => {
     // tocar um para o outro
-    if (it.isIa) {
+    const isIa =
+      it.isIa ||
+      it.url?.startsWith("ia:") ||
+      it.id?.startsWith("ia-") ||
+      it.id?.startsWith("fav-ia-");
+
+    if (isIa) {
       set({ item: it, src: null, loading: true });
       void (async () => {
         try {
-          const r = await fetch(`https://archive.org/metadata/${it.id.replace(/^ia-/, "")}`);
+          const rawId = (it.id.startsWith("fav-") ? it.id.slice(4) : it.id)
+            .replace(/^ia-/, "")
+            .replace(/^ia:/, "");
+          const r = await fetch(`https://archive.org/metadata/${rawId}`);
           const data = await r.json();
           const files: { name: string; size?: string }[] = data?.files ?? [];
           const audios = files
@@ -49,7 +58,7 @@ export const useLibPlayer = create<LibPlayerState>((set, get) => ({
             .sort((a, b) => Number(b.size ?? 0) - Number(a.size ?? 0));
           const pick = it.kind === "video" ? (videos[0] ?? audios[0]) : (audios[0] ?? videos[0]);
           if (!pick) throw new Error("sem arquivo");
-          const url = `https://archive.org/download/${it.id.replace(/^ia-/, "")}/${encodeURIComponent(pick.name)}`;
+          const url = `https://archive.org/download/${rawId}/${encodeURIComponent(pick.name)}`;
           if (get().item?.id === it.id) set({ src: url, loading: false });
         } catch {
           if (get().item?.id === it.id) set({ loading: false });

@@ -153,21 +153,25 @@ export const useFavorites = create<FavoritesState>()(
 
       syncToProjectFolders: () => {
         const pState = useProject.getState();
+        const favRoot = pState.folders.find((f) => f.name === "⭐ Favoritos" && !f.parentId);
+
         if (!get().enabled) {
-          const favRoot = pState.folders.find((f) => f.name === "⭐ Favoritos" && !f.parentId);
           if (favRoot) pState.deleteFolder(favRoot.id);
           return;
         }
 
         const favs = get().items;
-        if (!favs.length) return;
+        if (!favs.length) {
+          if (favRoot) pState.deleteFolder(favRoot.id);
+          return;
+        }
 
         const rootFolders = pState.folders;
 
         // Cria a pasta raiz "⭐ Favoritos" se não existir
-        let favRoot = rootFolders.find((f) => f.name === "⭐ Favoritos" && !f.parentId);
-        if (!favRoot) {
-          favRoot = pState.createFolder("⭐ Favoritos", null);
+        let currentFavRoot = rootFolders.find((f) => f.name === "⭐ Favoritos" && !f.parentId);
+        if (!currentFavRoot) {
+          currentFavRoot = pState.createFolder("⭐ Favoritos", null);
         }
 
         const subNames: Record<FavoriteKind, string> = {
@@ -180,11 +184,19 @@ export const useFavorites = create<FavoritesState>()(
 
         const subFolderMap = new Map<FavoriteKind, string>();
         for (const [k, name] of Object.entries(subNames) as [FavoriteKind, string][]) {
-          let sub = pState.folders.find((f) => f.name === name && f.parentId === favRoot!.id);
-          if (!sub) {
-            sub = pState.createFolder(name, favRoot!.id);
+          const hasItems = favs.some((fav) => fav.kind === k);
+          const existingSub = pState.folders.find((f) => f.name === name && f.parentId === currentFavRoot!.id);
+          if (hasItems) {
+            if (!existingSub) {
+              const created = pState.createFolder(name, currentFavRoot!.id);
+              subFolderMap.set(k, created.id);
+            } else {
+              subFolderMap.set(k, existingSub.id);
+            }
+          } else if (existingSub) {
+            // Se não tem itens desta categoria, exclui a subpasta vazia
+            pState.deleteFolder(existingSub.id);
           }
-          subFolderMap.set(k, sub.id);
         }
 
         // Insere as mídias favoritadas nas respectivas subpastas

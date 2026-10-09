@@ -640,65 +640,74 @@ export function MediaPanel() {
               {/* Pastas */}
               {folders
                 .filter((f) => (f.parentId ?? null) === currentFolderId)
-                .map((folder) => (
-                  <div
-                    key={folder.id}
-                    onDoubleClick={() => setCurrentFolderId(folder.id)}
-                    className="group mb-1.5 flex items-center justify-between rounded-lg border border-[#1e2633] bg-[#121722] p-2 transition hover:border-[#2f3b4f] hover:bg-[#161c2a]"
-                  >
-                    {renamingFolderId === folder.id ? (
-                      <div className="flex flex-1 items-center gap-1">
-                        <Input
-                          value={renamingFolderName}
-                          onChange={(e) => setRenamingFolderName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleRenameFolder(folder.id);
-                            if (e.key === "Escape") setRenamingFolderId(null);
-                          }}
-                          autoFocus
-                          className="h-6 text-xs"
-                        />
-                        <button onClick={() => handleRenameFolder(folder.id)} className="text-emerald-400">
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                        <button onClick={() => setRenamingFolderId(null)} className="text-zinc-500">
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => setCurrentFolderId(folder.id)}
-                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                        >
-                          <Folder className="h-4 w-4 shrink-0 text-amber-400" />
-                          <span className="truncate text-xs font-medium text-zinc-200">
-                            {folder.name}
-                          </span>
-                        </button>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                          <button
-                            onClick={() => {
-                              setRenamingFolderId(folder.id);
-                              setRenamingFolderName(folder.name);
+                .map((folder) => {
+                  const directMediaCount = media.filter((m) => m.folderId === folder.id).length;
+                  const directSubCount = folders.filter((f) => f.parentId === folder.id).length;
+                  const totalCount = directMediaCount + directSubCount;
+
+                  return (
+                    <div
+                      key={folder.id}
+                      onDoubleClick={() => setCurrentFolderId(folder.id)}
+                      className="group mb-1.5 flex items-center justify-between rounded-lg border border-[#1e2633] bg-[#121722] p-2 transition hover:border-[#2f3b4f] hover:bg-[#161c2a]"
+                    >
+                      {renamingFolderId === folder.id ? (
+                        <div className="flex flex-1 items-center gap-1">
+                          <Input
+                            value={renamingFolderName}
+                            onChange={(e) => setRenamingFolderName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRenameFolder(folder.id);
+                              if (e.key === "Escape") setRenamingFolderId(null);
                             }}
-                            className="text-zinc-400 hover:text-zinc-200"
-                            title="Renomear"
-                          >
-                            <Pencil className="h-3 w-3" />
+                            autoFocus
+                            className="h-6 text-xs"
+                          />
+                          <button onClick={() => handleRenameFolder(folder.id)} className="text-emerald-400">
+                            <Check className="h-3.5 w-3.5" />
                           </button>
-                          <button
-                            onClick={() => setConfirmDeleteFolder(folder)}
-                            className="text-zinc-400 hover:text-red-400"
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-3 w-3" />
+                          <button onClick={() => setRenamingFolderId(null)} className="text-zinc-500">
+                            <X className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                      </>
-                    )}
-                  </div>
-                ))}
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setCurrentFolderId(folder.id)}
+                            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                          >
+                            <Folder className="h-4 w-4 shrink-0 text-amber-400" />
+                            <span className="truncate text-xs font-medium text-zinc-200">
+                              {folder.name}
+                            </span>
+                            <span className="ml-auto mr-2 shrink-0 rounded bg-[#1c2433] px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 group-hover:text-zinc-200">
+                              {totalCount} {totalCount === 1 ? "item" : "itens"}
+                            </span>
+                          </button>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                            <button
+                              onClick={() => {
+                                setRenamingFolderId(folder.id);
+                                setRenamingFolderName(folder.name);
+                              }}
+                              className="text-zinc-400 hover:text-zinc-200"
+                              title="Renomear"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteFolder(folder)}
+                              className="text-zinc-400 hover:text-red-400"
+                              title="Excluir"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
 
               {/* Arquivos de Mídia */}
               <div className="grid grid-cols-2 gap-2">
@@ -770,16 +779,37 @@ export function MediaPanel() {
                           type="button"
                           onClick={async (e) => {
                             e.stopPropagation();
-                            const blob = await registry.getBlob(m.id);
-                            if (blob) {
-                              const url = URL.createObjectURL(blob);
+                            let playUrl = registry.getUrl(m.id);
+                            if (!playUrl) {
+                              const blob = await registry.getBlob(m.id);
+                              if (blob) {
+                                playUrl = URL.createObjectURL(blob);
+                              }
+                            }
+                            if (!playUrl && m.stockUrl) {
+                              playUrl = m.stockUrl;
+                            }
+                            if (!playUrl && m.id.startsWith("fav-")) {
+                              const rawFavId = m.id.replace(/^fav-/, "");
+                              const fav = useFavorites.getState().items.find((f) => f.id === rawFavId || f.id === m.id);
+                              if (fav) {
+                                playUrl = fav.url;
+                              }
+                            }
+                            if (playUrl) {
+                              const isIa =
+                                playUrl.startsWith("ia:") ||
+                                playUrl.includes("archive.org") ||
+                                m.id.startsWith("ia-") ||
+                                m.id.startsWith("fav-ia-");
                               openLibPlayer({
                                 id: m.id,
                                 title: m.name,
-                                url,
+                                url: playUrl,
                                 kind: m.kind as "video" | "audio",
                                 thumb: m.thumbnail,
                                 duration: m.duration,
+                                isIa,
                               });
                             }
                           }}
