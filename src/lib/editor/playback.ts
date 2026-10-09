@@ -85,31 +85,39 @@ class PlaybackEngine {
       this.last = now;
       const pb = usePlayback.getState();
       if (pb.playing) {
-        // Função de proteção: a agulha não avança se o áudio/vídeo ativo ainda estiver decodificando ou em seek
+        // Encontra o elemento de áudio/vídeo líder ativo para travar o relógio no hardware de som
+        let leaderTime: number | null = null;
         const active = this.activeClips(pb.playhead);
-        let waitingBuffer = false;
         for (const clip of active) {
           if (clip.kind !== "video" && clip.kind !== "audio") continue;
+          if (clip.muted) continue;
           const key = this.bindings.get(clip.id);
           const el = key ? this.elements.get(key) : undefined;
-          if (el instanceof HTMLMediaElement) {
-            if (el.seeking || el.readyState < 2) {
-              waitingBuffer = true;
+          if (el instanceof HTMLMediaElement && !el.paused && !el.seeking && el.readyState >= 2) {
+            const elT = clip.start + (el.currentTime - clip.inPoint) / (clip.speed || 1);
+            if (isFinite(elT) && elT >= clip.start - 0.05 && elT <= clip.start + clip.duration + 0.05) {
+              leaderTime = elT;
               break;
             }
           }
         }
 
-        if (!waitingBuffer) {
-          const t = pb.playhead + dt;
-          const dur = pb.duration;
-          if (t >= dur && dur > 0) {
-            // acabou o conteúdo visível/audível → a seta PARA aqui
-            usePlayback.getState().setPlayhead(dur);
-            this.pause();
-          } else {
-            usePlayback.getState().setPlayhead(t);
-          }
+        let nextT = pb.playhead;
+        if (leaderTime !== null) {
+          // A agulha segue com precisão atômica o hardware de som
+          nextT = leaderTime;
+        } else {
+          // Sem elemento tocando: avança pelo timer rAF
+          nextT = pb.playhead + dt;
+        }
+
+        const dur = pb.duration;
+        if (nextT >= dur && dur > 0) {
+          // acabou o conteúdo visível/audível → a seta PARA aqui
+          usePlayback.getState().setPlayhead(dur);
+          this.pause();
+        } else {
+          usePlayback.getState().setPlayhead(nextT);
         }
       }
       const cur = usePlayback.getState();
@@ -630,21 +638,6 @@ class PlaybackEngine {
     this.pendingPlay = false;
     const from = pb.playhead >= pb.duration - 0.01 ? 0 : pb.playhead;
     usePlayback.getState().setPlayhead(from);
-
-    const active = this.activeClips(from);
-    for (const clip of active) {
-      if (clip.kind === "text" || clip.kind === "image") continue;
-      const key = this.bindings.get(clip.id) ?? elKeyOf(clip.kind, clip.mediaId!);
-      const el = this.elements.get(key);
-      if (el instanceof HTMLMediaElement) {
-        try {
-          el.currentTime = clip.inPoint + (from - clip.start) * (clip.speed || 1);
-        } catch {}
-        el.playbackRate = Math.max(0.0625, Math.min(16, clip.speed || 1));
-        void el.play().catch(() => undefined);
-      }
-    }
-
     usePlayback.getState().setPlaying(true);
     this.dirty = true;
   }
@@ -697,18 +690,6 @@ class PlaybackEngine {
     cancelAnimationFrame(this.glideRaf);
     this.glideRaf = 0;
     usePlayback.getState().setPlayhead(target);
-
-    const active = this.activeClips(target);
-    for (const clip of active) {
-      if (clip.kind === "text" || clip.kind === "image") continue;
-      const key = this.bindings.get(clip.id) ?? elKeyOf(clip.kind, clip.mediaId!);
-      const el = this.elements.get(key);
-      if (el instanceof HTMLMediaElement) {
-        try {
-          el.currentTime = clip.inPoint + (target - clip.start) * (clip.speed || 1);
-        } catch {}
-      }
-    }
 
     this.syncMedia(target, pb.playing);
     this.updateAudio(target);
