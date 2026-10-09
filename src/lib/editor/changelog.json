@@ -1,6 +1,31 @@
 {
-  "version": "8.3.0",
+  "version": "8.4.0",
   "entries": [
+    {
+      "version": "8.4.0",
+      "date": "2026-10-09",
+      "items": [
+        "EXPANDABLE RESOLUTIONS BELOW 4K: Added comprehensive resolution grid with 4K, 2K, 1080p, 720p, 480p and expandable 'Show More' tray covering 3K, 1600p, 1200p, 960p, 900p, 768p, 576p, 540p, 360p, 240p, 144p",
+        "FOLDER ITEM COUNT BADGES: Visual item counter badge on every media folder displaying exact count of contained files and subfolders",
+        "CONDITIONAL FAVORITES SUBFOLDERS: Favorites category folders are now created strictly on-demand when items exist, auto-pruning empty categories",
+        "INSTANT PREVIEW PLAYBACK: Direct audio and video playback for Favorited and Stock library items including Internet Archive streams",
+        "CLEAR PROJECT LOCALIZATION: Replaced raw 'tb.clear' key with clean localized 'Limpar Projeto' / 'Clear Project' dialog"
+      ],
+      "items_pt": [
+        "GRADE EXPANSÍVEL DE RESOLUÇÕES ABAIXO DE 4K: Suporte completo a 4K, 2K, 1080p, 720p, 480p e gaveta 'Ver Mais' com 3K, 1600p, 1200p, 960p, 900p, 768p, 576p PAL, 540p, 360p, 240p e 144p",
+        "BADGE DE CONTAGEM DE ITENS NAS PASTAS: Contador visual exibindo a quantidade exata de arquivos e subpastas dentro de cada pasta de mídia",
+        "SUBPASTAS DE FAVORITOS CONDICIONAIS: Criação inteligente de subpastas apenas para categorias com itens favoritados e remoção automática das vazias",
+        "PLAY DIRETO EM FAVORITOS E STOCK: Reprodução instantânea de áudio e vídeo de itens favoritados e da biblioteca de efeitos/músicas",
+        "LOCALIZAÇÃO DO BOTÃO LIMPAR PROJETO: Correção do rótulo 'tb.clear' para 'Limpar Projeto' com confirmação em português claro"
+      ],
+      "items_es": [
+        "RESOLUCIONES EXPANDIBLES DEBAJO DE 4K: Soporte completo a 4K, 2K, 1080p, 720p, 480p y panel 'Ver Más' con todas las resoluciones intermedias hasta 144p",
+        "CONTADOR DE ELEMENTOS EN CARPETAS: Indicador visual con la cantidad de medios dentro de cada carpeta",
+        "SUB-CARPETAS DE FAVORITOS CONDICIONALES: Creación automática solo cuando hay elementos favoritos",
+        "REPRODUCCIÓN DIRECTA DE FAVORITOS: Vista previa rápida sin errores para audios y videos",
+        "LIMPIAR PROYECTO LOCALIZADO: Corrección de la etiqueta 'tb.clear' a 'Limpiar Proyecto'"
+      ]
+    },
     {
       "version": "8.3.0",
       "date": "2026-10-08",

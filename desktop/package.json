@@ -1,6 +1,6 @@
 {
   "name": "galaxycut-desktop",
-  "version": "8.3.0",
+  "version": "8.4.0",
   "description": "GalaxyCut — Editor de Vídeo para Criadores",
   "main": "main.js",
   "scripts": {
