@@ -9,7 +9,6 @@ class MediaRegistry {
   private blobs = new Map<string, Blob>();
   private urls = new Map<string, string>();
   private cachedMetas = new Map<string, MediaMeta>();
-  private hydrated = new Set<string>();
 
   hasBlob(id: string) {
     return this.blobs.has(id);

@@ -46,7 +46,7 @@ export function FloatMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const subRef = useRef<HTMLDivElement>(null);
   /** posicionamento do submenu: pra cima/pra baixo + flipX, medido após pintar */
-  const [subAdj, setSubAdj] = useState<{ flipX: boolean; openUp: boolean; maxH: number; width: number }>({
+  const [, setSubAdj] = useState<{ flipX: boolean; openUp: boolean; maxH: number; width: number }>({
     flipX: false, openUp: false, maxH: 400, width: SUB_W,
   });
   /** o menu em si abre pra cima quando não cabe embaixo do ponto */

@@ -8,12 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Diamond, Trash2, Plus, Sparkles, HelpCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Diamond, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { useT } from "@/lib/editor/i18n";
 
 export function KeyframeInspector({ clip }: { clip: Clip }) {
-  const t = useT();
   const playhead = usePlayback((s) => s.playhead);
   const addOrUpdateKeyframe = useProject((s) => s.addOrUpdateKeyframe);
   const deleteKeyframe = useProject((s) => s.deleteKeyframe);

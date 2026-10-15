@@ -13,9 +13,8 @@ import {
 } from "@/lib/editor/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
-import { Label } from "@/components/ui/label";
 import { engine } from "@/lib/editor/playback";
-import { Sparkles, ArrowRight, ArrowLeft, RotateCw } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 export function AnimationInspector({ clip }: { clip: Clip }) {

@@ -14,10 +14,10 @@
 
 import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target } from "mp4-muxer";
 import { Muxer as WebmMuxer, ArrayBufferTarget as WebmTarget } from "webm-muxer";
-import { useProject, usePlayback, computeEffectiveDuration } from "./store";
+import { useProject, computeEffectiveDuration } from "./store";
 import { registry } from "./media";
 import { drawFrame } from "./render";
-import { Clip, clipEnd, fadeEnvelope } from "./types";
+import { Clip, clipEnd } from "./types";
 
 export interface OfflineProgressInfo {
   stage: "prepare" | "render" | "finish";

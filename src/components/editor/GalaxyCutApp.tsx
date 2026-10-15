@@ -33,7 +33,6 @@ const EditorShell = dynamic(() => import("./EditorShell").then((m) => m.EditorSh
 export function GalaxyCutApp() {
   const [route, setRoute] = useState<"home" | "editor">("home");
   const [newOpen, setNewOpen] = useState(false);
-  const onboarded = useSettings((s) => s.onboarded);
   // 1ª vez: nasce direto na configuração inicial (sem effect — sem piscar a home)
   const [onboarding, setOnboarding] = useState(() => !useSettings.getState().onboarded);
   // idioma mudou? os textos estáticos do dynamic loading acompanham

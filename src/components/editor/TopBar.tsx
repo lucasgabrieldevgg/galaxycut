@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Undo2, Redo2, Settings, Settings2, Download, FilePlus2, House, MessageSquareHeart } from "lucide-react";
 import { useProject } from "@/lib/editor/store";
-import { ASPECTS, ASPECT_CHOICES } from "@/lib/editor/types";
+import { ASPECT_CHOICES } from "@/lib/editor/types";
 import { exportFormatLabel } from "@/lib/editor/exporter";
 import { SettingsDialog } from "./SettingsDialog";
 import { FeedbackDialog } from "./FeedbackDialog";
@@ -41,9 +41,6 @@ export function TopBar({
     window.addEventListener("galaxiacut:opensettings", openSettings);
     return () => window.removeEventListener("galaxiacut:opensettings", openSettings);
   }, []);
-
-  const currentAspect =
-    project.width / project.height > 1.2 ? "16:9" : Math.abs(project.width / project.height - 1) < 0.01 ? "1:1" : "9:16";
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1c2430] bg-[#07070a] px-3">

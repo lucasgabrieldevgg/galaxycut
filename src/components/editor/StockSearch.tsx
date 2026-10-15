@@ -16,10 +16,7 @@ import {
   Loader2,
   Plus,
   Play,
-  RotateCcw,
   Sparkles,
-  ExternalLink,
-  Copyright,
   Clock,
   Film,
   Music2,
@@ -37,7 +34,6 @@ import { useFavorites } from "@/lib/editor/favorites";
 import { useT } from "@/lib/editor/i18n";
 import {
   SHORTS_CATEGORIES,
-  CURATED_SHORTS_TRACKS,
   CuratedShortsTrack,
   ShortsVibe,
 } from "@/lib/editor/shortsAudio";
@@ -111,8 +107,8 @@ export function StockSearch() {
   const [genre, setGenre] = useState("all");
   const [shortsVibe, setShortsVibe] = useState<ShortsVibe>("all");
   const [onlyFavorites, setOnlyFavorites] = useState(false);
-  const [cmin, setCmin] = useState(10);
-  const [cmax, setCmax] = useState(60);
+  const [cmin, ] = useState(10);
+  const [cmax, ] = useState(60);
   const [stickTab, setStickTab] = useState<"stickers" | "emojis">("stickers");
   const [showFilters, setShowFilters] = useState(false);
 

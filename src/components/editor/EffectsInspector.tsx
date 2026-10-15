@@ -1,12 +1,10 @@
 // GalaxyCut — Inspetor de Efeitos Visuais Contínuos (Shake, Glitch, VHS, RGB, etc.)
 "use client";
 
-import { useState } from "react";
 import { useProject } from "@/lib/editor/store";
-import { Clip, ClipEffect, EFFECT_CATALOG, EffectMeta, EffectType, uid } from "@/lib/editor/types";
+import { Clip, ClipEffect, EFFECT_CATALOG, EffectMeta, uid } from "@/lib/editor/types";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { engine } from "@/lib/editor/playback";
-import { Sparkles, Plus, Trash2, Sliders, Check, Eye, EyeOff, Clock } from "lucide-react";
+import { Sparkles, Plus, Trash2, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 export function EffectsInspector({ clip }: { clip: Clip }) {

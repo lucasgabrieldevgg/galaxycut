@@ -16,7 +16,7 @@ import { engine } from "@/lib/editor/playback";
 import { toast } from "sonner";
 import {
   Video, ChevronDown, ChevronUp, Check, Sparkles, Loader2,
-  FileVideo, Music2, Image as ImageIcon, CheckCircle2, AlertCircle, X,
+  FileVideo, Music2, Image as ImageIcon,
 } from "lucide-react";
 
 interface ConvertMediaDialogProps {
@@ -39,7 +39,7 @@ export function ConvertMediaDialog({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stageText, setStageText] = useState("");
-  const [currentIdx, setCurrentIdx] = useState(0);
+  const [, setCurrentIdx] = useState(0);
   const cancelRef = useRef<{ cancelled: boolean }>({ cancelled: false });
 
   const activeFormatInfo = TRANSCODE_FORMATS.find((f) => f.id === selectedFormat) || TRANSCODE_FORMATS[0];

@@ -3,7 +3,7 @@
 // v7.1: formato PERSONALIZADO — largura e altura que você quiser.
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";

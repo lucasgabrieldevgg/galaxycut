@@ -23,7 +23,7 @@ import { SilenceDialog } from "./SilenceDialog";
 import { BatchAudioDialog } from "./BatchAudioDialog";
 import { useT, t as tr, useLang } from "@/lib/editor/i18n";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Scissors, Copy, Trash2, Magnet, ZoomIn, ZoomOut, Maximize2,
@@ -145,8 +145,6 @@ function startClipDrag(
         useProject.getState().moveClipLive(clip.id, Math.max(0, orig.start + finalDx), trackId);
       }
     } else if (mode === "left") {
-      const m = pbs.media.find((x) => x.id === clip.mediaId);
-      const srcDur = m?.duration ?? Infinity;
       const dx = (lastClientX - startX) / zoom;
       let ns = Math.min(orig.start + dx, orig.start + orig.duration - 0.1);
       ns = Math.max(ns, 0);

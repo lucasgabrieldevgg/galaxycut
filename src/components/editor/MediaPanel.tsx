@@ -11,17 +11,14 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { useProject, usePlayback } from "@/lib/editor/store";
 import { engine } from "@/lib/editor/playback";
 import { registry } from "@/lib/editor/media";
-import { isDesktopBuild } from "@/lib/editor/desktop";
 import { useSubtitleJob } from "@/lib/editor/subtitles";
 import {
   CAPTION_PRESETS,
-  LICENSE_STYLE,
-  licenseLevel,
   MediaFolder,
   MediaMeta,
   EFFECT_CATALOG,
@@ -32,7 +29,6 @@ import {
   AnimationInType,
   AnimationOutType,
   AnimationComboType,
-  ClipEffect,
   uid,
   makeClip,
   defaultTextProps,
@@ -42,8 +38,8 @@ import { useLibPlayer } from "@/lib/editor/libPlayer";
 import { toast } from "sonner";
 import {
   Upload, FolderOpen, FolderPlus, Folder, ChevronRight, ArrowLeft, Trash2, Plus, Type, Sparkles,
-  Search, Film, ImageIcon, Music2, FileWarning, Loader2, PlusCircle, Mic, Play as PlayIcon,
-  Scissors, Copy, ClipboardPaste, MoreVertical, Pencil, Check, X, Wand2, Star,
+  Search, Film, ImageIcon, Music2, Loader2, PlusCircle, Mic, Play as PlayIcon,
+  Pencil, Check, X, Wand2, Star,
 } from "lucide-react";
 import { SubtitleDialog } from "./SubtitleDialog";
 import { StockSearch } from "./StockSearch";
@@ -51,7 +47,7 @@ import { LibraryPlayerBar } from "./LibraryPlayerBar";
 import { RecordDialog } from "./RecordDialog";
 import { ConvertMediaDialog } from "./ConvertMediaDialog";
 import { FloatMenu, MenuItem } from "./ClipMenu";
-import { useT, t as tr } from "@/lib/editor/i18n";
+import { useT } from "@/lib/editor/i18n";
 import { PresetPreview } from "./PresetPreview";
 import { useFavorites } from "@/lib/editor/favorites";
 import { downloadStockFile, resolveIaFile } from "@/lib/editor/stockClient";
@@ -79,18 +75,11 @@ export function MediaPanel() {
   const folders = useProject((s) => s.folders);
   const addMedia = useProject((s) => s.addMedia);
   const removeMedia = useProject((s) => s.removeMedia);
-  const relinkMedia = useProject((s) => s.relinkMedia);
   const addClipFromMedia = useProject((s) => s.addClipFromMedia);
   const addTextClip = useProject((s) => s.addTextClip);
   const createFolder = useProject((s) => s.createFolder);
   const renameFolder = useProject((s) => s.renameFolder);
   const deleteFolder = useProject((s) => s.deleteFolder);
-  const moveMediaToFolder = useProject((s) => s.moveMediaToFolder);
-  const mediaClipboard = useProject((s) => s.mediaClipboard);
-  const cutMedia = useProject((s) => s.cutMedia);
-  const copyMedia = useProject((s) => s.copyMedia);
-  const pasteMedia = useProject((s) => s.pasteMedia);
-  const clearMediaClipboard = useProject((s) => s.clearMediaClipboard);
 
   const openLibPlayer = useLibPlayer((s) => s.open);
   const [importing, setImporting] = useState(0);
@@ -128,8 +117,6 @@ export function MediaPanel() {
   /** mídia selecionada no painel */
   const [selMedia, setSelMedia] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<"all" | "video" | "audio" | "image">("all");
-  const [effectSearch, setEffectSearch] = useState("");
-  const [effectCategory, setEffectCategory] = useState<"all" | "motion" | "retro" | "light" | "stylize">("all");
   const [recordOpen, setRecordOpen] = useState(false);
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [convertMediaList, setConvertMediaList] = useState<MediaMeta[]>([]);

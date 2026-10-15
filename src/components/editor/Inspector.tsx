@@ -30,7 +30,6 @@ export function Inspector() {
   const project = useProject((s) => s.project);
   const clipCount = useProject((s) => s.clips.length);
   const resetInspectorOnSelect = useSettings((s) => s.resetInspectorOnSelect ?? true);
-  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 

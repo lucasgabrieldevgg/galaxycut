@@ -1,7 +1,7 @@
 // GalaxyCut — diálogo de legendas automáticas com personalização completa estilo CapCut (v7.8)
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -9,20 +9,19 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useProject } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
-import { transcribeTimeline, transcribe, SubSegment, useSubtitleJob, WhisperProgress, cancelTranscription, WhisperModelId } from "@/lib/editor/subtitles";
+import { transcribeTimeline, SubSegment, useSubtitleJob, WhisperProgress, cancelTranscription, WhisperModelId } from "@/lib/editor/subtitles";
 import { CAPTION_PRESETS, CaptionPreset, makeClip, defaultTextProps, TextProps, FONTS } from "@/lib/editor/types";
 import { useT } from "@/lib/editor/i18n";
 import { PresetPreview } from "./PresetPreview";
 import { toast } from "sonner";
 import {
-  Sparkles, Loader2, CheckCircle2, TriangleAlert, Cpu, Palette, Layers, Minus, XCircle,
-  Type, MoveVertical, Sliders, Bold, Italic, CaseUpper, Check
+  Sparkles, Loader2, CheckCircle2, TriangleAlert, Palette, Layers, Minus, XCircle,
+  MoveVertical
 } from "lucide-react";
 
 // Paletas de cores para pré-seleção rápida

@@ -8,7 +8,6 @@ import { persist } from "zustand/middleware";
 import { StockItem, resolveIaFile, downloadStockFile } from "./stockClient";
 import { MediaMeta } from "./types";
 import { useProject } from "./store";
-import { registry } from "./media";
 import { toast } from "sonner";
 
 export type FavoriteKind = "video" | "music" | "sfx" | "image" | "sticker";

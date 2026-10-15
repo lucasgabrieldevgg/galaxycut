@@ -55,8 +55,6 @@ const MIME_BY_FORMAT: Record<string, { mime: string; ext: string }[]> = {
 
 export function listVideoFormats(): { id: VideoFormat; label: string; hint: string }[] {
   const out: { id: VideoFormat; label: string; hint: string }[] = [];
-  const tryMime = (cands: { mime: string }[]) =>
-    cands.some((c) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c.mime));
   out.push({ id: "mp4", label: "MP4", hint: "H.264 / AAC · Máxima compatibilidade (YouTube, Insta, TikTok, TV)" });
   out.push({ id: "webm9", label: "WebM (VP9)", hint: "VP9 / Opus · Alta compressão e qualidade para web" });
   out.push({ id: "webm8", label: "WebM (VP8)", hint: "VP8 / Opus · Compatibilidade web universal" });

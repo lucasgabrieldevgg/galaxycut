@@ -18,8 +18,8 @@ import { deliverExport, askExportDestination, isDesktopBuild } from "@/lib/edito
 import { useT } from "@/lib/editor/i18n";
 import { toast } from "sonner";
 import {
-  Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen, Star,
-  Image as ImageIcon, Music4, FileVideo, XCircle, Volume2, VolumeX, Film, Camera, Clock, AlertTriangle,
+  Download, Loader2, CheckCircle2, FileText, MonitorPlay, FolderOpen,
+  Image as ImageIcon, Music4, XCircle, Volume2, VolumeX, Film, Camera, Clock, AlertTriangle,
   ChevronDown, ChevronUp,
 } from "lucide-react";
 import { clipEnd } from "@/lib/editor/types";

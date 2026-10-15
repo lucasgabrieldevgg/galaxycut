@@ -284,7 +284,7 @@ class PlaybackEngine {
     const { clips, media } = useProject.getState();
     const liveClipIds = new Set(clips.map((c) => c.id));
     // remove bindings de clipes apagados
-    for (const [clipId, key] of this.bindings) {
+    for (const [clipId] of this.bindings) {
       if (!liveClipIds.has(clipId)) {
         this.bindings.delete(clipId);
         audioEngine.dropClip(clipId);

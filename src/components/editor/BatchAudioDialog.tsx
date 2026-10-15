@@ -1,20 +1,15 @@
 // GalaxyCut — Diálogo de Melhoria de Áudio em Lote / Filtros de Áudio por Faixas e Clipes
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Wand2, Sliders, Volume2, Film, Music, Sparkles } from "lucide-react";
 import { useProject } from "@/lib/editor/store";
-import { Clip, Track, AudioFilterConfig, DEFAULT_AUDIO_FILTERS } from "@/lib/editor/types";
+import { AudioFilterConfig, DEFAULT_AUDIO_FILTERS } from "@/lib/editor/types";
 import { AudioFiltersDialog } from "./AudioFiltersDialog";
 import { toast } from "sonner";
 import { engine } from "@/lib/editor/playback";
-
-interface BatchAudioDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
 
 export function BatchAudioDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const tracks = useProject((s) => s.tracks);
@@ -46,7 +41,6 @@ export function BatchAudioDialog({ open, onOpenChange }: { open: boolean; onOpen
   }
 
   const allSelected = audioClips.length > 0 && selectedClipIds.size === audioClips.length;
-  const isPartiallySelected = selectedClipIds.size > 0 && selectedClipIds.size < audioClips.length;
 
   const toggleSelectAll = () => {
     if (allSelected) {

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Sliders, Volume2, ShieldAlert, Waves, Mic, Sparkles, RefreshCw } from "lucide-react";
+import { Sliders, Volume2, ShieldAlert, Waves, Sparkles, RefreshCw } from "lucide-react";
 import { AudioFilterConfig, DEFAULT_AUDIO_FILTERS } from "@/lib/editor/types";
 
 interface AudioFiltersDialogProps {
