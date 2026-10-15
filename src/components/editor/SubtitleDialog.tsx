@@ -354,7 +354,7 @@ export function SubtitleDialog() {
                         type="button"
                         onClick={() => {
                           updateStyle({
-                            highlightAnim: anim.id as any,
+                            highlightAnim: anim.id as TextProps["highlightAnim"],
                             highlight: anim.id !== "none",
                             highlightScale: anim.id === "none" || anim.id === "colorOnly" || anim.id === "box" ? 1.0 : 1.2,
                           });

@@ -92,14 +92,14 @@ export function MediaPanel() {
   const [activeTab, setActiveTab] = useState("media");
 
   useEffect(() => {
-    const handleNav = (e: any) => {
+    const handleNav = (e: CustomEvent<{ folderId?: string }>) => {
       setActiveTab("media");
       if (e.detail?.folderId !== undefined) {
         setCurrentFolderId(e.detail.folderId);
       }
     };
-    window.addEventListener("galaxiacut:navmedia", handleNav);
-    return () => window.removeEventListener("galaxiacut:navmedia", handleNav);
+    window.addEventListener("galaxiacut:navmedia", handleNav as EventListener);
+    return () => window.removeEventListener("galaxiacut:navmedia", handleNav as EventListener);
   }, [setCurrentFolderId]);
 
   /** diálogo de criar pasta */
@@ -298,7 +298,16 @@ export function MediaPanel() {
     }
   }
 
-  async function scanEntry(entry: any, currentPath: string[]): Promise<{ file: File; folderPath: string[] }[]> {
+  /** Entrada de `DataTransferItem.webkitGetAsEntry()` — API legada de pastas, sem tipos no DOM lib atual. */
+interface ScanEntry {
+  isFile: boolean;
+  isDirectory: boolean;
+  name: string;
+  file: (ok: (f: File) => void, err: () => void) => void;
+  createReader: () => { readEntries: (ok: (entries: ScanEntry[]) => void, err: () => void) => void };
+}
+
+async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ file: File; folderPath: string[] }[]> {
     if (entry.isFile) {
       return new Promise((resolve) => {
         entry.file(
@@ -309,10 +318,10 @@ export function MediaPanel() {
     } else if (entry.isDirectory) {
       const dirReader = entry.createReader();
       const newPath = [...currentPath, entry.name];
-      const readSubEntries = (): Promise<any[]> => {
+      const readSubEntries = (): Promise<ScanEntry[]> => {
         return new Promise((resolve) => {
           dirReader.readEntries(
-            (results: any[]) => {
+            (results: ScanEntry[]) => {
               if (!results || !results.length) resolve([]);
               else {
                 readSubEntries().then((more) => resolve([...results, ...more]));
@@ -349,7 +358,7 @@ export function MediaPanel() {
         const item = items[i];
         if (item.kind !== "file") continue;
         if (typeof item.webkitGetAsEntry === "function") {
-          const entry = item.webkitGetAsEntry();
+          const entry = item.webkitGetAsEntry() as unknown as ScanEntry | null;
           if (entry) {
             if (entry.isDirectory) {
               detectedFoldersList.push(entry.name);

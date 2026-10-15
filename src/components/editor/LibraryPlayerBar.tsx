@@ -306,7 +306,8 @@ function PlayerCore({
               id: item.id,
               title: item.title,
               url: item.url,
-              thumb: item.thumb,
+              // item.thumb é opcional no LibItem; o modal tolera ausência em runtime (comportamento pré-tipagem)
+              thumb: item.thumb as string,
               duration: dur || 0,
               provider: item.provider || "GalaxyCut",
               license: item.license || "cc0",

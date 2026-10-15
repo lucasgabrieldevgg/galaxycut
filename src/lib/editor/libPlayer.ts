@@ -3,6 +3,7 @@
 "use client";
 
 import { create } from "zustand";
+import type { StockItem } from "./stockClient";
 
 export interface LibItem {
   id: string;
@@ -15,7 +16,7 @@ export interface LibItem {
   creator?: string;
   license?: string;
   duration?: number;
-  rawStockItem?: any;
+  rawStockItem?: StockItem;
 }
 
 interface LibPlayerState {

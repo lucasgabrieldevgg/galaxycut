@@ -82,13 +82,14 @@ export function ConvertMediaDialog({
 
         convertedMetas.push(res.meta);
         okCount++;
-      } catch (err: any) {
+      } catch (err) {
         console.error("Transcode item error:", err);
-        if (String(err?.message || "").includes("cancelada")) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("cancelada")) {
           toast.info("Conversão cancelada");
           break;
         }
-        toast.error(`Falha ao converter "${item.name}": ${err?.message || "Erro desconhecido"}`);
+        toast.error(`Falha ao converter "${item.name}": ${msg || "Erro desconhecido"}`);
       }
     }
 

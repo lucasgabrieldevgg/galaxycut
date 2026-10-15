@@ -123,7 +123,8 @@ function decodeAudioViaElement(blob: Blob, ctx: AudioContext, durationHint: numb
     v.onloadedmetadata = async () => {
       try {
         const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : durationHint;
-        const captureFn = (v as any).captureStream || (v as any).mozCaptureStream;
+        const captureable = v as HTMLVideoElement & { captureStream?: () => MediaStream; mozCaptureStream?: () => MediaStream };
+        const captureFn = captureable.captureStream ?? captureable.mozCaptureStream;
 
         if (typeof captureFn === "function" && typeof MediaRecorder !== "undefined") {
           const stream: MediaStream = captureFn.call(v);

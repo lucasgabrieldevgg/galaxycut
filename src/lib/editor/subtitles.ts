@@ -294,13 +294,13 @@ async function transcribeLegacy(
         asr = cached;
         break;
       }
-      const mod: any = await dynImport(TRANSFORMERS_URL);
+      const mod = (await dynImport(TRANSFORMERS_URL)) as { pipeline: unknown };
       const pipeline = mod.pipeline as (t: string, m: string, o?: unknown) => Promise<unknown>;
       asr = (await pipeline("automatic-speech-recognition", id, {
         dtype: "q8",
         device: "wasm",
-        progress_callback: (p: any) => {
-          if (p?.status === "progress" && p.total) onProgress({ stage: "download", pct: p.loaded / p.total });
+        progress_callback: (p: AsrProgress) => {
+          if (p?.status === "progress" && p.total) onProgress({ stage: "download", pct: (p.loaded ?? 0) / p.total });
           else if (p?.status === "ready" || p?.status === "done") onProgress({ stage: "prepare", pct: 1 });
         },
       })) as CallableFunction;
@@ -312,12 +312,12 @@ async function transcribeLegacy(
   }
   if (!asr) throw lastErr instanceof Error ? lastErr : new Error("Não consegui carregar o modelo de IA");
   onProgress({ stage: "transcribe", pct: 0.2 });
-  const out: any = await asr(pcm, { language: lang, task: "transcribe", chunk_length_s: 30, stride_chunk_s: 5, return_timestamps: "word" });
+  const out = (await asr(pcm, { language: lang, task: "transcribe", chunk_length_s: 30, stride_chunk_s: 5, return_timestamps: "word" })) as AsrResult;
   const words = parseWords(out);
   onProgress({ stage: "transcribe", pct: 0.98 });
   if (words.length) return groupWords(words, Math.max(2, Math.min(6, maxWords)));
-  const out2: any = await asr(pcm, { language: lang, task: "transcribe", chunk_length_s: 30, stride_chunk_s: 5, return_timestamps: true });
-  const chunks: { text: string; timestamp: [number | null, number | null] }[] =
+  const out2 = (await asr(pcm, { language: lang, task: "transcribe", chunk_length_s: 30, stride_chunk_s: 5, return_timestamps: true })) as AsrResult;
+  const chunks: AsrChunk[] =
     out2?.chunks && out2.chunks.length ? out2.chunks : out2?.text ? [{ text: out2.text, timestamp: [0, null] }] : [];
   return polish(chunkToSegments(chunks));
 }
@@ -564,7 +564,22 @@ export async function transcribe(
   }
 }
 
-function parseWords(out: any): RawWord[] {
+/** Resposta mínima do pipeline de ASR (transformers.js) que o transcritor lê. */
+interface AsrChunk {
+  text: string;
+  timestamp: [number | null, number | null];
+}
+interface AsrResult {
+  chunks?: AsrChunk[];
+  text?: string;
+}
+interface AsrProgress {
+  status?: string;
+  total?: number;
+  loaded?: number;
+}
+
+function parseWords(out: AsrResult): RawWord[] {
   const chunks: { text: string; timestamp: [number | null, number | null] }[] = out?.chunks ?? [];
   const words: RawWord[] = [];
   for (let i = 0; i < chunks.length; i++) {

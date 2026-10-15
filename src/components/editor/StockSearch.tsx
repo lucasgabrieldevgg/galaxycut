@@ -652,7 +652,7 @@ export function StockSearch() {
               const ls = LICENSE_STYLE[lv];
               const isVideoTile = (type === "video" || !it.audio) && !isSticker && type !== "image";
               const isAudioTile = Boolean(it.audio);
-              const curated = (it as any).badge ? (it as CuratedShortsTrack) : undefined;
+              const curated = "badge" in it ? (it as CuratedShortsTrack) : undefined;
               const starred = isFavorite(it.id);
 
               return (

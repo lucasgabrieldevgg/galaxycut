@@ -7,6 +7,7 @@ import { encodeWav, decodeAudioOf, peaksFromBuffer } from "./wav";
 import { GIFEncoder, quantize, applyPalette } from "gifenc";
 import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target } from "mp4-muxer";
 import { Muxer as WebmMuxer, ArrayBufferTarget as WebmTarget } from "webm-muxer";
+import type { WebCodecsHost } from "./webcodecs";
 import { MediaMeta, uid } from "./types";
 
 export type TranscodeFormat = "mp4" | "webm" | "mov" | "mkv" | "avi" | "gif" | "mp3" | "wav";
@@ -96,7 +97,7 @@ export interface TranscodeOptions {
   cancelRef?: { cancelled: boolean };
 }
 
-const WC = typeof window !== "undefined" ? (window as any) : ({} as any);
+const WC = (typeof window !== "undefined" ? window : {}) as unknown as WebCodecsHost;
 
 function waitMediaReady(el: HTMLMediaElement, timeoutMs = 6000): Promise<void> {
   return new Promise((res) => {
@@ -329,7 +330,7 @@ export async function transcodeMedia(
         }
       }
 
-      let muxer: any;
+      let muxer: Mp4Muxer<Mp4Target> | WebmMuxer<WebmTarget>;
       if (isMp4Based) {
         muxer = new Mp4Muxer({
           target: new Mp4Target(),
@@ -350,8 +351,8 @@ export async function transcodeMedia(
       }
 
       const videoEncoder = new WC.VideoEncoder({
-        output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
-        error: (e: any) => console.warn("VideoEncoder chunk error:", e),
+        output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+        error: (e) => console.warn("VideoEncoder chunk error:", e),
       });
 
       videoEncoder.configure({
@@ -367,8 +368,8 @@ export async function transcodeMedia(
       if (audioCodecPick && audioBuffer && WC.AudioEncoder) {
         try {
           const audioEncoder = new WC.AudioEncoder({
-            output: (chunk: any, meta: any) => muxer.addAudioChunk(chunk, meta),
-            error: (err: any) => console.warn("AudioEncoder warning:", err),
+            output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+            error: (err) => console.warn("AudioEncoder warning:", err),
           });
           audioEncoder.configure({
             codec: audioCodecPick,

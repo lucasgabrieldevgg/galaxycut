@@ -14,6 +14,7 @@
 
 import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target } from "mp4-muxer";
 import { Muxer as WebmMuxer, ArrayBufferTarget as WebmTarget } from "webm-muxer";
+import type { WebCodecsHost } from "./webcodecs";
 import { useProject, computeEffectiveDuration } from "./store";
 import { registry } from "./media";
 import { drawFrame } from "./render";
@@ -48,7 +49,7 @@ export interface OfflineResult {
 }
 
 
-const WC = typeof window !== "undefined" ? (window as any) : ({} as any);
+const WC = (typeof window !== "undefined" ? window : {}) as unknown as WebCodecsHost;
 
 /** WebCodecs existe neste navegador? */
 export function offlineSupported(): boolean {
@@ -196,7 +197,8 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
 
 // ---------- pool de elementos DEDICADOS à exportação ----------
 
-type ExportEl = HTMLVideoElement | HTMLImageElement;
+/** Elemento de mídia do pool, marcado com a origem (`__gcMedia`) para devolução ao pool certo. */
+type ExportEl = (HTMLVideoElement | HTMLImageElement) & { __gcMedia?: string };
 
 interface ElPool {
   free: ExportEl[];
@@ -322,7 +324,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     if (!bound) return null;
     if (fresh) {
       pool.all.push(bound);
-      (bound as any).__gcMedia = c.mediaId; // pro retorno ao pool / limpeza
+      bound.__gcMedia = c.mediaId; // pro retorno ao pool / limpeza
     }
     bindings.set(c.id, bound);
     return bound;
@@ -342,7 +344,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     if (!el) continue;
     if (!pool.all.includes(el)) {
       pool.all.push(el);
-      (el as any).__gcMedia = mediaId;
+      el.__gcMedia = mediaId;
     }
     await waitForElement(el, 20000);
     prepared++;
@@ -370,9 +372,9 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
   let noAudio = false;
   const isMp4 = opts.format === "mp4";
 
-  let audioEncoder: any = null;
+  let audioEncoder: AudioEncoder | null = null;
   let audioCodecPick: string | null = null;
-  let audioEncError: any = null;
+  let audioEncError: unknown = null;
   let audioChunksCount = 0;
 
   if (audioBuffer && wantAudio) {
@@ -399,7 +401,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     throw new Error("no-offline-codec");
   }
 
-  let muxer: any;
+  let muxer: Mp4Muxer<Mp4Target> | WebmMuxer<WebmTarget>;
   if (isMp4) {
     muxer = new Mp4Muxer({
       target: new Mp4Target(),
@@ -422,8 +424,8 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
   }
 
   const videoEncoder = new WC.VideoEncoder({
-    output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
-    error: (e: any) => {
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error: (e) => {
       throw new Error(`Codificador de vídeo falhou: ${e?.message ?? e}`);
     },
   });
@@ -439,11 +441,11 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
   if (audioCodecPick && audioBuffer) {
     try {
       audioEncoder = new WC.AudioEncoder({
-        output: (chunk: any, meta: any) => {
+        output: (chunk, meta) => {
           audioChunksCount++;
           muxer.addAudioChunk(chunk, meta);
         },
-        error: (err: any) => {
+        error: (err) => {
           console.error("AudioEncoder error:", err);
           audioEncError = err;
         },
@@ -485,7 +487,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     for (const [clipId, el] of bindings) {
       if (!activeIds.has(clipId)) {
         bindings.delete(clipId);
-        pools.get((el as any).__gcMedia ?? "")?.free.push(el);
+        pools.get(el.__gcMedia ?? "")?.free.push(el);
       }
     }
     for (const c of active) getEl(c); // reserva o elemento de cada clipe ativo
@@ -604,12 +606,12 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
     }
 
     try {
-      await audioEncoder.flush();
+      await audioEncoder?.flush();
     } catch (e) {
       console.warn("AudioEncoder flush warning:", e);
-      audioEncError = audioEncError || e;
+      audioEncError = audioEncError ?? e;
     }
-    audioEncoder.close();
+    audioEncoder?.close();
 
     // Se houve erro grave e nenhum chunk foi gravado, cai no fallback
     if (audioEncError && audioChunksCount === 0 && wantAudio) {
