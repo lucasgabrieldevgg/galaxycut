@@ -3,6 +3,11 @@
   "version": "9.0.0",
   "description": "GalaxyCut — Editor de Vídeo para Criadores",
   "main": "main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lucasgabrieldevgg/galaxycut.git",
+    "directory": "desktop"
+  },
   "scripts": {
     "start": "electron .",
     "dist:linux": "electron-builder --linux AppImage",
@@ -43,9 +48,11 @@
       "category": "public.app-category.video"
     }
   },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
   "devDependencies": {
     "electron": "^34.0.0",
-    "electron-builder": "^25.1.8",
-    "electron-updater": "^6.3.9"
+    "electron-builder": "^25.1.8"
   }
 }
