@@ -18,6 +18,9 @@ import {
   Plus,
   Volume2,
   VolumeX,
+  Scissors,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useLibPlayer, LibItem } from "@/lib/editor/libPlayer";
 import { useT } from "@/lib/editor/i18n";
@@ -65,6 +68,8 @@ function PlayerCore({
   const [muted, setMuted] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  // modo corte: trecho in/out marcado NA PRÉVIA, antes de ir pra timeline
+  const [trim, setTrim] = useState<{ inPt: number; outPt: number } | null>(null);
 
   const addMedia = useProject((s) => s.addMedia);
   const addClipFromMedia = useProject((s) => s.addClipFromMedia);
@@ -108,6 +113,33 @@ function PlayerCore({
     setTime(el.currentTime);
   };
 
+  // modo corte: a prévia dá loop dentro do trecho marcado (feedback ao vivo)
+  const handleTimeUpdate = (cur: number) => {
+    const el = getMediaEl();
+    if (trim && el && !el.paused && dur > 0.2 && cur >= trim.outPt - 0.05 && trim.outPt < dur - 0.05) {
+      el.currentTime = trim.inPt;
+      setTime(trim.inPt);
+    } else {
+      setTime(cur);
+    }
+  };
+
+  const markIn = () => {
+    if (!trim || !dur) return;
+    const cur = getMediaEl()?.currentTime ?? time;
+    const inPt = Math.max(0, Math.min(cur, dur - 0.2));
+    const outPt = Math.max(inPt + 0.2, Math.min(trim.outPt, dur));
+    setTrim({ inPt, outPt });
+  };
+
+  const markOut = () => {
+    if (!trim || !dur) return;
+    const cur = getMediaEl()?.currentTime ?? time;
+    const outPt = Math.min(dur, Math.max(cur, 0.2));
+    const inPt = Math.min(Math.max(0, trim.inPt), outPt - 0.2);
+    setTrim({ inPt, outPt });
+  };
+
   const handleAddDirect = async () => {
     setAdding(true);
     try {
@@ -129,9 +161,10 @@ function PlayerCore({
         useProject.getState().setCurrentFolderId(catFolder.id);
         toast.success(t("st.addedToTimeline"));
       } else {
-        // Se for mídia local
-        addClipFromMedia(item.id);
-        toast.success(t("mp.addedClip"));
+        // Se for mídia local — com trecho marcado, entra só o corte escolhido
+        const range = trim && trim.outPt - trim.inPt > 0.2 ? { inPoint: trim.inPt, outPoint: trim.outPt } : undefined;
+        addClipFromMedia(item.id, range);
+        toast.success(range ? t("lib.rangeAdded") : t("mp.addedClip"));
       }
     } catch {
       toast.error(t("st.errorDownload"));
@@ -153,7 +186,7 @@ function PlayerCore({
               muted={muted}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
-              onTimeUpdate={() => setTime(videoRef.current?.currentTime ?? 0)}
+              onTimeUpdate={() => handleTimeUpdate(videoRef.current?.currentTime ?? 0)}
               onLoadedMetadata={() => setDur(videoRef.current?.duration || 0)}
               onEnded={() => setPlaying(false)}
               onError={(e) => {
@@ -168,7 +201,7 @@ function PlayerCore({
               muted={muted}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
-              onTimeUpdate={() => setTime(audioRef.current?.currentTime ?? 0)}
+              onTimeUpdate={() => handleTimeUpdate(audioRef.current?.currentTime ?? 0)}
               onLoadedMetadata={() => setDur(audioRef.current?.duration || 0)}
               onEnded={() => setPlaying(false)}
               onError={(e) => {
@@ -206,8 +239,8 @@ function PlayerCore({
             size="icon"
             className="h-6 w-6 shrink-0 text-zinc-400 hover:text-white hover:bg-[#1c2430] rounded"
             onClick={() => setModalOpen(true)}
-            title="Expandir prévia (Tela cheia)"
-            aria-label="Expandir prévia"
+            title={t("lib.expand")}
+            aria-label={t("lib.expand")}
           >
             <Maximize2 className="h-3.5 w-3.5" />
           </Button>
@@ -223,6 +256,51 @@ function PlayerCore({
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
+
+        {/* Modo corte: barra do trecho + marcação de início/fim antes de adicionar */}
+        {trim && dur > 0 && (
+          <>
+            <div className="relative h-1 w-full rounded bg-[#1c2430]">
+              <div
+                className="absolute inset-y-0 rounded bg-[var(--gc-accent-60)]"
+                style={{ left: `${(trim.inPt / dur) * 100}%`, width: `${((trim.outPt - trim.inPt) / dur) * 100}%` }}
+              />
+              <div className="absolute -top-[3px] h-2 w-[2px] rounded bg-white" style={{ left: `${(trim.inPt / dur) * 100}%` }} />
+              <div className="absolute -top-[3px] h-2 w-[2px] rounded bg-white" style={{ left: `${(trim.outPt / dur) * 100}%` }} />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 gap-1 rounded px-2 text-[10px] font-semibold text-zinc-300 hover:bg-[#1c2430] hover:text-white"
+                onClick={markIn}
+                title={t("lib.setIn")}
+              >
+                <ChevronLeft className="h-3 w-3" /> {t("lib.setIn")} {fmt(trim.inPt)}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 gap-1 rounded px-2 text-[10px] font-semibold text-zinc-300 hover:bg-[#1c2430] hover:text-white"
+                onClick={markOut}
+                title={t("lib.setOut")}
+              >
+                {t("lib.setOut")} {fmt(trim.outPt)} <ChevronRight className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 rounded px-2 text-[10px] text-zinc-500 hover:bg-[#1c2430] hover:text-zinc-300"
+                onClick={() => setTrim({ inPt: 0, outPt: dur })}
+              >
+                {t("lib.resetRange")}
+              </Button>
+              <span className="ml-auto font-mono text-[10px] tabular-nums text-zinc-500">
+                {t("lib.range", { a: fmt(trim.inPt), b: fmt(trim.outPt), d: (trim.outPt - trim.inPt).toFixed(1) })}
+              </span>
+            </div>
+          </>
+        )}
 
         {/* Linha 2: Controles de Reprodução + Barra de Progresso Inteira + Volume + Adicionar */}
         <div className="flex items-center gap-1.5 min-w-0">
@@ -280,20 +358,35 @@ function PlayerCore({
             size="icon"
             className="h-6 w-6 shrink-0 text-zinc-400 hover:text-zinc-200 p-0"
             onClick={() => setMuted((m) => !m)}
-            title={muted ? "Ativar Som" : "Mudo"}
+            title={muted ? t("lib.unmute") : t("lib.mute")}
           >
             {muted ? <VolumeX className="h-3 w-3 text-red-400" /> : <Volume2 className="h-3 w-3" />}
           </Button>
+
+          {/** liga/desliga o modo corte (só pra mídia local — stock baixa inteiro) */}
+          {!item.rawStockItem && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-6 w-6 shrink-0 rounded p-0 ${trim ? "bg-[var(--gc-accent-15)] text-[var(--gc-accent)]" : "text-zinc-400 hover:text-zinc-200 hover:bg-[#1c2430]"}`}
+              onClick={() => setTrim((tr) => (tr ? null : { inPt: 0, outPt: dur || 0 }))}
+              title={t("lib.trim")}
+              aria-label={t("lib.trim")}
+              aria-pressed={!!trim}
+            >
+              <Scissors className="h-3 w-3" />
+            </Button>
+          )}
 
           <Button
             size="sm"
             onClick={handleAddDirect}
             disabled={adding}
             className="h-6 px-2 text-[10px] font-semibold bg-[var(--gc-accent)] hover:bg-[var(--gc-accent-hover)] text-black rounded shrink-0 shadow gap-1"
-            title="Adicionar à Linha do Tempo"
+            title={trim ? t("lib.addRange") : t("lib.addToTimeline")}
           >
             {adding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" strokeWidth={3} />}
-            <span className="hidden xs:inline">Adicionar</span>
+            <span className="hidden xs:inline">{trim ? t("lib.addRange") : t("lib.add")}</span>
           </Button>
         </div>
       </div>

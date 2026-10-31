@@ -72,7 +72,7 @@ interface ProjectState extends Snapshot {
   removeMedia: (id: string) => void;
   // clipes
   addClip: (c: Clip) => void;
-  addClipFromMedia: (mediaId: string) => Clip | null;
+  addClipFromMedia: (mediaId: string, range?: { inPoint: number; outPoint: number }) => Clip | null;
   /** solta uma mídia em ponto específico. NÃO empilha: se o ponto tá ocupado,
    *  acha o espaço livre mais próximo (em cima/baixo/entre clipes) e devolve
    *  { clip, redirected } — redirected=true quando precisou mover do ponto pedido. */
@@ -401,7 +401,7 @@ export const useProject = create<ProjectState>((set, get) => ({
     get().pushHistory();
     set((s) => ({ clips: [...s.clips, c], selectedId: c.id, selectedIds: [c.id] }));
   },
-  addClipFromMedia: (mediaId) => {
+  addClipFromMedia: (mediaId, range) => {
     const meta = get().media.find((m) => m.id === mediaId);
     if (!meta || meta.missing) return null;
     const s = get();
@@ -411,15 +411,19 @@ export const useProject = create<ProjectState>((set, get) => ({
         : "V1";
     const trackClips = s.clips.filter((c) => c.trackId === trackId);
     const start = trackClips.reduce((acc, c) => Math.max(acc, clipEnd(c)), 0);
-    const duration = meta.kind === "image" ? 4.8 : meta.duration;
+    // corte no painel de mídia: range in/out marcado na prévia (tempo do ARQUIVO)
+    const full = meta.kind === "image" || !range;
+    const inPt = full ? 0 : Math.max(0, Math.min(range.inPoint, (range.outPoint || meta.duration) - 0.1));
+    const outPt = full ? meta.duration : Math.min(meta.duration, Math.max(inPt + 0.1, range.outPoint));
+    const duration = meta.kind === "image" ? 4.8 : Math.max(0.1, outPt - inPt);
     const clip = makeClip({
       kind: meta.kind,
       mediaId,
       trackId,
       start,
       duration,
-      inPoint: 0,
-      outPoint: meta.kind === "image" ? duration : meta.duration,
+      inPoint: inPt,
+      outPoint: outPt,
     });
     get().pushHistory();
     set((st) => ({ clips: [...st.clips, clip], selectedId: clip.id, selectedIds: [clip.id] }));
