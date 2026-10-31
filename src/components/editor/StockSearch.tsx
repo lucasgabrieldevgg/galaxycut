@@ -258,7 +258,7 @@ export function StockSearch() {
 
       addClipFromMedia(meta.id);
       useProject.getState().setCurrentFolderId(catFolder.id);
-      window.dispatchEvent(new CustomEvent("galaxiacut:navmedia", { detail: { folderId: catFolder.id } }));
+      window.dispatchEvent(new CustomEvent("galaxycut:navmedia", { detail: { folderId: catFolder.id } }));
       toast.success(t("st.addedToTimeline"));
     } catch {
       toast.error(t("st.errorDownload"));
@@ -309,7 +309,7 @@ export function StockSearch() {
     });
     addClipFromMedia(meta.id);
     useProject.getState().setCurrentFolderId(catFolder.id);
-    window.dispatchEvent(new CustomEvent("galaxiacut:navmedia", { detail: { folderId: catFolder.id } }));
+    window.dispatchEvent(new CustomEvent("galaxycut:navmedia", { detail: { folderId: catFolder.id } }));
     toast.success(t("ss.addedEmoji", { emoji }));
   }
 

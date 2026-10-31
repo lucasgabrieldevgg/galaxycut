@@ -301,7 +301,7 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
   /** Aplica o encaixe magnético (só quando CHEGA PERTO, 2% da tela) e devolve
    *  as guias que devem acender. Trabalha no espaço do projeto. */
   function snapMove(
-    clip: Clip,
+    _clip: Clip,
     box: { cx: number; cy: number; dw: number; dh: number } | null,
     rawX: number,
     rawY: number

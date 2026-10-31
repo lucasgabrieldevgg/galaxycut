@@ -46,13 +46,12 @@ import { StockSearch } from "./StockSearch";
 import { LibraryPlayerBar } from "./LibraryPlayerBar";
 import { RecordDialog } from "./RecordDialog";
 import { ConvertMediaDialog } from "./ConvertMediaDialog";
-import { FloatMenu, MenuItem } from "./ClipMenu";
 import { useT } from "@/lib/editor/i18n";
 import { PresetPreview } from "./PresetPreview";
 import { useFavorites } from "@/lib/editor/favorites";
 import { downloadStockFile, resolveIaFile } from "@/lib/editor/stockClient";
 
-const MEDIA_DND_TYPE = "application/x-galaxiacut-media";
+const MEDIA_DND_TYPE = "application/x-galaxycut-media";
 
 /** filtros da aba Mídia (achar vídeo/áudio/imagem fácil) */
 const KIND_FILTERS: { id: "all" | "video" | "audio" | "image"; key: string }[] = [
@@ -98,8 +97,8 @@ export function MediaPanel() {
         setCurrentFolderId(e.detail.folderId);
       }
     };
-    window.addEventListener("galaxiacut:navmedia", handleNav as EventListener);
-    return () => window.removeEventListener("galaxiacut:navmedia", handleNav as EventListener);
+    window.addEventListener("galaxycut:navmedia", handleNav as EventListener);
+    return () => window.removeEventListener("galaxycut:navmedia", handleNav as EventListener);
   }, [setCurrentFolderId]);
 
   /** diálogo de criar pasta */
@@ -145,7 +144,7 @@ export function MediaPanel() {
         toast.dismiss(`dl-${m.id}`);
         addClipFromMedia(m.id);
         toast.success(`"${m.name}" adicionado à timeline!`);
-      } catch (e) {
+      } catch {
         toast.dismiss(`dl-${m.id}`);
         toast.error(`Falha ao baixar "${m.name}"`);
       }
@@ -228,8 +227,8 @@ export function MediaPanel() {
       const m = useProject.getState().media.find((x) => x.id === selMedia);
       if (m) askRemove(m);
     };
-    window.addEventListener("galaxiacut:delmedia", del);
-    return () => window.removeEventListener("galaxiacut:delmedia", del);
+    window.addEventListener("galaxycut:delmedia", del);
+    return () => window.removeEventListener("galaxycut:delmedia", del);
   }, [selMedia]);
 
   async function handleFiles(files: FileList | File[], targetFolderId: string | null = currentFolderId) {

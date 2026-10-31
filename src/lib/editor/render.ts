@@ -96,7 +96,7 @@ function effectiveCaptionPos(c: Clip): Clip {
 }
 
 // ---------- transições ----------
-function activeTransition(c: Clip, clips: Clip[], t: number): { type: TransitionType; p: number; duration: number } | null {
+function activeTransition(c: Clip, _clips: Clip[], t: number): { type: TransitionType; p: number; duration: number } | null {
   const tr = c.transitionIn;
   if (!tr || tr.type === "none" || tr.duration <= 0) return null;
   if (t >= c.start + tr.duration) return null;

@@ -10,9 +10,6 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   env: { NEXT_PUBLIC_BASE_PATH: basePath },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   reactStrictMode: false,
 };
 

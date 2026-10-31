@@ -317,7 +317,7 @@ function PlayerCore({
           }
           open={modalOpen}
           onOpenChange={setModalOpen}
-          onAddStock={async (st) => {
+          onAddStock={async () => {
             await handleAddDirect();
             setModalOpen(false);
           }}

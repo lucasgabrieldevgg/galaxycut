@@ -38,8 +38,8 @@ export function TopBar({
   // a aba de IA pede pra abrir as configurações (falta de chave etc.)
   useEffect(() => {
     const openSettings = () => setSettingsOpen(true);
-    window.addEventListener("galaxiacut:opensettings", openSettings);
-    return () => window.removeEventListener("galaxiacut:opensettings", openSettings);
+    window.addEventListener("galaxycut:opensettings", openSettings);
+    return () => window.removeEventListener("galaxycut:opensettings", openSettings);
   }, []);
 
   return (

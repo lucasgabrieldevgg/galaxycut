@@ -759,7 +759,7 @@ export function uid(): string {
 
 export function defaultTextProps(): TextProps {
   return {
-    content: "Texto do GaláxiaCut",
+    content: "Seu texto aqui",
     font: FONTS[6].value,
     size: 64,
     color: "#FFFFFF",

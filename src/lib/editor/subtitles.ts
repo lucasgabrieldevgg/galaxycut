@@ -276,7 +276,7 @@ self.onmessage = async (ev) => {
 /** Fallback SEM worker (navegadores que bloqueiam blob worker): o código antigo,
  *  só que com yield entre etapas. Usado só se o worker não abrir. */
 
-let legacyCache = new Map<string, CallableFunction>();
+const legacyCache = new Map<string, CallableFunction>();
 
 async function transcribeLegacy(
   pcm: Float32Array,

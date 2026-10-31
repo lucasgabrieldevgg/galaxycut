@@ -24,6 +24,7 @@ import { engine } from "./playback";
 import { spansToTimeline, SilenceSpan } from "./silence";
 import { decodeAudioOf, encodeWav, peaksFromBuffer } from "./wav";
 import * as projects from "./projects";
+import { t } from "./i18n";
 
 interface Snapshot {
   project: ProjectMeta;
@@ -515,7 +516,7 @@ export const useProject = create<ProjectState>((set, get) => ({
     const text: TextProps = {
       ...base,
       ...customProps,
-      content: customProps.content || "Seu Texto Aqui",
+      content: customProps.content || t("ed.textDefault"),
     };
 
     const clip = makeClip({
@@ -569,7 +570,7 @@ export const useProject = create<ProjectState>((set, get) => ({
     const clip = s0.clips.find((c) => c.id === id);
     get().pushHistory();
     set((s) => {
-      let clips = s.clips.filter((c) => c.id !== id);
+      const clips = s.clips.filter((c) => c.id !== id);
       // "Apagar e fechar espaço": os clipes da frente andam pra trás até encostar
       if (ripple && clip) {
         const dur = clip.duration;

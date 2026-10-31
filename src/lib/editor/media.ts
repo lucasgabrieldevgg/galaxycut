@@ -1,9 +1,23 @@
-// GaláxiaCut — registro de mídia (blobs, URLs, miniaturas, picos de áudio)
+// GalaxyCut — registro de mídia (blobs, URLs, miniaturas, picos de áudio)
 "use client";
 
 import { MediaMeta, uid } from "./types";
 import { idbDel, idbGet, idbPut } from "./mediaDB";
 import { decodeAudioOf, peaksFromBuffer } from "./wav";
+import { t } from "./i18n";
+import { toast } from "sonner";
+
+// arquivo grande demais pra cota do IndexedDB: avisa 1x a cada 10s — sem isso,
+// importar uma pasta de vídeos pesados dispara um toast por arquivo
+let lastBigWarn = 0;
+function warnBigFile(bytes: number) {
+  const now = Date.now();
+  if (now - lastBigWarn < 10_000) return;
+  lastBigWarn = now;
+  toast.warning(t("mp.tooBig"), {
+    description: t("mp.tooBigDesc", { size: (bytes / 1048576).toFixed(0) }),
+  });
+}
 
 class MediaRegistry {
   private blobs = new Map<string, Blob>();
@@ -50,7 +64,7 @@ class MediaRegistry {
     }
     this.blobs.set(id, blob);
     if (!this.urls.has(id)) this.urls.set(id, URL.createObjectURL(blob));
-    if (opts?.persist !== false) idbPut(id, blob);
+    if (opts?.persist !== false && !idbPut(id, blob)) warnBigFile(blob.size);
   }
 
   drop(id: string) {

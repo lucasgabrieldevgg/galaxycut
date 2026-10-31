@@ -12,9 +12,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useSettings, PLAYHEAD_MODES, PlayheadMode } from "@/lib/editor/settings";
 import { ACCENTS } from "@/lib/editor/theme";
 import { SHORTCUT_DEFS, comboFromEvent, comboLabel, useShortcuts } from "@/lib/editor/shortcuts";

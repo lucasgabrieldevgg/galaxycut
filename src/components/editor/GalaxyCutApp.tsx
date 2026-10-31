@@ -35,8 +35,12 @@ export function GalaxyCutApp() {
   const [newOpen, setNewOpen] = useState(false);
   // 1ª vez: nasce direto na configuração inicial (sem effect — sem piscar a home)
   const [onboarding, setOnboarding] = useState(() => !useSettings.getState().onboarded);
-  // idioma mudou? os textos estáticos do dynamic loading acompanham
-  useLang((s) => s.lang);
+  // idioma mudou? os textos estáticos do dynamic loading acompanham…
+  const lang = useLang((s) => s.lang);
+  // …e o <html lang> acompanha (leitores de tela, tradutores, corretores)
+  useEffect(() => {
+    document.documentElement.lang = lang === "pt" ? "pt-BR" : lang;
+  }, [lang]);
 
   // "ver de novo" nas configurações: reabre a configuração inicial
   useEffect(() => {

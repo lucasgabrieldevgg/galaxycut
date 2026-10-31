@@ -5,7 +5,6 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { StockItem, resolveIaFile, downloadStockFile } from "./stockClient";
 import { MediaMeta } from "./types";
 import { useProject } from "./store";
 import { toast } from "sonner";

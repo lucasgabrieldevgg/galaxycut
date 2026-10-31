@@ -59,7 +59,9 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: "shiftFrames", label: "Shift + ← → : pula 10 quadros de uma vez", group: "Reprodução", def: "shift + setas", fixed: true },
 ];
 
-const LS_KEY = "galaxiacut_shortcuts_v1";
+const LS_KEY = "galaxycut_shortcuts_v1";
+/** grafia antiga (pré-v9) — só lida, pra não perder os atalhos salvos de quem já usava */
+const LEGACY_KEY = "galaxiacut_shortcuts_v1";
 /** combos alternativos que executam a mesma ação */
 const ALIASES: Record<string, string> = {
   backspace: "delete",
@@ -73,7 +75,7 @@ type ComboMap = Record<string, string>; // actionId -> combo ("" = sem tecla)
 function load(): ComboMap {
   if (typeof window === "undefined") return {};
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(LS_KEY) ?? localStorage.getItem(LEGACY_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const out: ComboMap = {};

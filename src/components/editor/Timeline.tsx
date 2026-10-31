@@ -36,7 +36,7 @@ import {
 const HEADER_W = 128;
 const RULER_H = 28;
 const TRACK_H: Record<string, number> = { text: 46, video: 62, audio: 50 };
-const MEDIA_DND_TYPE = "application/x-galaxiacut-media";
+const MEDIA_DND_TYPE = "application/x-galaxycut-media";
 
 /** snap com estado VIVO (usado durante arrastes longos, que sobrevivem a re-renders) */
 function snapInfoLive(t: number, excludeId: string, zoom: number): { t: number; hit: boolean } {
@@ -112,7 +112,7 @@ function startClipDrag(
     if (mode === "move") {
       const dx = (lastClientX - startX) / zoom;
       const effectiveDx = Math.max(-minStart, dx);
-      let targetStart = Math.max(0, orig.start + effectiveDx);
+      const targetStart = Math.max(0, orig.start + effectiveDx);
       const snapped = snapInfoLive(targetStart, clip.id, zoom);
 
       let finalDx = effectiveDx;
@@ -321,11 +321,11 @@ export function Timeline() {
   useEffect(() => {
     const open = () => setSilenceOpen(true);
     const openBatch = () => setBatchAudioOpen(true);
-    window.addEventListener("galaxiacut:opensilence", open);
-    window.addEventListener("galaxiacut:openbatchaudio", openBatch);
+    window.addEventListener("galaxycut:opensilence", open);
+    window.addEventListener("galaxycut:openbatchaudio", openBatch);
     return () => {
-      window.removeEventListener("galaxiacut:opensilence", open);
-      window.removeEventListener("galaxiacut:openbatchaudio", openBatch);
+      window.removeEventListener("galaxycut:opensilence", open);
+      window.removeEventListener("galaxycut:openbatchaudio", openBatch);
     };
   }, []);
 
@@ -385,7 +385,7 @@ export function Timeline() {
     e.preventDefault();
     setDropHint(null);
     const st = useProject.getState();
-    let t = dropTimeAt(e.clientX);
+    const t = dropTimeAt(e.clientX);
 
     // se a faixa não combina com o tipo de mídia, redireciona pra faixa certa
     const redirectTrack = (kind: "video" | "image" | "audio"): string => {
@@ -1428,7 +1428,7 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
       icon: <AudioWaveform className="h-3.5 w-3.5 text-[var(--gc-accent)]" />,
       onClick: () => {
         useProject.getState().select(clip.id);
-        window.dispatchEvent(new CustomEvent("galaxiacut:opensilence"));
+        window.dispatchEvent(new CustomEvent("galaxycut:opensilence"));
       },
     });
     items.push({
@@ -1448,7 +1448,7 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
       label: "Melhorar Áudio em Lote...",
       icon: <Wand2 className="h-3.5 w-3.5 text-sky-400" />,
       onClick: () => {
-        window.dispatchEvent(new CustomEvent("galaxiacut:openbatchaudio"));
+        window.dispatchEvent(new CustomEvent("galaxycut:openbatchaudio"));
       },
     });
   }

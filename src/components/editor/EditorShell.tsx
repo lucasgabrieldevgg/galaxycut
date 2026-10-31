@@ -63,8 +63,8 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
   // abrir diálogo de exportação por evento
   useEffect(() => {
     const openExport = () => setExportOpen(true);
-    window.addEventListener("galaxiacut:openexport", openExport);
-    return () => window.removeEventListener("galaxiacut:openexport", openExport);
+    window.addEventListener("galaxycut:openexport", openExport);
+    return () => window.removeEventListener("galaxycut:openexport", openExport);
   }, []);
 
   // atalhos de teclado — EDITÁVEIS nas Configurações → Atalhos
@@ -128,7 +128,7 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
             if (n > 1) toast.info(t("ed.deletedN", { n }));
           } else {
             // sem clipe selecionado → apaga a MÍDIA selecionada no painel
-            window.dispatchEvent(new CustomEvent("galaxiacut:delmedia"));
+            window.dispatchEvent(new CustomEvent("galaxycut:delmedia"));
           }
           break;
         case "deleteClose":
@@ -164,10 +164,10 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
           break;
         }
         case "silence":
-          window.dispatchEvent(new CustomEvent("galaxiacut:opensilence"));
+          window.dispatchEvent(new CustomEvent("galaxycut:opensilence"));
           break;
         case "settings":
-          window.dispatchEvent(new CustomEvent("galaxiacut:opensettings"));
+          window.dispatchEvent(new CustomEvent("galaxycut:opensettings"));
           break;
         case "selectAll":
           if (st.clips.length) {
@@ -281,13 +281,13 @@ function MobileLayout({ canvasRef, onExport }: { canvasRef: React.RefObject<HTML
           onClick={() => setPanel((p) => (p === "media" ? "none" : "media"))}
           className={`rounded-md px-2.5 py-1 text-[11px] ${panel === "media" ? "bg[var(--gc-accent-15)] text-[var(--gc-accent)]" : "text-zinc-400"}`}
         >
-          Mídia
+          {t("mp.media")}
         </button>
         <button
           onClick={() => setPanel((p) => (p === "inspector" ? "none" : "inspector"))}
           className={`rounded-md px-2.5 py-1 text-[11px] ${panel === "inspector" ? "bg[var(--gc-accent-15)] text-[var(--gc-accent)]" : "text-zinc-400"}`}
         >
-          Propriedades
+          {t("ed.props")}
         </button>
         <span className="ml-auto text-[10px] text-zinc-600">{t("ed.mobile")}</span>
       </div>

@@ -577,7 +577,7 @@ export async function exportOffline(opts: OfflineOptions): Promise<OfflineResult
         });
         audioEncoder.encode(ad);
         ad.close();
-      } catch (e1) {
+      } catch {
         // Fallback para f32-planar caso o driver exija planar
         try {
           const dataPlanar = new Float32Array(frameCount * CH);

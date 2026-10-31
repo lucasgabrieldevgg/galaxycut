@@ -47,9 +47,11 @@ function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequ
   );
 }
 
-export function idbPut(id: string, blob: Blob): void {
-  if (blob.size > MAX_PERSIST_BYTES) return;
+/** grava o arquivo; devolve false quando ele passa do limite (quem chamou avisa o usuário) */
+export function idbPut(id: string, blob: Blob): boolean {
+  if (blob.size > MAX_PERSIST_BYTES) return false;
   void tx("readwrite", (s) => s.put(blob, id));
+  return true;
 }
 
 export async function idbGet(id: string): Promise<Blob | undefined> {
