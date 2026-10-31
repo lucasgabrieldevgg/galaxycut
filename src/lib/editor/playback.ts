@@ -541,7 +541,7 @@ class PlaybackEngine {
           audioEngine.attach(key, el);
           this.lastAttach.set(key, el);
         }
-        audioEngine.update(key, { gain: eff, enhance: !!c.enhance, filters: c.audioFilters });
+        audioEngine.update(key, { gain: eff, enhance: !!c.enhance, filters: c.audioFilters, voiceFx: c.voiceFx ?? null });
       } else if (this.lastAttach.has(key)) {
         audioEngine.update(key, { gain: eff, enhance: false });
       } else {

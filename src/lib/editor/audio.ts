@@ -4,6 +4,7 @@
 "use client";
 
 import type { AudioFilterConfig } from "./types";
+import { buildVoiceChain, type VoiceLane, type VoiceFxId } from "./voiceFx";
 
 interface Chain {
   source: MediaElementAudioSourceNode;
@@ -12,9 +13,11 @@ interface Chain {
   limiter: DynamicsCompressorNode;
   makeup: GainNode;
   gain: GainNode;
+  voice: VoiceLane;
   lastGain?: number;
   lastEnhance?: boolean;
   lastFiltersSig?: string;
+  lastVoiceFx?: VoiceFxId | null;
 }
 
 export class AudioEngine {
@@ -68,8 +71,12 @@ export class AudioEngine {
       makeup.gain.value = 1;
       const gain = ctx.createGain();
       gain.gain.value = 1;
-      source.connect(hp).connect(comp).connect(limiter).connect(makeup).connect(gain).connect(this.master!);
-      const chain: Chain = { source, hp, comp, limiter, makeup, gain, lastGain: 1, lastEnhance: false };
+      // efeitos de voz: via bypassável ANTES da cadeia OBS (o mesmo grafo
+      // roda na exportação — buildVoiceChain é a fonte única)
+      const voice = buildVoiceChain(ctx);
+      source.connect(voice.input);
+      voice.output.connect(hp).connect(comp).connect(limiter).connect(makeup).connect(gain).connect(this.master!);
+      const chain: Chain = { source, hp, comp, limiter, makeup, gain, voice, lastGain: 1, lastEnhance: false };
       this.linked.set(el, chain);
       this.chains.set(key, chain);
       return chain;
@@ -89,7 +96,7 @@ export class AudioEngine {
   }
 
   /** Atualiza ganho/filtros estilo OBS por frame sem sobrecarregar a fila DSP do WebAudio */
-  update(key: string, opts: { gain: number; enhance: boolean; filters?: AudioFilterConfig }) {
+  update(key: string, opts: { gain: number; enhance: boolean; filters?: AudioFilterConfig; voiceFx?: VoiceFxId | null }) {
     const c = this.chains.get(key);
     if (!c || !this.ctx) return;
     const t = this.ctx.currentTime;
@@ -107,6 +114,17 @@ export class AudioEngine {
         c.gain.gain.setValueAtTime(effGain, t);
       } catch {
         c.gain.gain.value = effGain;
+      }
+    }
+
+    // efeito de voz (robô/rádio/megafone/eco): troca com crossfade — fora do
+    // signature dos filtros OBS pra não reconfigurar a cadeia à toa
+    if (opts.voiceFx !== undefined && c.lastVoiceFx !== opts.voiceFx) {
+      c.lastVoiceFx = opts.voiceFx;
+      try {
+        c.voice.setFx(opts.voiceFx, t);
+      } catch {
+        /* noop */
       }
     }
 

@@ -8,6 +8,8 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Sliders, Volume2, ShieldAlert, Waves, Sparkles, RefreshCw } from "lucide-react";
 import { AudioFilterConfig, DEFAULT_AUDIO_FILTERS } from "@/lib/editor/types";
+import { VOICE_FX, VOICE_FX_PLANNED, type VoiceFxId } from "@/lib/editor/voiceFx";
+import { useT } from "@/lib/editor/i18n";
 
 interface AudioFiltersDialogProps {
   open: boolean;
@@ -16,6 +18,9 @@ interface AudioFiltersDialogProps {
   onApply: (filters: AudioFilterConfig) => void;
   title?: string;
   description?: string;
+  /** efeito de voz do clipe (robô/rádio/megafone/eco) — vale no preview E na exportação */
+  voiceFx?: VoiceFxId | null;
+  onVoiceFx?: (id: VoiceFxId | null) => void;
 }
 
 const PRESETS: { id: string; name: string; desc: string; config: AudioFilterConfig }[] = [
@@ -116,7 +121,10 @@ export function AudioFiltersDialog({
   onApply,
   title = "Filtros de Áudio (Estilo OBS Studio)",
   description = "Ajuste os processadores de sinal (DSP) em tempo real para tratar ruídos e dar presença de estúdio.",
+  voiceFx = null,
+  onVoiceFx,
 }: AudioFiltersDialogProps) {
+  const t = useT();
   const [config, setConfig] = useState<AudioFilterConfig>({ ...DEFAULT_AUDIO_FILTERS, ...filters });
   const [activeTab, setActiveTab] = useState<"presets" | "custom">("presets");
 
@@ -152,6 +160,28 @@ export function AudioFiltersDialog({
           </div>
           <DialogDescription className="text-xs text-zinc-400">{description}</DialogDescription>
         </DialogHeader>
+
+        {/* Efeitos de voz — timbre do clipe (o mesmo grafo roda no preview e na exportação) */}
+        {onVoiceFx && (
+          <div className="mb-3">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{t("vfx.title")}</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              <VoiceFxBtn active={voiceFx == null} onClick={() => onVoiceFx(null)} label={t("vfx.none")} title={t("vfx.note")} />
+              {VOICE_FX.map((fx) => (
+                <VoiceFxBtn
+                  key={fx.id}
+                  active={voiceFx === fx.id}
+                  onClick={() => onVoiceFx(fx.id)}
+                  label={t(fx.nameKey)}
+                  title={t(fx.descKey)}
+                />
+              ))}
+              {VOICE_FX_PLANNED.map((fx) => (
+                <VoiceFxBtn key={fx.nameKey} disabled label={`${t(fx.nameKey)} · ${t("ai.soon")}`} title={t(fx.descKey)} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Abas */}
         <div className="flex border-b border-[#1f2837] mb-2">
@@ -431,5 +461,39 @@ export function AudioFiltersDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** botãozinho de efeito de voz (grade no topo do diálogo de áudio) */
+function VoiceFxBtn({
+  active,
+  disabled,
+  onClick,
+  label,
+  title,
+}: {
+  active?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  label: string;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-pressed={active}
+      className={`rounded-md border px-2.5 py-1.5 text-left text-[11px] font-semibold transition ${
+        disabled
+          ? "cursor-not-allowed border-[#232d3d] bg-transparent text-zinc-600"
+          : active
+            ? "border-[var(--gc-accent)] bg-[var(--gc-accent-15)] text-[var(--gc-accent)]"
+            : "border-[#232d3d] bg-[#10151d] text-zinc-300 hover:border-[#2a3546] hover:text-white"
+      }`}
+    >
+      {label}
+    </button>
   );
 }

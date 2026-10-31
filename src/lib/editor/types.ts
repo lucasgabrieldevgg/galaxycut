@@ -1,4 +1,6 @@
-// GaláxiaCut — tipos do projeto de edição
+// GalaxyCut — tipos do projeto de edição
+import type { VoiceFxId } from "./voiceFx";
+
 export type ClipKind = "video" | "image" | "audio" | "text";
 export type TrackKind = "video" | "audio" | "text";
 
@@ -360,6 +362,7 @@ export interface Clip {
   muted: boolean;
   enhance: boolean; // melhoria de áudio (highpass + compressor)
   audioFilters?: AudioFilterConfig; // filtros de áudio estilo OBS Studio
+  voiceFx?: VoiceFxId; // efeito de voz (robô, rádio, megafone, eco) — preview E exportação
   transitionIn?: Transition; // transição na entrada (na junção com o clipe anterior da faixa)
   text?: TextProps;
   keyframes?: Keyframe[]; // CapCut Keyframes (losangos ◆)

@@ -652,6 +652,8 @@ function ClipInspector({ clip }: { clip: Clip }) {
               update({ enhance: true, audioFilters: f });
               toast.success("Filtros de áudio atualizados no clipe!");
             }}
+            voiceFx={clip.voiceFx ?? null}
+            onVoiceFx={(id) => update({ voiceFx: id ?? undefined })}
             title="Filtros de Áudio do Clipe (Estilo OBS)"
             description="Personalize o processamento de áudio com as ferramentas clássicas do OBS Studio."
           />

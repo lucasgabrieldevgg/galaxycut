@@ -19,6 +19,7 @@ import { useProject, computeEffectiveDuration } from "./store";
 import { registry } from "./media";
 import { drawFrame } from "./render";
 import { Clip, clipEnd } from "./types";
+import { buildVoiceChain } from "./voiceFx";
 
 export interface OfflineProgressInfo {
   stage: "prepare" | "render" | "finish";
@@ -187,7 +188,17 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
       gain.gain.setValueAtTime(g0, Math.max(start, end - c.fadeOut));
       gain.gain.linearRampToValueAtTime(0.0001, end);
     }
-    src.connect(gain).connect(off.destination);
+    if (c.voiceFx) {
+      // efeito de voz: o MESMO grafo do preview, agora no mix offline
+      // (paridade preview=exportação por construção)
+      const lane = buildVoiceChain(off);
+      lane.setFx(c.voiceFx, 0);
+      src.connect(gain);
+      gain.connect(lane.input);
+      lane.output.connect(off.destination);
+    } else {
+      src.connect(gain).connect(off.destination);
+    }
     const offsetInBuf = Math.max(0, Math.min(buf.duration - 0.01, c.inPoint || 0));
     const durInBuf = Math.max(0.01, Math.min(buf.duration - offsetInBuf, c.duration * speed));
     src.start(start, offsetInBuf, durInBuf);
