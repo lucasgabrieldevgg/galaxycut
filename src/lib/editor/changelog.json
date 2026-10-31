@@ -1,6 +1,40 @@
 {
-  "version": "8.4.0",
+  "version": "9.0.0",
   "entries": [
+    {
+      "version": "9.0.0",
+      "date": "2026-11-01",
+      "items": [
+        "SHARE AN EDIT WITH A LINK: new Share button generates a self-contained link — the whole edit (cuts, texts, effects, keyframes) travels compressed inside the URL fragment, so no server ever sees it. Three access levels: view-only (locked viewer with play/scrub), edit (opens the editor; changes stay in the recipient's local copy) and copy (duplicates into their library). Media files don't travel — whoever opens reconnects their own.",
+        "TRIM MEDIA IN THE LIBRARY PREVIEW: scissors mode in the media player marks in/out points with live loop playback, then adds just that section to the timeline — no need to drop the whole file first.",
+        "IMPORT TEXT & SUBTITLES: .srt, .vtt and .txt files import straight as caption clips on the text track, with the same styling as automatic subtitles. The parser tolerates real-world files: CRLF, indexless blocks, VTT notes/styles, even SRT renamed to .txt; plain text becomes speech-paced captions.",
+        "VOICE EFFECTS: robot, radio, megaphone and echo for any audio or video clip — one audio graph runs in the preview AND in the export, so what you hear is what renders. Deep/high (real pitch-shift) arrive with the next batch.",
+        "AI MODEL CATALOG: models now DECLARE their tasks (transcription, voice separation, denoise, TTS, voice transformation, background removal, translation) with size, speed, accuracy and memory requirements. Pick Whisper models from the catalog; future AI ships as optional packages.",
+        "SAFETY NET RE-ARMED: strict TypeScript with zero-ignore builds, ESLint back online (dead code is an error again) and 63 unit tests running in CI — including a dictionary-parity test that keeps EN/ES complete. The tests already caught two real bugs: the 'c' shortcut alias never fired, and Ctrl+Shift+Z collapsed into Ctrl+Z.",
+        "DESKTOP RELEASE PIPELINE FIXED: electron-updater is now declared in package.json (the stale v7.8.0 lockfile was installing it by accident), the lockfile is regenerated, and the builder icons (png/ico/icns) are committed via `npm run gen:icons`.",
+        "HYGIENE: files above the browser persist limit now warn instead of silently dying on reload; legacy galaxiacut keys/events migrated to galaxycut; <html lang> follows the UI language; dead dependencies removed; a brain/ folder documents the decisions (ADRs) so future sessions pick up where this one ended."
+      ],
+      "items_pt": [
+        "COMPARTILHAR EDIÇÃO POR LINK: novo botão Compartilhar gera um link autocontido — a edição inteira (cortes, textos, efeitos, keyframes) viaja comprimida dentro do fragmento da URL, então nenhum servidor vê nada. Três níveis de acesso: somente visualização (viewer travado, com play e agulha), edição (abre no editor; as mudanças ficam na cópia local de quem abriu) e cópia própria (duplica na biblioteca de quem abriu). Arquivos de mídia não viajam — quem abrir reconecta os próprios.",
+        "CORTE DE MÍDIA NA PRÉVIA DA BIBLIOTECA: modo tesoura no player de mídia marca início/fim com loop ao vivo no trecho e adiciona SÓ aquele trecho na timeline — sem precisar soltar o arquivo inteiro primeiro.",
+        "IMPORTAR TEXTO E LEGENDAS: arquivos .srt, .vtt e .txt entram direto como clipes de legenda na faixa de texto, com o mesmo visual das legendas automáticas. O parser tolera arquivo do mundo real: CRLF, blocos sem índice, notas/estilos do VTT e até SRT renomeado pra .txt; texto corrido vira legenda no ritmo de fala.",
+        "EFEITOS DE VOZ: robô, rádio, megafone e eco em qualquer clipe de áudio ou vídeo — um único grafo de áudio roda no preview E na exportação, então o que você ouve é o que renderiza. Grave/aguda (pitch-shift de verdade) chegam no próximo lote.",
+        "CATÁLOGO DE MODELOS DE IA: os modelos agora DECLARAM suas tarefas (transcrição, separação de voz, denoise, TTS, transformação de voz, remoção de fundo, tradução) com tamanho, velocidade, precisão e memória. Escolha os modelos do Whisper no catálogo; a IA futura chega como pacotes opcionais.",
+        "REDE DE SEGURANÇA REARMADA: TypeScript strict sem ignorar erros no build, ESLint de volta (código morto voltou a ser erro) e 63 testes unitários rodando no CI — incluindo um teste de paridade que mantém EN/ES completos. Os testes já pegaram 2 bugs reais: o atalho 'c' nunca funcionou, e Ctrl+Shift+Z virava Ctrl+Z.",
+        "PIPELINE DE RELEASE DESKTOP CONSERTADO: electron-updater agora declarado no package.json (o lockfile velho da v7.8.0 o instalava por acidente), lockfile regenerado e ícones do builder (png/ico/icns) commitados via `npm run gen:icons`.",
+        "HIGIENE: arquivos acima do limite de gravação do navegador agora avisam em vez de morrer em silêncio no F5; chaves/eventos legados galaxiacut migrados pra galaxycut; o <html lang> acompanha o idioma; dependências mortas removidas; e a pasta brain/ documenta as decisões (ADRs) pra as próximas sessões começarem onde essa terminou."
+      ],
+      "items_es": [
+        "COMPARTIR EDICIÓN POR ENLACE: nuevo botón Compartir genera un enlace autocontenido — la edición completa (cortes, textos, efectos, keyframes) viaja comprimida dentro del fragmento de la URL, así que ningún servidor ve nada. Tres niveles de acceso: sólo visualización (visor bloqueado, con play y aguja), edición (abre en el editor; los cambios quedan en la copia local de quien abrió) y copia propia (duplica en la biblioteca de quien abrió). Los archivos de medios no viajan — quien abra reconecta los suyos.",
+        "CORTE DE MEDIOS EN LA VISTA PREVIA: modo tijera en el reproductor marca inicio/fin con bucle en vivo del fragmento y añade SÓLO ese trozo a la timeline — sin soltar el archivo entero primero.",
+        "IMPORTAR TEXTO Y SUBTÍTULOS: archivos .srt, .vtt y .txt entran directo como clips de subtítulo en la pista de texto, con el mismo estilo de los subtítulos automáticos. El parser tolera archivos del mundo real: CRLF, bloques sin índice, notas/estilos de VTT e incluso SRT renombrado a .txt; el texto plano se vuelve subtítulo al ritmo del habla.",
+        "EFECTOS DE VOZ: robot, radio, megáfono y eco en cualquier clip de audio o vídeo — un solo grafo de audio corre en la vista previa Y en la exportación, así que lo que oyes es lo que se renderiza. Grave/agudo (pitch-shift real) llegan en el próximo lote.",
+        "CATÁLOGO DE MODELOS DE IA: los modelos ahora DECLARAN sus tareas (transcripción, separación de voz, denoise, TTS, transformación de voz, eliminación de fondo, traducción) con tamaño, velocidad, precisión y memoria. Elige los modelos de Whisper en el catálogo; la IA futura llega como paquetes opcionales.",
+        "RED DE SEGURIDAD REARMADA: TypeScript strict sin ignorar errores en el build, ESLint de vuelta (el código muerto vuelve a ser error) y 63 pruebas unitarias en el CI — incluyendo una prueba de paridad que mantiene EN/ES completos. Las pruebas ya cazaron 2 bugs reales: el atajo 'c' nunca funcionó, y Ctrl+Shift+Z se volvía Ctrl+Z.",
+        "PIPELINE DE RELEASE DE ESCRITORIO ARREGLADO: electron-updater ahora declarado en package.json (el lockfile viejo de la v7.8.0 lo instalaba por accidente), lockfile regenerado e iconos del builder (png/ico/icns) commiteados con `npm run gen:icons`.",
+        "HIGIENE: los archivos por encima del límite del navegador ahora avisan en vez de morir en silencio al recargar; claves/eventos heredados galaxiacut migrados a galaxycut; el <html lang> sigue el idioma; dependencias muertas eliminadas; y la carpeta brain/ documenta las decisiones (ADR) para que las próximas sesiones empiecen donde ésta terminó."
+      ]
+    },
     {
       "version": "8.4.0",
       "date": "2026-10-09",

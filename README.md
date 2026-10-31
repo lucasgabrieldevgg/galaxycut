@@ -30,6 +30,11 @@
 - **Audio enhancement** — one-click studio chain (noise cut + compressor + limiter).
 - **Voice recording** — narration straight from the editor, with an OBS-style decibel meter.
 - **Free stock search** — photos, videos, music and SFX from open banks (Openverse, Freesound, Wikimedia Commons, Internet Archive, Jamendo; Pexels and Pixabay with optional keys). Search in your language — translation is automatic. Plus **emoji stickers** you can drop straight onto the timeline.
+- **Share an edit with a link** — the whole edit rides compressed inside the URL fragment: no server, no account, nothing uploaded. Pick what the link allows: watch-only (locked viewer), edit, or get-a-copy.
+- **Trim before the timeline** — scissors mode in the library preview marks in/out points with live loop playback, then adds just that section.
+- **Import text & subtitles** — `.srt`, `.vtt` and `.txt` land as caption clips on the text track, styled like the automatic captions (tolerant parser: CRLF, indexless blocks, renamed files).
+- **Voice effects** — robot, radio, megaphone and echo, applied identically in the preview and in the exported file.
+- **AI model catalog** — every model declares its task (transcription today; voice separation, denoise, TTS and more coming as optional packages), with size, speed, accuracy and memory requirements.
 - **Flexible export** — MP4 / WebM, animated **GIF**, audio-only **WAV** and single-frame **PNG**; from 240p up to 8K, 24–60 fps (defaults to 1080p/30). Vertical 1080p is a true 1080×1920. Subtitles export as `.srt`.
 - **Update checker** — the app notices new versions, shows the changelog and asks before you download.
 - **Editable shortcuts** — rebind keys in Settings → Shortcuts.
@@ -57,6 +62,7 @@ npm ci
 npm run dev          # editor at http://localhost:3000
 npm run build        # static build in out/
 npm run typecheck    # types
+npm test             # unit tests (engine, parsers, i18n parity)
 ```
 
 The app is 100% static (no server): host it on any CDN.
