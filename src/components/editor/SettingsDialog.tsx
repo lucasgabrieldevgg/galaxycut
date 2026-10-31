@@ -23,6 +23,7 @@ import { isDesktopBuild } from "@/lib/editor/desktop";
 import { LANGUAGES, useLang, t as tr } from "@/lib/editor/i18n";
 import { useT } from "@/lib/editor/i18n";
 import { PresetPreview } from "./PresetPreview";
+import { AiModelsButton } from "./AiModelsDialog";
 import { useUpdatePrompt } from "./UpdateDialog";
 import { useFavorites } from "@/lib/editor/favorites";
 import { toast } from "sonner";
@@ -99,6 +100,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                       <WhisperBtn key={m.id} id={m.id} />
                     ))}
                   </div>
+                  <AiModelsButton />
                 </div>
 
                 <div>
