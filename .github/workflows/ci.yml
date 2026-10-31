@@ -25,6 +25,9 @@ jobs:
       - name: Lint
         run: npm run lint --if-present
 
+      - name: Testes (vitest)
+        run: npm test --if-present
+
       - name: Build estático
         run: npm run build
       - name: higiene

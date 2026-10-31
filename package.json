@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "gen:icons": "node scripts/gen-desktop-icons.mjs"
   },
   "dependencies": {
@@ -58,6 +59,7 @@
     "sharp": "^0.34.5",
     "tailwindcss": "^4.1.13",
     "tw-animate-css": "^1.3.5",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.12"
   }
 }

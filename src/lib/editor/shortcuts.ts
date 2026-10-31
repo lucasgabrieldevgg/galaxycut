@@ -62,12 +62,12 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
 const LS_KEY = "galaxycut_shortcuts_v1";
 /** grafia antiga (pré-v9) — só lida, pra não perder os atalhos salvos de quem já usava */
 const LEGACY_KEY = "galaxiacut_shortcuts_v1";
-/** combos alternativos que executam a mesma ação */
+/** combos alternativos que executam a mesma ação (sempre combo → combo) */
 const ALIASES: Record<string, string> = {
   backspace: "delete",
   "shift+backspace": "shift+delete",
   "ctrl+y": "ctrl+shift+z",
-  c: "split",
+  c: "s",
 };
 
 type ComboMap = Record<string, string>; // actionId -> combo ("" = sem tecla)
@@ -108,7 +108,7 @@ export function comboFromEvent(e: KeyboardEvent): string {
   if (mod) parts.push("ctrl");
   if (e.altKey) parts.push("alt");
   if (e.shiftKey && k === "space") parts.push("shift");
-  else if (e.shiftKey && k.length > 1) parts.push("shift"); // shift+setas etc.
+  else if (e.shiftKey && (k.length > 1 || mod || e.altKey)) parts.push("shift"); // shift+setas e ctrl+shift+letra
   parts.push(k);
   return parts.join("+");
 }

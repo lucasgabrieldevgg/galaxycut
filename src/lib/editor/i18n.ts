@@ -17,7 +17,7 @@ type Dict = Record<string, string>;
 
 // Português = texto padrão do app (todas as chaves SEMPRE preenchidas aqui;
 // EN/ES cobrem tudo — o que faltar cai no PT)
-const PT: Dict = {
+export const PT: Dict = {
   // home
   "home.subtitle": "editor de vídeo livre, no navegador",
   "home.yourEdits": "Suas edições",
@@ -823,7 +823,7 @@ const PT: Dict = {
   "misc.close": "Fechar",
 };
 
-const EN: Dict = {
+export const EN: Dict = {
   "home.subtitle": "free video editor, in your browser",
   "home.yourEdits": "Your edits",
   "home.saveNote": "Everything is saved on your device — the files and the project. Start a new edit or pick up where you left off.",
@@ -1600,7 +1600,7 @@ const EN: Dict = {
   "misc.close": "Close",
 };
 
-const ES: Dict = {
+export const ES: Dict = {
   "home.subtitle": "editor de vídeo libre, en tu navegador",
   "home.yourEdits": "Tus ediciones",
   "home.saveNote": "Todo queda guardado en tu dispositivo — los archivos y el proyecto. Crea una edición nueva o sigue donde lo dejaste.",
