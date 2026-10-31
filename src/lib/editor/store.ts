@@ -3,6 +3,7 @@
 
 import { create } from "zustand";
 import {
+  CAPTION_PRESETS,
   Clip,
   ClipAnimation,
   ClipEffect,
@@ -24,6 +25,7 @@ import { engine } from "./playback";
 import { spansToTimeline, SilenceSpan } from "./silence";
 import { decodeAudioOf, encodeWav, peaksFromBuffer } from "./wav";
 import * as projects from "./projects";
+import { useSettings } from "./settings";
 import { t } from "./i18n";
 
 interface Snapshot {
@@ -78,6 +80,8 @@ interface ProjectState extends Snapshot {
   /** depois de arrastar livre: empurra os clipes que ficaram por baixo (inserção estilo CapCut). Devolve quantos empurrou. */
   settleOverlaps: (clipId: string) => number;
   addTextClip: (at?: number | Partial<TextProps> | string, preset?: Partial<TextProps>) => Clip | void;
+  /** importa legendas (.srt/.vtt) ou texto simples como clipes de legenda na faixa de texto */
+  addCueClips: (cues: { start: number; end: number; text: string }[]) => number;
   updateClip: (id: string, patch: Partial<Clip>, opts?: { history?: boolean }) => void;
   updateClips: (ids: string[], patch: Partial<Clip>, opts?: { history?: boolean }) => void;
   moveClipLive: (id: string, start: number, trackId: string) => void;
@@ -539,6 +543,46 @@ export const useProject = create<ProjectState>((set, get) => ({
     }));
     engine.markDirty();
     return clip;
+  },
+
+  addCueClips: (cues) => {
+    const s = get();
+    if (!cues.length) return 0;
+    let track = s.tracks.find((t) => t.kind === "text");
+    if (!track) {
+      track = { id: "T-texto", kind: "text", name: "Texto", muted: false, hidden: false };
+      set((st) => ({ tracks: [track!, ...st.tracks] }));
+    }
+    // mesmo tratamento visual das legendas automáticas: posição global + preset
+    const pos = useSettings.getState().captionPos ?? { x: 0, y: 0.62 };
+    const preset = CAPTION_PRESETS.find((p) => p.id === useSettings.getState().captionPreset) ?? CAPTION_PRESETS[0];
+    const base = defaultTextProps();
+    const newClips = cues.map((cue) => {
+      const dur = Math.max(0.4, cue.end - cue.start);
+      return makeClip({
+        kind: "text",
+        trackId: track!.id,
+        start: Math.max(0, cue.start),
+        duration: dur,
+        inPoint: 0,
+        outPoint: dur,
+        x: pos.x,
+        y: pos.y,
+        posLock: false,
+        isCaption: true,
+        text: {
+          ...base,
+          ...preset.props,
+          content: preset.props.uppercase ? cue.text.toUpperCase() : cue.text,
+          // uma "palavra" só por legenda: o destaque acende a caixa inteira
+          words: [{ w: cue.text, s: 0, e: dur }],
+        },
+      });
+    });
+    get().pushHistory();
+    set((st) => ({ clips: [...st.clips, ...newClips] }));
+    engine.markDirty();
+    return newClips.length;
   },
   updateClip: (id, patch, opts) => {
     if (opts?.history !== false) get().pushHistory();

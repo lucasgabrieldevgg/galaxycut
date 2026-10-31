@@ -34,12 +34,13 @@ import {
   defaultTextProps,
 } from "@/lib/editor/types";
 import { gcDrag } from "@/lib/editor/dnd";
+import { detectAndParse } from "@/lib/editor/textImport";
 import { useLibPlayer } from "@/lib/editor/libPlayer";
 import { toast } from "sonner";
 import {
   Upload, FolderOpen, FolderPlus, Folder, ChevronRight, ArrowLeft, Trash2, Plus, Type, Sparkles,
   Search, Film, ImageIcon, Music2, Loader2, PlusCircle, Mic, Play as PlayIcon,
-  Pencil, Check, X, Wand2, Star,
+  Pencil, Check, X, Wand2, Star, FileText,
 } from "lucide-react";
 import { SubtitleDialog } from "./SubtitleDialog";
 import { StockSearch } from "./StockSearch";
@@ -235,12 +236,34 @@ export function MediaPanel() {
     const rawArr = Array.from(files);
     if (!rawArr.length) return;
 
-    setImporting((prev) => prev + rawArr.length);
+    // textos e legendas NÃO são mídia: viram clipes de legenda na timeline
+    const textFiles = rawArr.filter((f) => /\.(txt|srt|vtt)$/i.test(f.name));
+    const mediaFiles = rawArr.filter((f) => !textFiles.includes(f));
+    let importedTexts = 0;
+    for (const f of textFiles) {
+      try {
+        const parsed = detectAndParse(f.name, await f.text());
+        if (!parsed || !parsed.cues.length) {
+          toast.error(t("mp.textBad", { name: f.name }));
+          continue;
+        }
+        const n = useProject.getState().addCueClips(parsed.cues);
+        if (n > 0) importedTexts++;
+      } catch {
+        toast.error(t("mp.textBad", { name: f.name }));
+      }
+    }
+    if (importedTexts > 0) {
+      toast.success(t("mp.textImported", { n: importedTexts }), { description: t("mp.textImportedDesc") });
+    }
+    if (!mediaFiles.length) return;
+
+    setImporting((prev) => prev + mediaFiles.length);
     let ok = 0;
     let fail = 0;
     const importedVideos: MediaMeta[] = [];
 
-    for (const f of rawArr) {
+    for (const f of mediaFiles) {
       try {
         const meta = await registry.importFile(f);
         addMedia({ ...meta, folderId: targetFolderId });
@@ -258,7 +281,7 @@ export function MediaPanel() {
     if (ok > 0) {
       toast.success(
         fail > 0
-          ? t("mp.importedPartial", { ok, n: rawArr.length, fail })
+          ? t("mp.importedPartial", { ok, n: mediaFiles.length, fail })
           : t("mp.importedN", { n: ok })
       );
 
@@ -564,7 +587,7 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
               ref={fileRef}
               type="file"
               multiple
-              accept="video/*,audio/*,image/*,.mp4,.webm,.mov,.mkv,.m4v,.avi,.wmv,.flv,.ts,.mts,.m2ts,.vob,.ogv,.3gp,.3g2,.mpg,.mpeg,.mpe,.mpv,.m2v,.mxf,.rm,.rmvb,.asf,.f4v,.divx,.xvid,.y4m,.nut,.png,.jpg,.jpeg,.jfif,.jpe,.jif,.jfi,.webp,.gif,.avif,.bmp,.dib,.svg,.svgz,.ico,.tiff,.tif,.heic,.heif,.raw,.cr2,.nef,.arw,.dng,.psd,.ai,.eps,.hdr,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.opus,.wma,.aiff,.aif,.aifc,.alac,.caf,.mka,.ac3,.dts,.amr,.mid,.midi,*"
+              accept="video/*,audio/*,image/*,.mp4,.webm,.mov,.mkv,.m4v,.avi,.wmv,.flv,.ts,.mts,.m2ts,.vob,.ogv,.3gp,.3g2,.mpg,.mpeg,.mpe,.mpv,.m2v,.mxf,.rm,.rmvb,.asf,.f4v,.divx,.xvid,.y4m,.nut,.png,.jpg,.jpeg,.jfif,.jpe,.jif,.jfi,.webp,.gif,.avif,.bmp,.dib,.svg,.svgz,.ico,.tiff,.tif,.heic,.heif,.raw,.cr2,.nef,.arw,.dng,.psd,.ai,.eps,.hdr,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.opus,.wma,.aiff,.aif,.aifc,.alac,.caf,.mka,.ac3,.dts,.amr,.mid,.midi,.srt,.vtt,.txt,*"
               className="hidden"
               onChange={(e) => {
                 if (e.target.files) void handleFiles(e.target.files);
@@ -951,7 +974,7 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                 </div>
                 <div>
                   <span className="block text-xs font-bold text-zinc-100">{t("sub.title")}</span>
-                  <span className="block text-[10px] text-zinc-400">Karaokê, Estilos CapCut e Cores</span>
+                  <span className="block text-[10px] text-zinc-400">{t("mp.subsCardDesc")}</span>
                 </div>
               </div>
               <ChevronRight className="h-4 w-4 text-[var(--gc-accent)]" />
@@ -959,14 +982,31 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
 
             {/* Adicionar Texto Manual */}
             <Button
-              onClick={() => addTextClip("Seu Texto Aqui")}
+              onClick={() => addTextClip(t("ed.textDefault"))}
               className="w-full gap-2 bg-[#1c2430] hover:bg-[#283446] text-zinc-200 text-xs font-semibold mb-3"
             >
-              <Plus className="h-3.5 w-3.5" /> Adicionar Texto Simples
+              <Plus className="h-3.5 w-3.5" /> {t("mp.addText")}
             </Button>
 
+            {/* Importar legendas/texto de arquivo (.srt/.vtt/.txt) */}
+            <label className="mb-3 block">
+              <input
+                type="file"
+                accept=".srt,.vtt,.txt"
+                multiple
+                hidden
+                onChange={(e) => {
+                  if (e.target.files) void handleFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <span className="flex h-8 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-[#232d3d] bg-[#10151d] text-xs font-semibold text-zinc-200 transition hover:bg-[#141a24]">
+                <FileText className="h-3.5 w-3.5" /> {t("mp.importText")}
+              </span>
+            </label>
+
             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
-              Presets de Texto:
+              {t("mp.textPresets")}
             </span>
 
             <ScrollArea className="min-h-0 flex-1">
@@ -994,7 +1034,7 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                           },
                         })
                       );
-                      toast.success(`Texto "${p.name}" adicionado!`);
+                      toast.success(t("mp.textPresetAdded", { name: p.name }));
                     }}
                     className="flex flex-col items-center gap-1.5 rounded-lg border border-[#1e2633] bg-[#121722] p-2 transition hover:border-[var(--gc-accent)] hover:bg-[#161c2a]"
                   >
