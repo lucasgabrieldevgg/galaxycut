@@ -1,10 +1,11 @@
-// GalaxyCut — casca do app: onboarding (1ª vez) → home (edições) ↔ editor.
+// GalaxyCut — casca do app: link compartilhado (#s=) → onboarding (1ª vez) → home ↔ editor.
 // Carrega o projeto escolhido (disco > navegador no app) e devolve pra home.
 "use client";
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { useProject, usePlayback, saveToStorage, setActiveProject } from "@/lib/editor/store";
 import { rehydrateMedia } from "@/lib/editor/media";
 import { engine } from "@/lib/editor/playback";
@@ -13,10 +14,13 @@ import { saveToDisk, loadDiskProject, listDiskProjects } from "@/lib/editor/disk
 import { desktop } from "@/lib/editor/desktop";
 import { useSettings } from "@/lib/editor/settings";
 import { t as tr, useLang } from "@/lib/editor/i18n";
+import { uid } from "@/lib/editor/types";
+import { parseShareLink, shareFragmentFromLocation, type SharePayload } from "@/lib/editor/share";
 import { HomeScreen } from "./HomeScreen";
 import { UpdateDialog } from "./UpdateDialog";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { OnboardingScreen } from "./OnboardingScreen";
+import { SharedEditScreen } from "./SharedEditScreen";
 
 const EditorShell = dynamic(() => import("./EditorShell").then((m) => m.EditorShell), {
   ssr: false,
@@ -35,6 +39,12 @@ export function GalaxyCutApp() {
   const [newOpen, setNewOpen] = useState(false);
   // 1ª vez: nasce direto na configuração inicial (sem effect — sem piscar a home)
   const [onboarding, setOnboarding] = useState(() => !useSettings.getState().onboarded);
+  // link de edição compartilhada (#s=… no fragmento — ADR-001): a tela de
+  // chegada tem prioridade sobre tudo (inclusive o onboarding de 1ª visita)
+  const [share, setShare] = useState<"none" | "loading" | "ready" | "invalid">(() =>
+    shareFragmentFromLocation() ? "loading" : "none",
+  );
+  const [sharePayload, setSharePayload] = useState<SharePayload | null>(null);
   // idioma mudou? os textos estáticos do dynamic loading acompanham…
   const lang = useLang((s) => s.lang);
   // …e o <html lang> acompanha (leitores de tela, tradutores, corretores)
@@ -77,6 +87,26 @@ export function GalaxyCutApp() {
       }
     })();
   }, []);
+
+  // decodifica o link compartilhado (payload validado na fronteira — share.ts);
+  // toda mudança de estado acontece em callback assíncrono (sem render em cascata)
+  useEffect(() => {
+    if (share !== "loading") return;
+    let cancelled = false;
+    const frag = shareFragmentFromLocation();
+    void parseShareLink(frag ?? "")
+      .then((p) => {
+        if (cancelled) return;
+        setSharePayload(p);
+        setShare("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setShare(frag ? "invalid" : "none");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [share]);
 
   async function openProject(id: string) {
     // 1) no app de desktop, o DISCO tem prioridade se for mais fresco (autosave do crash)
@@ -140,6 +170,61 @@ export function GalaxyCutApp() {
     void saveToDisk(false); // app: grava projeto.json no disco também
     setActiveProject(null);
     setRoute("home");
+  }
+
+  // ---- link compartilhado (ADR-001) ----
+
+  function stripShareHash() {
+    try {
+      if (typeof location !== "undefined" && location.hash) {
+        history.replaceState(null, "", location.pathname + location.search);
+      }
+    } catch {
+      /* noop */
+    }
+  }
+
+  /** importa a edição compartilhada pra biblioteca local e abre no editor */
+  function importShared(payload: SharePayload, mode: "edit" | "copy") {
+    const id = uid();
+    const name = mode === "copy" ? `${payload.name} (cópia)`.slice(0, 60) : payload.name.slice(0, 60);
+    projects.saveProjectSnapshot(id, {
+      project: { ...payload.project, name },
+      tracks: payload.tracks,
+      clips: payload.clips,
+      media: payload.media,
+      folders: payload.folders,
+    });
+    stripShareHash();
+    setShare("none");
+    // quem chegou por link na 1ª visita considera-se apresentado (o onboarding
+    // pode ser revisto em Configurações)
+    if (!useSettings.getState().onboarded) useSettings.getState().set({ onboarded: true });
+    toast.success(tr("shared.imported"));
+    void openProject(id);
+  }
+
+  function goHomeFromShare() {
+    stripShareHash();
+    setShare("none");
+    if (!useSettings.getState().onboarded) useSettings.getState().set({ onboarded: true });
+  }
+
+  if (share === "loading") {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#080b11]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-[var(--gc-accent)]" />
+          <p className="text-sm text-zinc-500">{tr("app.openingShare")}</p>
+        </div>
+      </div>
+    );
+  }
+  if (share === "invalid") {
+    return <SharedEditScreen payload={null} onImport={importShared} onExit={goHomeFromShare} />;
+  }
+  if (share === "ready" && sharePayload) {
+    return <SharedEditScreen payload={sharePayload} onImport={importShared} onExit={goHomeFromShare} />;
   }
 
   if (onboarding) return <OnboardingScreen onDone={() => setOnboarding(false)} />;

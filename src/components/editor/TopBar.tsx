@@ -1,4 +1,4 @@
-// GaláxiaCut — barra superior (logo redondinha + projeto + proporção + desfazer + exportar)
+// GalaxyCut — barra superior (logo + projeto + proporção + desfazer + compartilhar + exportar)
 "use client";
 
 import { useEffect, useState } from "react";
@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Undo2, Redo2, Settings, Settings2, Download, FilePlus2, House, MessageSquareHeart } from "lucide-react";
+import { Undo2, Redo2, Settings, Settings2, Download, FilePlus2, House, MessageSquareHeart, Share2 } from "lucide-react";
 import { useProject } from "@/lib/editor/store";
 import { ASPECT_CHOICES } from "@/lib/editor/types";
 import { exportFormatLabel } from "@/lib/editor/exporter";
 import { SettingsDialog } from "./SettingsDialog";
 import { FeedbackDialog } from "./FeedbackDialog";
+import { ShareDialog } from "./ShareDialog";
 import { BrandLogo } from "./BrandLogo";
 import { useT } from "@/lib/editor/i18n";
 
@@ -33,6 +34,7 @@ export function TopBar({
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const t = useT();
 
   // a aba de IA pede pra abrir as configurações (falta de chave etc.)
@@ -196,6 +198,17 @@ export function TopBar({
         </AlertDialog>
 
         <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 border-[#232d3d] bg-[#0c1017] px-2.5 text-xs text-zinc-300 hover:bg-[#141a24]"
+          onClick={() => setShareOpen(true)}
+          title={t("tb.share")}
+        >
+          <Share2 className="h-3.5 w-3.5 text-[var(--gc-accent)]" />
+          <span className="hidden sm:inline">{t("tb.share")}</span>
+        </Button>
+
+        <Button
           size="sm"
           onClick={onExport}
           className="h-7 gap-1.5 bg-[var(--gc-accent)] px-3 text-xs font-semibold text-black hover:bg-[var(--gc-accent-hover)]"
@@ -207,6 +220,7 @@ export function TopBar({
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} />
     </header>
   );
 }
