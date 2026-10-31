@@ -114,8 +114,16 @@ jobs:
           const crypto = require('crypto');
           const data = JSON.parse(fs.readFileSync('public/version.json', 'utf8'));
           const entry = (data.changelog || []).find(c => c.version === data.version) || {};
-          const appImage = 'GalaxyCut-' + data.version + '-x86_64.AppImage';
-          const winExe = 'GalaxyCut-Setup-' + data.version + '.exe';
+          // Descobre os nomes reais por glob: o electron-builder já mudou o
+          // padrão de nome (v7.9 tinha -x86_64, v8+ não tem) e hardcodar
+          // quebrou o release em toda tag desde v8.0.0.
+          const distFiles = fs.readdirSync('dist');
+          const appImage = distFiles.find((f) => f.endsWith('.AppImage'));
+          const winExe = distFiles.find((f) => f.endsWith('.exe'));
+          if (!appImage || !winExe) {
+            throw new Error('Artefatos não encontrados em dist/: ' + distFiles.join(', '));
+          }
+          console.log('appImage:', appImage, '| winExe:', winExe);
 
           const sha512 = (f) => crypto.createHash('sha512').update(fs.readFileSync('dist/' + f)).digest('base64');
           const size = (f) => fs.statSync('dist/' + f).size;
