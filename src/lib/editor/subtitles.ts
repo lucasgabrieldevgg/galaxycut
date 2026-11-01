@@ -21,12 +21,13 @@ export interface WhisperProgress {
   perWinSec?: number; // v7.3: segundos estimados por janela (pro ~restante)
 }
 
-export type WhisperModelId = "tiny" | "base" | "small";
+export type WhisperModelId = "tiny" | "base" | "small" | "medium";
 
 export const WHISPER_MODELS: { id: WhisperModelId; label: string; hint: string }[] = [
   { id: "tiny", label: "Rápido", hint: "~40 MB · mais erros, mas voa" },
   { id: "base", label: "Equilibrado", hint: "~80 MB · bom pra português" },
   { id: "small", label: "Preciso", hint: "~250 MB · detecta bem mais palavras (demora mais)" },
+  { id: "medium", label: "Máximo", hint: "~750 MB · a precisão mais alta que dá pra rodar no navegador (exige paciência e RAM)" },
 ];
 
 // import() dinâmico de URL externa sem o bundler enxergar (legado — hoje o worker importa direto)
@@ -42,10 +43,19 @@ const MODEL_IDS: Record<WhisperModelId, string> = {
   tiny: "Xenova/whisper-tiny",
   base: "Xenova/whisper-base",
   small: "Xenova/whisper-small",
+  medium: "Xenova/whisper-medium",
 };
-// cadeia de fallback: pedido → base → tiny (nunca deixa o usuário na mão)
+// cadeia de fallback: pedido → base → tiny (nunca deixa o usuário na mão;
+// medium cai direto pra base — small ainda pesaria demais num fallback)
 function fallbackChain(requested: WhisperModelId): string[] {
-  const order: WhisperModelId[] = requested === "small" ? [requested, "base", "tiny"] : requested === "tiny" ? [requested, "base"] : [requested, "tiny"];
+  const order: WhisperModelId[] =
+    requested === "medium"
+      ? [requested, "base", "tiny"]
+      : requested === "small"
+      ? [requested, "base", "tiny"]
+      : requested === "tiny"
+      ? [requested, "base"]
+      : [requested, "tiny"];
   return order.map((m) => MODEL_IDS[m]);
 }
 

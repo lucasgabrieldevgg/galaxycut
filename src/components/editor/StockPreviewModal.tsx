@@ -236,10 +236,11 @@ export function StockPreviewModal({ item, open, onOpenChange, onAddStock }: Stoc
           </div>
         </DialogHeader>
 
-        {/* Player Viewport — Amplo e Responsivo */}
+        {/* Player Viewport — amplo e com ALTURA guiada pelo formato real do
+            vídeo (v9.1: antes era achatado num teto de 50vh e parecia faixa) */}
         <div
           ref={viewportRef}
-          className="relative flex-1 min-h-[200px] max-h-[50vh] sm:max-h-[56vh] md:max-h-[60vh] w-full bg-black flex items-center justify-center overflow-hidden select-none"
+          className="relative flex-1 min-h-[240px] max-h-[74vh] w-full bg-black flex items-center justify-center overflow-hidden select-none"
         >
           {loading && (
             <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/75 backdrop-blur-xs gap-2">
@@ -283,11 +284,23 @@ export function StockPreviewModal({ item, open, onOpenChange, onAddStock }: Stoc
                 ref={videoRef}
                 playsInline
                 muted={muted}
-                className="h-full w-full max-h-[50vh] sm:max-h-[56vh] md:max-h-[60vh] object-contain cursor-pointer"
+                onLoadedMetadata={(e) => {
+                  setDur(videoRef.current?.duration || item.duration || 0);
+                  const vw = e.currentTarget.videoWidth;
+                  const vh = e.currentTarget.videoHeight;
+                  if (vw && vh) {
+                    // o quadro cresce até o formato REAL do vídeo (sem achatar)
+                    e.currentTarget.style.aspectRatio = `${vw} / ${vh}`;
+                    e.currentTarget.style.width = "auto";
+                    e.currentTarget.style.height = "auto";
+                    e.currentTarget.style.maxHeight = "74vh";
+                    e.currentTarget.style.maxWidth = "100%";
+                  }
+                }}
+                className="max-h-[74vh] max-w-full cursor-pointer object-contain"
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
                 onTimeUpdate={() => setTime(videoRef.current?.currentTime ?? 0)}
-                onLoadedMetadata={() => setDur(videoRef.current?.duration || item.duration || 0)}
                 onEnded={() => setPlaying(false)}
                 onClick={togglePlay}
               />

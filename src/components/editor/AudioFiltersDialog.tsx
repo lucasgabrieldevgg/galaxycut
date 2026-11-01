@@ -146,26 +146,32 @@ export function AudioFiltersDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[88vh] overflow-y-auto border-[#232d3d] bg-[#10141d] text-zinc-200">
         <DialogHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pr-8">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <Sliders className="h-4 w-4 text-[var(--gc-accent)]" /> {title}
             </DialogTitle>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-400">Ativar Filtros</span>
-              <Switch
-                checked={config.enabled}
-                onCheckedChange={(v) => setConfig((c) => ({ ...c, enabled: v }))}
-              />
-            </div>
           </div>
           <DialogDescription className="text-xs text-zinc-400">{description}</DialogDescription>
         </DialogHeader>
+
+        {/* v9.1: o interruptor saiu do cabeçalho — ficava colado no X de fechar.
+            Agora é uma linha do corpo, com espaço de sobra pra clicar. */}
+        <div className="mb-2 flex items-center justify-between rounded-lg border border-[#232d3d] bg-[#0e1320] px-3 py-2">
+          <span className="flex items-center gap-2 text-xs font-medium text-zinc-300">
+            <Waves className="h-3.5 w-3.5 text-sky-400" />
+            {t("vfx.enableFilters")}
+          </span>
+          <Switch
+            checked={config.enabled}
+            onCheckedChange={(v) => setConfig((c) => ({ ...c, enabled: v }))}
+          />
+        </div>
 
         {/* Efeitos de voz — timbre do clipe (o mesmo grafo roda no preview e na exportação) */}
         {onVoiceFx && (
           <div className="mb-3">
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{t("vfx.title")}</p>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               <VoiceFxBtn active={voiceFx == null} onClick={() => onVoiceFx(null)} label={t("vfx.none")} title={t("vfx.note")} />
               {VOICE_FX.map((fx) => (
                 <VoiceFxBtn

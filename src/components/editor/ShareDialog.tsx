@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, PencilLine, CopyPlus, Link2, Copy, Check, RefreshCw, FileVideo, Loader2, TriangleAlert } from "lucide-react";
+import { Eye, PencilLine, CopyPlus, Link2, Copy, Check, RefreshCw, FileVideo, Loader2, TriangleAlert, MonitorPlay } from "lucide-react";
 import { toast } from "sonner";
 import { useProject } from "@/lib/editor/store";
 import { useT } from "@/lib/editor/i18n";
@@ -18,6 +18,7 @@ const LEVEL_ICONS: Record<ShareLevel, typeof Eye> = { view: Eye, edit: PencilLin
 export function ShareDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const t = useT();
   const [level, setLevel] = useState<ShareLevel>("view");
+  const [directVideo, setDirectVideo] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [generatedName, setGeneratedName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -27,9 +28,16 @@ export function ShareDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 
   const info = SHARE_LEVEL_INFO.find((l) => l.id === level) ?? SHARE_LEVEL_INFO[0];
 
-  // trocar o nível invalida o link gerado (o nível viaja DENTRO do link)
+  // trocar o nível OU o modo invalida o link gerado (ambos viajam DENTRO do link)
   function pick(l: ShareLevel) {
     setLevel(l);
+    setLink(null);
+    setError(null);
+    setCopied(false);
+  }
+
+  function toggleDirect() {
+    setDirectVideo((d) => !d);
     setLink(null);
     setError(null);
     setCopied(false);
@@ -41,18 +49,21 @@ export function ShareDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setCopied(false);
     try {
       const st = useProject.getState();
-      const url = await buildShareLink({
-        v: 1,
-        lvl: level,
-        name: st.project.name.slice(0, 200),
-        made: Date.now(),
-        app: APP_VERSION,
-        project: st.project,
-        tracks: st.tracks,
-        clips: st.clips,
-        folders: st.folders,
-        media: st.media,
-      });
+      const url = await buildShareLink(
+        {
+          v: 1,
+          lvl: level,
+          name: st.project.name.slice(0, 200),
+          made: Date.now(),
+          app: APP_VERSION,
+          project: st.project,
+          tracks: st.tracks,
+          clips: st.clips,
+          folders: st.folders,
+          media: st.media,
+        },
+        { directVideo }
+      );
       setGeneratedName(st.project.name.slice(0, 200));
       setLink(url);
     } catch (e) {
@@ -126,6 +137,33 @@ export function ShareDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           })}
         </div>
 
+        {/* v9.1: link de vídeo direto — quem abre cai DIRETO no player estilo
+            shorts, sem a tela de apresentação do link */}
+        <button
+          type="button"
+          onClick={toggleDirect}
+          aria-pressed={directVideo}
+          className={`mt-1 flex w-full items-start gap-3 rounded-lg border p-3 text-left transition ${
+            directVideo
+              ? "border-[var(--gc-accent)] bg-[var(--gc-accent-7)]"
+              : "border-[#232d3d] bg-[#10151d] hover:border-[#2a3546]"
+          }`}
+        >
+          <span
+            className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+              directVideo ? "bg-[var(--gc-accent-20)] text-[var(--gc-accent)]" : "bg-[#1c2430] text-zinc-400"
+            }`}
+          >
+            <MonitorPlay className="h-4 w-4" />
+          </span>
+          <span className="min-w-0">
+            <span className={`block text-sm font-semibold ${directVideo ? "text-[var(--gc-accent)]" : "text-zinc-200"}`}>
+              {t("share.directVideo")}
+            </span>
+            <span className="mt-0.5 block text-xs leading-snug text-zinc-400">{t("share.directVideoDesc")}</span>
+          </span>
+        </button>
+
         <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-zinc-500">
           <FileVideo className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {t("share.mediaNote")}
@@ -139,7 +177,7 @@ export function ShareDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             <div className="mt-3 flex items-center gap-2">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{t("share.levelLabel")}</span>
               <span className="rounded-full bg-[var(--gc-accent-15)] px-2 py-0.5 text-[11px] font-semibold text-[var(--gc-accent)]">
-                {t(info.nameKey)}
+                {directVideo ? t("share.directVideo") : t(info.nameKey)}
               </span>
             </div>
 

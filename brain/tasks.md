@@ -40,3 +40,17 @@
 - Filtros OBS (audioFilters) ainda são preview-only na exportação — os efeitos de voz JÁ saem no arquivo
 - `console.log` de erro no handleFiles usa i18n, mas diálogos antigos (AudioFiltersDialog/Inspector) têm strings PT hardcoded
 - Chrome não tokenizado (hex espalhado) — só o accent é tokenizado
+
+## Lote 4 — feedback do Lucas pós-v9.0.0 (sessão de 2026-11-01, TUDO FEITO)
+- [x] Quadradinho animado nos catálogos (FxTile.tsx + keyframes gcfx-* no globals.css): efeitos, transições E animações (23/25 animando verificado no navegador)
+- [x] 5 novos efeitos de voz (estúdio/subaquático/alienígena/telefone/grave) + chips direto no Inspetor + "Ativar filtros" longe do X
+- [x] Link de vídeo direto no Share (#s=…&w=1): cai direto no player fullscreen estilo shorts, autoplay com fallback de toque (verificado ponta a ponta)
+- [x] Visualização não oferece mais "copiar pra mim"; edição usa ID estável (reabrir o link atualiza a cópia local); cópia segue duplicando
+- [x] SFX com fallback pro Internet Archive (0 → 12 resultados com Openverse fora do ar) + empty states com buscas populares
+- [x] Vídeo da biblioteca toca VISÍVEL na barrinha (mini-video) e o modal grande pausa a barrinha (antes tocavam dobrado); modal a 74vh guiado pelo aspecto real
+- [x] PresetPreview mede o container e auto-ajusta a fonte (legenda não corta mais)
+- [x] Categorias nos stickers (10 chips de busca) e emojis (10 categorias + Todas, 160 emojis, filtro verificado)
+- [x] Whisper medium (~750 MB) + catálogo de IA com modelos nomeados por tarefa + voice-transform marcado disponível
+- [x] "Shorts" removido da aba de músicas (→ "Estilos instrumentais") e do README ("creators of every kind")
+- [x] mp.recordVoice existia em PT?? não — nem existia: mostrava a chave crua. Corrigido ×3 idiomas + layout line-clamp
+- [x] Bump 9.1.0 + changelog trilingue (11 itens × 3) + 63/63 testes + lint no nível do HEAD + build verde

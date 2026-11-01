@@ -76,6 +76,16 @@ function PlayerCore({
 
   const getMediaEl = () => (item.kind === "video" ? videoRef.current : audioRef.current);
 
+  // modal aberto = o vídeo da barra PAUSA (senão tocam os dois juntos)
+  useEffect(() => {
+    if (!modalOpen) return;
+    const el = item.kind === "video" ? videoRef.current : audioRef.current;
+    if (el && !el.paused) {
+      el.pause();
+      setPlaying(false);
+    }
+  }, [modalOpen, item.kind]);
+
   // montou com src? toca
   useEffect(() => {
     const el = getMediaEl();
@@ -176,14 +186,18 @@ function PlayerCore({
   return (
     <>
       <div className="flex shrink-0 flex-col gap-1.5 border-t border-[#1c2430] bg-[#0e1320] px-3 py-2 shadow-xl select-none">
-        {/* Elemento de Áudio/Vídeo invisível ou mini */}
-        <div className="sr-only pointer-events-none">
-          {item.kind === "video" ? (
+        {/* Elemento de Áudio invisível · VÍDEO em miniatura VISÍVEL (v9.1:
+            antes o vídeo tocava escondido no player “de música” — agora dá
+            pra ver o que tá tocando e clicar expande a prévia grande) */}
+        {item.kind === "video" ? (
+          <div className="relative mx-auto w-full max-w-[180px] overflow-hidden rounded-md border border-[#232d3d] bg-black">
             <video
               ref={videoRef}
               playsInline
               preload="auto"
               muted={muted}
+              onClick={toggle}
+              className="aspect-video h-auto w-full cursor-pointer object-contain"
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
               onTimeUpdate={() => handleTimeUpdate(videoRef.current?.currentTime ?? 0)}
@@ -194,7 +208,19 @@ function PlayerCore({
                 setPlaying(false);
               }}
             />
-          ) : (
+            {!playing && (
+              <button
+                type="button"
+                onClick={toggle}
+                className="absolute inset-0 flex items-center justify-center bg-black/35 transition hover:bg-black/50"
+                aria-label={t("lib.play")}
+              >
+                <Play className="h-6 w-6 fill-current text-white/90 drop-shadow" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="sr-only pointer-events-none">
             <audio
               ref={audioRef}
               preload="auto"
@@ -209,8 +235,8 @@ function PlayerCore({
                 setPlaying(false);
               }}
             />
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Linha 1: Thumbnail/Ícone + Título + Tempo + Botão Expandir + Fechar */}
         <div className="flex items-center gap-2 min-w-0">

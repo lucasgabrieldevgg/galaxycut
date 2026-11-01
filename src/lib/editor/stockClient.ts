@@ -209,10 +209,10 @@ function inDuration(item: StockItem, preset: DurPreset, dmin: number, dmax: numb
   return item.duration >= lo && item.duration <= hi;
 }
 
-// ---------- gêneros musicais (estilo CapCut + Shorts Backgrounds) ----------
+// ---------- gêneros musicais (estilo CapCut + trilhas instrumentais) ----------
 export const MUSIC_GENRES: Record<string, { label: string; terms: string }> = {
   all: { label: "Todos", terms: "" },
-  shorts: { label: "Áudio Shorts", terms: "instrumental background music beat ambient no vocals clean vlog" },
+  shorts: { label: "Instrumental (Sem Voz)", terms: "instrumental background music beat ambient no vocals clean vlog" },
   shorts_curiosity: { label: "Curiosidades & Fatos", terms: "curiosity mystery ambient synth pulse documentary background instrumental" },
   shorts_lofi: { label: "Lo-Fi & Calmo", terms: "lofi chill hip hop beat study relaxing instrumental no vocals" },
   shorts_comedy: { label: "Cômico & Memes", terms: "sneaky funny whimsical upbeat quirky comedy instrumental" },
@@ -588,9 +588,11 @@ export async function searchStock(params: StockSearchParams): Promise<{ results:
     if (en && qMusic !== qMusicPt) jobs.push(run(() => openverseAudio(qMusicPt, page, { category: "music" })));
     jobs.push(run(() => iaAudio(qMusic, page, "music")));
   } else {
-    // EFEITO: Freesound puro (não é música!) + fallback com "sound effect" no fim
+    // EFEITO: Freesound via Openverse + fallback Internet Archive (v9.1: sem
+    // isso, a aba ficava vazia sempre que o Openverse caía/limitava a taxa)
     jobs.push(run(() => openverseAudio(en ?? q, page, { source: "freesound" })));
     jobs.push(run(() => openverseAudio(`${en ?? q} sound effect`, page, { noFilter: true })));
+    jobs.push(run(() => iaAudio(`${en ?? q} sound effect`, page, "sfx")));
     if (en) jobs.push(run(() => openverseAudio(`${q} efeito sonoro`, page, { source: "freesound" })));
   }
 

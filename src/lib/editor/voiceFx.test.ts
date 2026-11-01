@@ -19,8 +19,10 @@ describe("catálogo de efeitos de voz", () => {
     }
   });
 
-  it("tem os 4 efeitos embarcados do roadmap (robô, rádio, megafone, eco)", () => {
-    expect(VOICE_FX.map((f) => f.id).sort()).toEqual(["echo", "megaphone", "radio", "robot"]);
+  it("tem os 4 efeitos do roadmap + os 5 novos da v9.1", () => {
+    expect(VOICE_FX.map((f) => f.id).sort()).toEqual([
+      "alien", "bass", "echo", "megaphone", "radio", "robot", "studio", "telephone", "underwater",
+    ]);
   });
 });
 

@@ -2,6 +2,8 @@
 // Mostra exatamente o que o link permite (nível + descrição, como o gerador
 // prometeu) e oferece as ações compatíveis: assistir (viewer travado),
 // editar ou criar uma cópia. Nada é persistido sem escolha explícita.
+// v9.1: links com &w=1 (modo vídeo direto) abrem direto no player estilo
+// shorts — sem a tela de apresentação.
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -9,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import {
   Eye, PencilLine, CopyPlus, Play, Pause, SkipBack, ChevronLeft, ChevronRight,
-  Copy, ArrowLeft, FileVideo, TriangleAlert,
+  ArrowLeft, FileVideo, TriangleAlert,
 } from "lucide-react";
 import { useProject, usePlayback, setActiveProject } from "@/lib/editor/store";
 import { engine } from "@/lib/editor/playback";
@@ -25,14 +27,17 @@ export function SharedEditScreen({
   payload,
   onImport,
   onExit,
+  direct = false,
 }: {
   payload: SharePayload | null;
   onImport: (p: SharePayload, mode: "edit" | "copy") => void;
   onExit: () => void;
+  /** link de vídeo direto (#s=…&w=1): cai direto no player, sem apresentação */
+  direct?: boolean;
 }) {
   const t = useT();
   const lang = useLang((s) => s.lang);
-  const [watching, setWatching] = useState(false);
+  const [watching, setWatching] = useState(direct);
 
   // link inválido/corrompido — erro amigável, sem stack na cara do usuário
   if (!payload) {
@@ -59,7 +64,14 @@ export function SharedEditScreen({
   const date = new Date(payload.made).toLocaleDateString(lang === "pt" ? "pt-BR" : lang === "es" ? "es-ES" : "en-US");
 
   if (watching) {
-    return <ShareViewer payload={payload} onBack={() => setWatching(false)} onMakeCopy={() => onImport(payload, "copy")} />;
+    return (
+      <ShareViewer
+        payload={payload}
+        onBack={() => setWatching(false)}
+        direct={direct}
+        onMakeCopy={payload.lvl === "view" ? undefined : () => onImport(payload, "copy")}
+      />
+    );
   }
 
   const btnOutline =
@@ -102,13 +114,11 @@ export function SharedEditScreen({
       <div className="mt-6 flex w-full flex-col gap-2">
         {payload.lvl === "view" ? (
           <>
+            {/* v9.1: visualização não oferece mais "copiar pra mim" — o nível
+                só deixa OLHAR, então o botão de copiar não tem por que existir */}
             <Button onClick={() => setWatching(true)} className={btnPrimary}>
               <Play className="h-4 w-4" />
               {t("shared.watch")}
-            </Button>
-            <Button variant="outline" onClick={() => onImport(payload, "copy")} className={btnOutline}>
-              <CopyPlus className="h-4 w-4" />
-              {t("shared.copyForMe")}
             </Button>
           </>
         ) : payload.lvl === "edit" ? (
@@ -154,15 +164,19 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Visualizador travado: play/scrub no canvas do engine, zero edição. */
+/** Visualizador travado: play/scrub no canvas do engine, zero edição.
+ * v9.1: `direct` = modo vídeo (link #s=…&w=1): tela cheia estilo shorts,
+ * autoplay com tentativa de desbloqueio por toque, controles mínimos. */
 function ShareViewer({
   payload,
   onBack,
+  direct = false,
   onMakeCopy,
 }: {
   payload: SharePayload;
   onBack: () => void;
-  onMakeCopy: () => void;
+  direct?: boolean;
+  onMakeCopy?: () => void;
 }) {
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -170,6 +184,7 @@ function ShareViewer({
   const duration = usePlayback((s) => s.duration);
   const playing = usePlayback((s) => s.playing);
   const projectName = useProject((s) => s.project.name);
+  const [blocked, setBlocked] = useState(false); // navegador exigiu gesto pra tocar
 
   // carrega a edição em memória SEM projeto ativo (não polui a biblioteca nem
   // persiste nada — o autosave guarda activeProjectId nulo) e liga o engine
@@ -191,8 +206,90 @@ function ShareViewer({
       useProject.setState({ media });
       engine.markDirty();
     });
+    // modo vídeo direto: tenta dar play sozinho (estilo shorts); se depois
+    // de meio segundo o engine não tocar (gesto bloqueado pelo navegador),
+    // acende o botão grande de toque
+    if (direct) {
+      engine.play();
+      const tid = setTimeout(() => {
+        if (!usePlayback.getState().playing) setBlocked(true);
+      }, 500);
+      return () => {
+        clearTimeout(tid);
+        engine.pause();
+      };
+    }
     return () => engine.pause();
-  }, [payload]);
+  }, [payload, direct]);
+
+  const tapPlay = () => {
+    setBlocked(false);
+    void engine.play();
+  };
+
+  // ---- modo VÍDEO DIRETO: tela cheia, toque pausa/retoma, controles esquivos
+  if (direct) {
+    return (
+      <div className="flex h-screen w-full flex-col bg-black text-zinc-200 select-none">
+        <div className="relative flex min-h-0 flex-1 items-center justify-center">
+          <canvas
+            ref={canvasRef}
+            width={payload.project.width}
+            height={payload.project.height}
+            onClick={() => (playing ? engine.pause() : tapPlay())}
+            className="max-h-full max-w-full bg-black object-contain"
+          />
+          {(blocked || (!playing && playhead === 0)) && (
+            <button
+              type="button"
+              onClick={tapPlay}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/45 transition hover:bg-black/55"
+            >
+              <span className="flex h-20 w-20 items-center justify-center rounded-full border border-white/25 bg-black/60 shadow-2xl backdrop-blur-sm transition hover:scale-105">
+                <Play className="ml-1 h-9 w-9 fill-current text-white" />
+              </span>
+              <span className="text-sm font-medium text-zinc-200 drop-shadow">{t("shared.tapToPlay")}</span>
+            </button>
+          )}
+        </div>
+
+        <footer className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/85 to-transparent px-4 pb-3 pt-10">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-zinc-300 hover:bg-white/10 hover:text-white"
+            onClick={() => (playing ? engine.pause() : tapPlay())}
+            aria-label={playing ? t("pv.pause") : t("pv.play")}
+          >
+            {playing ? <Pause className="h-5 w-5 fill-current" /> : <Play className="ml-0.5 h-5 w-5 fill-current" />}
+          </Button>
+          <span className="w-24 shrink-0 font-mono text-[11px] tabular-nums text-zinc-400">
+            {fmtTime(playhead)} / {fmtTime(duration)}
+          </span>
+          <Slider
+            value={[Math.min(playhead, Math.max(duration, 0))]}
+            max={Math.max(duration, 0.1)}
+            step={0.01}
+            onValueChange={(v) => engine.seek(v[0], { mode: "free" })}
+            className="flex-1"
+          />
+          <span className="hidden max-w-[180px] truncate text-[11px] text-zinc-500 sm:block">{projectName}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-zinc-400 hover:bg-white/10 hover:text-white"
+            onClick={onBack}
+            aria-label={t("shared.backToLink")}
+            title={t("shared.backToLink")}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </footer>
+      </div>
+    );
+  }
+
+  // ---- modo normal (botão “Assistir” na tela de apresentação)
 
   return (
     <div className="flex h-screen flex-col bg-[#080b11] text-zinc-200">
@@ -211,15 +308,17 @@ function ShareViewer({
           <Eye className="h-3 w-3" />
           {t("shared.viewOnly")}
         </span>
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto h-7 gap-1.5 border-[#232d3d] bg-[#0c1017] px-2.5 text-xs text-zinc-300 hover:bg-[#141a24]"
-          onClick={onMakeCopy}
-        >
-          <Copy className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{t("shared.copyForMe")}</span>
-        </Button>
+        {onMakeCopy && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto h-7 gap-1.5 border-[#232d3d] bg-[#0c1017] px-2.5 text-xs text-zinc-300 hover:bg-[#141a24]"
+            onClick={onMakeCopy}
+          >
+            <CopyPlus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t("shared.copyForMe")}</span>
+          </Button>
+        )}
       </header>
 
       <div className="flex min-h-0 flex-1 items-center justify-center p-4">

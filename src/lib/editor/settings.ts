@@ -23,7 +23,7 @@ export interface AppSettings {
   captionPreset: string; // id do CAPTION_PRESETS
   captionMaxWords: 1 | 2 | 3 | 4; // palavras por caixa de legenda (anti-inundação)
   captionPos: { x: number; y: number }; // posição global das legendas (-1..1)
-  whisperModel: "tiny" | "base" | "small";
+  whisperModel: "tiny" | "base" | "small" | "medium";
   keys: { pexels: string; pixabay: string };
   /** verificador de atualização automático (mostra changelog quando sai versão nova) */
   autoUpdateCheck: boolean;

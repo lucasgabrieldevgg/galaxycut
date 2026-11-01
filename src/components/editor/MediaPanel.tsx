@@ -570,16 +570,16 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                 title={t("mp.importFolderHint")}
                 className="flex w-[74px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-1 py-3 text-zinc-500 transition hover:border[var(--gc-accent-60)] hover:text-[var(--gc-accent)]"
               >
-                <FolderOpen className="h-5 w-5" />
-                <span className="text-[10px] font-medium leading-tight text-center">{t("mp.importFolder").split(" ")[0]}<br />{t("mp.importFolder").split(" ").slice(1).join(" ")}</span>
+                <FolderOpen className="h-5 w-5 shrink-0" />
+                <span className="line-clamp-2 break-words px-0.5 text-[10px] font-medium leading-tight text-center">{t("mp.importFolder")}</span>
               </button>
               <button
                 onClick={() => setRecordOpen(true)}
                 title={t("mp.recordHint")}
                 className="flex w-[74px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[#2a3546] bg-[#0e1320] px-1 py-3 text-zinc-500 transition hover:border-red-400/60 hover:text-red-400"
               >
-                <Mic className="h-5 w-5" />
-                <span className="text-[10px] font-medium leading-tight text-center">{t("mp.recordVoice").split(" ")[0]}<br />{t("mp.recordVoice").split(" ").slice(1).join(" ")}</span>
+                <Mic className="h-5 w-5 shrink-0" />
+                <span className="line-clamp-2 break-words px-0.5 text-[10px] font-medium leading-tight text-center">{t("mp.recordVoice")}</span>
               </button>
             </div>
 

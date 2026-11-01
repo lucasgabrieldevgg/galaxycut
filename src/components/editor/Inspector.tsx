@@ -13,6 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useProject, usePlayback } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
 import { Clip, FONTS, TextProps, TRANSITIONS, TransitionType, clipEnd } from "@/lib/editor/types";
+import { FxTile } from "./FxTile";
 import { AlignLeft, AlignCenter, AlignRight, Bold, Italic, RotateCcw, Wand2, ArrowRightFromLine, Paintbrush, Pin, Sliders } from "lucide-react";
 import { engine } from "@/lib/editor/playback";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ import { KeyframeInspector } from "./KeyframeInspector";
 import { AnimationInspector } from "./AnimationInspector";
 import { EffectsInspector } from "./EffectsInspector";
 import { AudioFiltersDialog } from "./AudioFiltersDialog";
+import { VOICE_FX, type VoiceFxId } from "@/lib/editor/voiceFx";
 
 export function Inspector() {
   const t = useT();
@@ -544,13 +546,13 @@ function ClipInspector({ clip }: { clip: Clip }) {
               key={t.type}
               onClick={() => update({ transitionIn: t.type === "none" ? undefined : { type: t.type as TransitionType, duration: trans?.duration ?? 0.5 } })}
               title={t.label}
-              className={`flex flex-col items-center gap-0.5 rounded-md border px-0.5 py-1.5 text-[9px] transition ${
+              className={`flex flex-col items-center gap-0.5 rounded-md border px-0.5 py-1 text-[9px] transition ${
                 (trans?.type ?? "none") === t.type
                   ? "border-fuchsia-400 bg-fuchsia-500/10 text-fuchsia-300"
                   : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
               }`}
             >
-              <span className="text-[13px] leading-none">{t.icon}</span>
+              <FxTile kind="transition" type={t.type} />
               <span className="w-full truncate text-center leading-tight">{t.label}</span>
             </button>
           ))}
@@ -626,6 +628,40 @@ function ClipInspector({ clip }: { clip: Clip }) {
                 onCheckedChange={(v) => update({ enhance: v })}
                 className="data-[state=checked]:bg-[var(--gc-accent)]"
               />
+            </div>
+
+            {/* v9.1: efeitos de voz à vista aqui também — antes só existiam
+                escondidos dentro de "Configurar Filtros" */}
+            <div>
+              <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-zinc-500">{t("vfx.title")}</p>
+              <div className="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => update({ voiceFx: undefined })}
+                  className={`rounded-full border px-2 py-0.5 text-[10px] transition ${
+                    !clip.voiceFx
+                      ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                      : "border-[#2c364c] bg-[#121824] text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  {t("vfx.none")}
+                </button>
+                {VOICE_FX.map((fx) => (
+                  <button
+                    key={fx.id}
+                    type="button"
+                    title={t(fx.descKey)}
+                    onClick={() => update({ voiceFx: fx.id as VoiceFxId })}
+                    className={`rounded-full border px-2 py-0.5 text-[10px] transition ${
+                      clip.voiceFx === fx.id
+                        ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                        : "border-[#2c364c] bg-[#121824] text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    {t(fx.nameKey)}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <Button

@@ -17,6 +17,7 @@ import {
 import { engine } from "@/lib/editor/playback";
 import { Sparkles, Plus, Trash2, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { FxTile } from "./FxTile";
 
 export function EffectsInspector({ clip }: { clip: Clip }) {
   const addClipEffect = useProject((s) => s.addClipEffect);
@@ -91,7 +92,7 @@ export function EffectsInspector({ clip }: { clip: Clip }) {
                       onClick={() => addEffect(item)}
                       className="flex items-center gap-2 px-2 py-1.5 text-[11px] cursor-pointer hover:bg-[#1a2230] focus:bg-[#1a2230]"
                     >
-                      <span className="text-sm">{item.icon}</span>
+                      <FxTile kind="effect" type={item.type} className="shrink-0" />
                       <div className="flex flex-col flex-1 min-w-0">
                         <span className="font-medium text-zinc-200">{item.name}</span>
                         <span className="text-[9px] text-zinc-500 truncate">{item.description}</span>
@@ -131,7 +132,7 @@ export function EffectsInspector({ clip }: { clip: Clip }) {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm">{meta.icon}</span>
+                    <FxTile kind="effect" type={eff.type} />
                     <span className="text-[11px] font-semibold text-zinc-200">{meta.name}</span>
                   </div>
                   <div className="flex items-center gap-2">

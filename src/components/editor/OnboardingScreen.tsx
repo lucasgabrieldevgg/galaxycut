@@ -27,7 +27,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const totalSteps = inApp ? 4 : 3;
   const [step, setStep] = useState(1);
   // download de modelos (checkboxes: pode marcar quantos quiser)
-  const [pick, setPick] = useState<Record<WhisperModelId, boolean>>({ tiny: false, base: true, small: false });
+  const [pick, setPick] = useState<Record<WhisperModelId, boolean>>({ tiny: false, base: true, small: false, medium: false });
   const [downloading, setDownloading] = useState<WhisperModelId | null>(null);
   const [pct, setPct] = useState(0);
   const [finished, setFinished] = useState<WhisperModelId[]>([]);

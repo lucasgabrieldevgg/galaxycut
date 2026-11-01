@@ -91,19 +91,27 @@ function baseUrl(): string {
   return `${location.origin}${location.pathname}`;
 }
 
-export async function buildShareLink(payload: SharePayload): Promise<string> {
+export async function buildShareLink(payload: SharePayload, opts?: { directVideo?: boolean }): Promise<string> {
   const bytes = await gzipText(JSON.stringify(payload));
   const enc = toB64Url(bytes);
   if (enc.length > MAX_ENCODED_CHARS) throw new Error("share/too-big");
-  return `${baseUrl()}#s=${enc}`;
+  // &w=1: modo vídeo direto — quem abre cai direto no player, sem a tela de
+  // apresentação do link (estilo shorts: só o vídeo, tela cheia)
+  return `${baseUrl()}#s=${enc}${opts?.directVideo ? "&w=1" : ""}`;
 }
 
 // ---------- leitura do link ----------
 
 export function shareFragmentFromLocation(): string | null {
   if (typeof location === "undefined") return null;
-  const m = location.hash.match(/^#s=([A-Za-z0-9_-]+)$/);
+  const m = location.hash.match(/^#s=([A-Za-z0-9_-]+)/);
   return m ? m[1] : null;
+}
+
+/** true quando o link pede modo vídeo direto (#s=…&w=1) */
+export function shareIsDirectVideo(): boolean {
+  if (typeof location === "undefined") return false;
+  return /[&?]w=1(?:&|$)/.test(location.hash);
 }
 
 export async function parseShareLink(encoded: string): Promise<SharePayload> {

@@ -1,9 +1,12 @@
 // GalaxyCut — preview de estilo de legenda em CANVAS (v7.8).
 // Desenha fielmente fontes, contorno, caixa de fundo e o comportamento
 // da palavra ativa (karaokê, caixa na palavra, sem saltos, neon, etc.)
+// v9.1: o canvas mede a largura REAL do container e a fonte se auto-ajusta
+// — o texto nunca mais vaza/corta nas bordas do quadradinho (o espaço
+// sempre é suficiente, agora o desenho também).
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { TextProps } from "@/lib/editor/types";
 
 export function PresetPreview({
@@ -15,13 +18,29 @@ export function PresetPreview({
   height?: number;
   previewText?: { w1: string; w2: string };
 }) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const ref = useRef<HTMLCanvasElement>(null);
+  const [width, setWidth] = useState(160);
+
+  // acompanha a largura do container (grade de 4 colunas etc.)
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 20) setWidth(w);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const cv = ref.current;
     if (!cv) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const W = 160;
+    const W = width;
     const H = height;
     cv.width = Math.round(W * dpr);
     cv.height = Math.round(H * dpr);
@@ -32,21 +51,32 @@ export function PresetPreview({
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, W, H);
 
-    const size = Math.round(height * 0.48);
-    const base = tp.bold ? "700" : "400";
-    ctx.font = `${tp.italic ? "italic " : ""}${base} ${size}px ${tp.font ?? "Arial, sans-serif"}`;
-    ctx.textBaseline = "middle";
-
     let w1 = previewText?.w1 ?? "Texto";
     let w2 = previewText?.w2 ?? "Ativo";
     if (tp.uppercase) {
       w1 = w1.toUpperCase();
       w2 = w2.toUpperCase();
     }
+
+    // ---- auto-ajuste: a fonte encolhe até o texto caber com folga ----
+    let size = Math.round(height * 0.48);
+    const measure = (px: number) => {
+      ctx.font = `${tp.italic ? "italic " : ""}${tp.bold ? "700" : "400"} ${px}px ${tp.font ?? "Arial, sans-serif"}`;
+      const space = ctx.measureText(" ").width;
+      return ctx.measureText(w1).width + space + ctx.measureText(w2).width;
+    };
+    let total = measure(size);
+    const maxW = Math.max(24, W - 10);
+    if (total > maxW) {
+      size = Math.max(8, Math.floor(size * (maxW / total)));
+      total = measure(size);
+    }
+
+    ctx.font = `${tp.italic ? "italic " : ""}${tp.bold ? "700" : "400"} ${size}px ${tp.font ?? "Arial, sans-serif"}`;
+    ctx.textBaseline = "middle";
+
     const space = ctx.measureText(" ").width;
     const w1w = ctx.measureText(w1).width;
-    const w2w = ctx.measureText(w2).width;
-    const total = w1w + space + w2w;
     let x = (W - total) / 2;
     const y = H / 2;
 
@@ -130,7 +160,11 @@ export function PresetPreview({
       : tp.color || "#FFFFFF";
 
     drawWord(w2, hi, x, true);
-  }, [tp, height, previewText]);
+  }, [tp, height, width, previewText]);
 
-  return <canvas ref={ref} className="mx-auto block max-w-full" aria-hidden />;
+  return (
+    <div ref={wrapRef} className="mx-auto w-full max-w-full">
+      <canvas ref={ref} className="mx-auto block max-w-full" aria-hidden />
+    </div>
+  );
 }

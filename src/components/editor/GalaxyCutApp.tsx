@@ -15,7 +15,7 @@ import { desktop } from "@/lib/editor/desktop";
 import { useSettings } from "@/lib/editor/settings";
 import { t as tr, useLang } from "@/lib/editor/i18n";
 import { uid } from "@/lib/editor/types";
-import { parseShareLink, shareFragmentFromLocation, type SharePayload } from "@/lib/editor/share";
+import { parseShareLink, shareFragmentFromLocation, shareIsDirectVideo, type SharePayload } from "@/lib/editor/share";
 import { HomeScreen } from "./HomeScreen";
 import { UpdateDialog } from "./UpdateDialog";
 import { NewProjectDialog } from "./NewProjectDialog";
@@ -184,9 +184,21 @@ export function GalaxyCutApp() {
     }
   }
 
-  /** importa a edição compartilhada pra biblioteca local e abre no editor */
+  /** importa a edição compartilhada pra biblioteca local e abre no editor.
+   * v9.1 — a diferença entre EDITAR e COPIAR ficou de verdade:
+   *  - "edit" usa um ID estável derivado do link: abrir o mesmo link de novo
+   *    ATUALIZA a mesma edição local (a edição local de quem abriu é afetada),
+   *    em vez de criar cópias infinitas;
+   *  - "copy" sempre duplica com nome (cópia) — nunca toca numa edição existente. */
   function importShared(payload: SharePayload, mode: "edit" | "copy") {
-    const id = uid();
+    let id = uid();
+    if (mode === "edit") {
+      // hash estável e curto de nome+data: mesmo link → mesma edição local
+      let h = 0;
+      const key = `${payload.name}|${payload.made}|${payload.clips.length}`;
+      for (let i = 0; i < key.length; i++) h = (Math.imul(31, h) + key.charCodeAt(i)) | 0;
+      id = `shared-${(h >>> 0).toString(36)}`;
+    }
     const name = mode === "copy" ? `${payload.name} (cópia)`.slice(0, 60) : payload.name.slice(0, 60);
     projects.saveProjectSnapshot(id, {
       project: { ...payload.project, name },
@@ -220,11 +232,12 @@ export function GalaxyCutApp() {
       </div>
     );
   }
+  const shareDirect = shareIsDirectVideo();
   if (share === "invalid") {
-    return <SharedEditScreen payload={null} onImport={importShared} onExit={goHomeFromShare} />;
+    return <SharedEditScreen payload={null} onImport={importShared} onExit={goHomeFromShare} direct={shareDirect} />;
   }
   if (share === "ready" && sharePayload) {
-    return <SharedEditScreen payload={sharePayload} onImport={importShared} onExit={goHomeFromShare} />;
+    return <SharedEditScreen payload={sharePayload} onImport={importShared} onExit={goHomeFromShare} direct={shareDirect} />;
   }
 
   if (onboarding) return <OnboardingScreen onDone={() => setOnboarding(false)} />;

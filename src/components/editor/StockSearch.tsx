@@ -43,18 +43,38 @@ import { toast } from "sonner";
 type StockType = "image" | "video" | "music" | "sfx" | "sticker";
 type DurId = "any" | "short" | "mid" | "long" | "custom";
 
-/** Emojis (sub-aba de Stickers — 100% offline). */
+/** Emojis (sub-aba de Stickers — 100% offline) — categorias com chips. */
 const STICKER_SETS: { key: string; emojis: string[] }[] = [
-  { key: "reactions", emojis: ["😂", "🔥", "❤️", "😍", "💀", "😭", "🤯", "😎", "🥳", "🤔", "👀", "👏"] },
-  { key: "gaming", emojis: ["🎮", "🕹️", "🏆", "👾", "🎯", "⚡", "💥", "👑", "🚀", "💣", "💎", "⭐"] },
-  { key: "symbols", emojis: ["✨", "💯", "⚠️", "❌", "✅", "❗", "❓", "🔔", "💰", "💸", "🔞", "🎵"] },
-  { key: "arrows", emojis: ["➡️", "⬅️", "⬆️", "⬇️", "↗️", "↘️", "👉", "👈", "👆", "👇", "🔥", "💫"] },
+  { key: "reactions", emojis: ["😂", "🔥", "❤️", "😍", "💀", "😭", "🤯", "😎", "🥳", "🤔", "👀", "👏", "🥰", "😴", "🤡", "😱"] },
+  { key: "gaming", emojis: ["🎮", "🕹️", "🏆", "👾", "🎯", "⚡", "💥", "👑", "🚀", "💣", "💎", "⭐", "🎲", "🎤", "🥇", "🔧"] },
+  { key: "symbols", emojis: ["✨", "💯", "⚠️", "❌", "✅", "❗", "❓", "🔔", "💰", "💸", "🔞", "🎵", "🆗", "🆒", "💤", "🔊"] },
+  { key: "arrows", emojis: ["➡️", "⬅️", "⬆️", "⬇️", "↗️", "↘️", "👉", "👈", "👆", "👇", "💫", "🔁", "🔄", "↩️", "↪️", "🔀"] },
+  { key: "food", emojis: ["🍕", "🍔", "🌮", "🍿", "🍩", "🍪", "🎂", "☕", "🥤", "🍓", "🍉", "🍇", "🍫", "🧁", "🍣", "🥑"] },
+  { key: "animals", emojis: ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🦁", "🐸", "🐵", "🦄", "🐔", "🦖", "🐙"] },
+  { key: "sports", emojis: ["⚽", "🏀", "🏈", "⚾", "🎾", "🏐", "🏓", "🥊", "🛹", "🏂", "🏊", "🚴", "🏆", "🥅", "⛳", "🎳"] },
+  { key: "nature", emojis: ["🌈", "☀️", "🌙", "⭐", "☁️", "🌊", "🌸", "🌴", "🍁", "❄️", "🌵", "🌻", "🍀", "🌋", "🌱", "🌏"] },
+  { key: "objects", emojis: ["📱", "💻", "🎥", "📷", "🎧", "🕹️", "💡", "🔒", "🎁", "📚", "✏️", "🕐", "🔋", "🧲", "🔎", "🗑️"] },
+  { key: "party", emojis: ["🎉", "🎊", "🎈", "🎁", "🥳", "🍾", "🍰", "🎆", "🎇", "🪩", "🎺", "🥁", "🕺", "💃", "🙌", "🤝"] },
+];
+
+/** Categorias de figurinhas PNG (busca online com termo pronto) */
+const STICKER_CATEGORIES: { q: string; label: string; icon: string }[] = [
+  { q: "love heart", label: "Corações", icon: "❤️" },
+  { q: "anime", label: "Anime", icon: "🌸" },
+  { q: "meme", label: "Memes", icon: "😹" },
+  { q: "cute animal", label: "Fofinhos", icon: "🐾" },
+  { q: "party celebration", label: "Festas", icon: "🎉" },
+  { q: "arrow", label: "Setas", icon: "➡️" },
+  { q: "explosion burst", label: "Impactos", icon: "💥" },
+  { q: "star sparkles", label: "Brilhos", icon: "✨" },
+  { q: "comic speech bubble", label: "Balões", icon: "💬" },
+  { q: "fire flame", label: "Fogo", icon: "🔥" },
 ];
 
 /** Gêneros musicais */
 const GENRES = [
   { id: "all", label: "Todas" },
-  { id: "shorts", label: "🔥 Shorts (Sem Voz)" },
+  { id: "shorts", label: "🔥 Instrumentais (Sem Voz)" },
   { id: "lofi", label: "Lo-Fi" },
   { id: "electronic", label: "Eletrônica" },
   { id: "ambient", label: "Ambiente" },
@@ -76,7 +96,7 @@ const DURATIONS: { id: DurId; label: string; min?: number; max?: number }[] = [
   { id: "custom", label: "Personalizado" },
 ];
 
-/** Exemplos rápidos de efeitos sonoros */
+/** Exemplos rápidos por tipo de busca (aparecem quando a aba abre vazia) */
 const SFX_EXAMPLES = [
   { label: "Transição Whoosh", q: "whoosh transition" },
   { label: "Pop", q: "pop" },
@@ -86,6 +106,33 @@ const SFX_EXAMPLES = [
   { label: "Risada / Meme", q: "meme laugh" },
   { label: "Moeda / Level Up", q: "coin level up" },
   { label: "Explosão", q: "explosion" },
+];
+
+const MUSIC_EXAMPLES = [
+  { label: "Lo-Fi calmo", q: "lofi chill beat" },
+  { label: "Épico / Trailer", q: "epic cinematic trailer" },
+  { label: "Vlog leve", q: "happy ukulele vlog" },
+  { label: "Suspense", q: "suspense tension ambient" },
+  { label: "Corporativo", q: "corporate upbeat clean" },
+  { label: "Piano emotivo", q: "emotional piano" },
+];
+
+const VIDEO_EXAMPLES = [
+  { label: "Natureza / Drone", q: "nature drone landscape" },
+  { label: "Cidade à noite", q: "city night neon" },
+  { label: "Gameplay retros", q: "retro gaming" },
+  { label: "Espaço", q: "space stars" },
+  { label: "Esporte", q: "sport action" },
+  { label: "Comida", q: "food closeup" },
+];
+
+const IMAGE_EXAMPLES = [
+  { label: "Papel de parede", q: "wallpaper background" },
+  { label: "Textura", q: "texture abstract" },
+  { label: "Montanhas", q: "mountain landscape" },
+  { label: "Tecnologia", q: "technology circuit" },
+  { label: "Céu / Nuvens", q: "sky clouds" },
+  { label: "Cyberpunk", q: "cyberpunk city" },
 ];
 
 function fmtDur(d: number) {
@@ -110,6 +157,7 @@ export function StockSearch() {
   const [cmin, ] = useState(10);
   const [cmax, ] = useState(60);
   const [stickTab, setStickTab] = useState<"stickers" | "emojis">("stickers");
+  const [emojiCat, setEmojiCat] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
 
   // Modal de Prévia Grande
@@ -382,7 +430,7 @@ export function StockSearch() {
                   onlyFavorites
                     ? "Filtrar favoritos..."
                     : isShortsMode
-                    ? "Fundo para Shorts..."
+                    ? "Trilha instrumental de fundo..."
                     : activeTab.ph
                 }
                 className="h-7 border-[#2a3546] bg-[#121722] text-xs text-zinc-200 placeholder:text-zinc-600 pl-2 pr-7"
@@ -447,32 +495,101 @@ export function StockSearch() {
 
       {/* ==================== ÁREA DE CONTEÚDO ROLÁVEL (100% VISÍVEL) ==================== */}
       <div className="min-h-0 flex-1 overflow-y-auto p-2 timeline-scroll space-y-2">
-        {/* sub-aba de STICKERS */}
+        {/* sub-aba de STICKERS: Figurinhas PNG / Emojis — cada uma com categorias */}
         {isSticker && !onlyFavorites && (
-          <div className="flex rounded-lg border border-[#2a3546] bg-[#0e1320] p-0.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setStickTab("stickers")}
-              className={`flex-1 rounded-md py-1 text-[11px] font-semibold transition ${
-                stickTab === "stickers"
-                  ? "bg-[var(--gc-accent)] text-black shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              🎨 Figurinhas (PNG)
-            </button>
-            <button
-              type="button"
-              onClick={() => setStickTab("emojis")}
-              className={`flex-1 rounded-md py-1 text-[11px] font-semibold transition ${
-                stickTab === "emojis"
-                  ? "bg-[var(--gc-accent)] text-black shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              😀 Emojis Prontos
-            </button>
-          </div>
+          <>
+            <div className="flex rounded-lg border border-[#2a3546] bg-[#0e1320] p-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setStickTab("stickers")}
+                className={`flex-1 rounded-md py-1 text-[11px] font-semibold transition ${
+                  stickTab === "stickers"
+                    ? "bg-[var(--gc-accent)] text-black shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                🎨 Figurinhas (PNG)
+              </button>
+              <button
+                type="button"
+                onClick={() => setStickTab("emojis")}
+                className={`flex-1 rounded-md py-1 text-[11px] font-semibold transition ${
+                  stickTab === "emojis"
+                    ? "bg-[var(--gc-accent)] text-black shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                😀 Emojis Prontos
+              </button>
+            </div>
+
+            {stickTab === "stickers" ? (
+              <div className="space-y-1 shrink-0">
+                <div className="text-[9px] font-semibold uppercase tracking-wide text-zinc-500">Categorias</div>
+                <div className="flex flex-wrap gap-1">
+                  {STICKER_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.q}
+                      type="button"
+                      onClick={() => {
+                        setQuery(cat.q);
+                        searchedRef.current = true;
+                        setLoading(true);
+                        setTranslated(null);
+                        searchStickers(cat.q)
+                          .then((results) => {
+                            setItems(results);
+                            if (!results.length) {
+                              toast.info(t("ss.nothing"), { description: t("ss.stickerNone", { q: cat.q }) });
+                            }
+                          })
+                          .catch(() => toast.error(t("ss.fail"), { description: t("ss.failDesc") }))
+                          .finally(() => setLoading(false));
+                      }}
+                      className={`rounded-full border px-2 py-0.5 text-[10px] transition ${
+                        query === cat.q
+                          ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                          : "border-[#2a3546] bg-[#121722] text-zinc-300 hover:border-[var(--gc-accent-60)] hover:text-white"
+                      }`}
+                    >
+                      <span className="mr-0.5">{cat.icon}</span>
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1 shrink-0">
+                <div className="flex gap-1 overflow-x-auto pb-1 timeline-scroll">
+                  <button
+                    type="button"
+                    onClick={() => setEmojiCat("all")}
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] transition ${
+                      emojiCat === "all"
+                        ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                        : "border-[#2a3546] bg-[#121722] text-zinc-300 hover:border-[var(--gc-accent-60)]"
+                    }`}
+                  >
+                    ⭐ Todas
+                  </button>
+                  {STICKER_SETS.map((set) => (
+                    <button
+                      key={set.key}
+                      type="button"
+                      onClick={() => setEmojiCat(set.key)}
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] transition ${
+                        emojiCat === set.key
+                          ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                          : "border-[#2a3546] bg-[#121722] text-zinc-300 hover:border-[var(--gc-accent-60)]"
+                      }`}
+                    >
+                      {set.emojis[0]} {t(`ss.cat.${set.key}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* EFEITOS SONOROS: chips rápidos */}
@@ -506,13 +623,13 @@ export function StockSearch() {
           </div>
         )}
 
-        {/* MÚSICAS: Categorias de Shorts & Gêneros */}
+        {/* MÚSICAS: estilos instrumentais & gêneros */}
         {showGenre && !onlyFavorites && (
           <div className="space-y-1.5">
-            {/* Chips de Shorts Instrumental */}
+            {/* Chips de estilos instrumentais */}
             <div className="flex items-center gap-1 overflow-x-auto pb-1 timeline-scroll">
               <span className="shrink-0 text-[10px] font-bold text-amber-400 flex items-center gap-1">
-                <Flame className="h-3.5 w-3.5" /> Shorts:
+                <Flame className="h-3.5 w-3.5" /> Estilos:
               </span>
               {SHORTS_CATEGORIES.map((cat) => (
                 <button
@@ -605,13 +722,13 @@ export function StockSearch() {
           </div>
         )}
 
-        {/* Emojis Prontos */}
+        {/* Emojis Prontos (filtrados pela categoria escolhida) */}
         {isSticker && stickTab === "emojis" && !onlyFavorites && (
           <div className="space-y-3">
-            {STICKER_SETS.map((set) => (
+            {STICKER_SETS.filter((set) => emojiCat === "all" || set.key === emojiCat).map((set) => (
               <div key={set.key}>
                 <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">{t(`ss.cat.${set.key}`)}</p>
-                <div className="grid grid-cols-6 gap-1">
+                <div className="grid grid-cols-8 gap-1">
                   {set.emojis.map((e) => (
                     <button
                       key={e}
@@ -774,17 +891,59 @@ export function StockSearch() {
           </div>
         )}
 
-        {/* Sem resultados */}
+        {/* Sem resultados — oferece buscas populares em vez de só "tente outra palavra" */}
         {!loading && displayItems && displayItems.length === 0 && (
-          <div className="rounded-xl border border-[#232d3d] bg-[#101520] p-6 text-center space-y-2 my-4">
+          <div className="rounded-xl border border-[#232d3d] bg-[#101520] p-5 text-center space-y-2.5 my-4">
             <p className="text-sm font-semibold text-zinc-300">
               {onlyFavorites ? "Nenhum favorito encontrado" : "Nenhum resultado encontrado"}
             </p>
             <p className="text-xs text-zinc-500 leading-relaxed">
               {onlyFavorites
                 ? "Clique no ícone de estrela (⭐) em qualquer vídeo, música ou efeito para salvar aqui!"
-                : "Tente buscar por outros termos em português ou inglês."}
+                : "As fontes online podem oscilar — tente um destes termos populares (funcionam em português ou inglês):"}
             </p>
+            {!onlyFavorites && !isSticker && (
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {(type === "sfx" ? SFX_EXAMPLES : type === "music" ? MUSIC_EXAMPLES : type === "video" ? VIDEO_EXAMPLES : IMAGE_EXAMPLES)
+                  .slice(0, 6)
+                  .map((ex) => (
+                    <button
+                      key={ex.q}
+                      type="button"
+                      onClick={() => {
+                        setQuery(ex.q);
+                        searchedRef.current = true;
+                        void searchDirect(ex.q, type, dur, genre);
+                      }}
+                      className="rounded-full border border-[#2a3546] bg-[#121722] px-2.5 py-1 text-[10px] text-zinc-300 transition hover:border-[var(--gc-accent-60)] hover:text-white"
+                    >
+                      {ex.label}
+                    </button>
+                  ))}
+              </div>
+            )}
+            {!onlyFavorites && isSticker && (
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {STICKER_CATEGORIES.slice(0, 6).map((cat) => (
+                  <button
+                    key={cat.q}
+                    type="button"
+                    onClick={() => {
+                      setQuery(cat.q);
+                      searchedRef.current = true;
+                      setLoading(true);
+                      searchStickers(cat.q)
+                        .then((results) => setItems(results))
+                        .catch(() => toast.error(t("ss.fail"), { description: t("ss.failDesc") }))
+                        .finally(() => setLoading(false));
+                    }}
+                    className="rounded-full border border-[#2a3546] bg-[#121722] px-2.5 py-1 text-[10px] text-zinc-300 transition hover:border-[var(--gc-accent-60)] hover:text-white"
+                  >
+                    {cat.icon} {cat.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

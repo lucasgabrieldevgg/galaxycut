@@ -12,9 +12,9 @@ describe("catálogo de modelos de IA", () => {
     }
   });
 
-  it("os modelos embutidos são exatamente os do Whisper (tiny/base/small)", () => {
+  it("os modelos embutidos são os 4 Whisper (tiny/base/small/medium) + efeitos de voz", () => {
     const builtIn = AI_MODELS.filter((m) => m.status === "built-in").map((m) => m.id).sort();
-    expect(builtIn).toEqual(["base", "small", "tiny"]);
+    expect(builtIn).toEqual(["base", "medium", "small", "tiny", "voicefx"]);
   });
 
   it("toda chave de i18n citada existe no dicionário PT", () => {

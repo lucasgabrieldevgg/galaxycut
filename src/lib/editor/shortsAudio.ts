@@ -1,5 +1,5 @@
-// GalaxyCut — Músicas e Áudios de Fundo para Shorts, Reels e TikTok
-// 100% Instrumentais (sem vocais/falas), ideais para sobreposição de voz/narração.
+// GalaxyCut — Músicas e Áudios de Fundo Instrumentais (sem vocais/falas),
+// ideais para sobreposição de voz/narração em qualquer formato de vídeo.
 
 import { StockItem } from "./stockClient";
 
@@ -16,9 +16,9 @@ export interface ShortsCategory {
 export const SHORTS_CATEGORIES: ShortsCategory[] = [
   {
     id: "all",
-    label: "Todos os Shorts",
+    label: "Todos os estilos",
     icon: "📱",
-    description: "Músicas de fundo neutras e versáteis para qualquer tipo de Short ou Reel",
+    description: "Músicas de fundo neutras e versáteis para qualquer tipo de vídeo",
     searchTerms: "instrumental background music beat ambient no vocals",
   },
   {

@@ -16,7 +16,7 @@
 - Free, no account, no watermark, no subscription.
 - Your files stay **on your device** — nothing is uploaded to any server.
 - Automatic captions with **local AI** (Whisper runs on your own machine, in a background worker — the app never freezes, and you can cancel mid-run).
-- Made for **game shorts** creators (9:16, 1:1 and 16:9, plus 4:5, 4:3, 3:2, 21:9 and more).
+- Made for video creators of every kind — game clips, vlogs, tutorials, shorts, or full-length videos (9:16, 1:1 and 16:9, plus 4:5, 4:3, 3:2, 21:9 and more).
 - Interface in **English, Portuguese and Spanish**.
 
 ## Features

@@ -16,6 +16,7 @@ import { Slider } from "@/components/ui/slider";
 import { engine } from "@/lib/editor/playback";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { FxTile } from "./FxTile";
 
 export function AnimationInspector({ clip }: { clip: Clip }) {
   const setClipAnimation = useProject((s) => s.setClipAnimation);
@@ -119,7 +120,7 @@ export function AnimationInspector({ clip }: { clip: Clip }) {
                       : "border-[#232d3d] bg-[#121722] text-zinc-400 hover:border-violet-500/50 hover:text-zinc-200"
                   }`}
                 >
-                  <span className="text-base mb-0.5">{item.icon}</span>
+                  <FxTile kind="animIn" type={item.type} className="mb-0.5" />
                   <span className="text-[9px] font-medium leading-tight">{item.label}</span>
                 </button>
               );
@@ -159,7 +160,7 @@ export function AnimationInspector({ clip }: { clip: Clip }) {
                       : "border-[#232d3d] bg-[#121722] text-zinc-400 hover:border-violet-500/50 hover:text-zinc-200"
                   }`}
                 >
-                  <span className="text-base mb-0.5">{item.icon}</span>
+                  <FxTile kind="animOut" type={item.type} className="mb-0.5" />
                   <span className="text-[9px] font-medium leading-tight">{item.label}</span>
                 </button>
               );
@@ -199,7 +200,7 @@ export function AnimationInspector({ clip }: { clip: Clip }) {
                       : "border-[#232d3d] bg-[#121722] text-zinc-400 hover:border-violet-500/50 hover:text-zinc-200"
                   }`}
                 >
-                  <span className="text-base mb-0.5">{item.icon}</span>
+                  <FxTile kind="animCombo" type={item.type} className="mb-0.5" />
                   <span className="text-[9px] font-medium leading-tight">{item.label}</span>
                 </button>
               );

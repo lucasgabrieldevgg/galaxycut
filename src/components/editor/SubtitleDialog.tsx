@@ -118,9 +118,9 @@ export function SubtitleDialog() {
   }, [targetClips]);
 
   const modelLabel = (id: WhisperModelId) =>
-    id === "tiny" ? t("sub.modelFast") : id === "base" ? t("sub.modelBalanced") : t("sub.modelAccurate");
+    id === "tiny" ? t("sub.modelFast") : id === "base" ? t("sub.modelBalanced") : id === "medium" ? t("sub.modelMax") : t("sub.modelAccurate");
   const modelHint = (id: WhisperModelId) =>
-    id === "tiny" ? t("sub.modelFastHint") : id === "base" ? t("sub.modelBalancedHint") : t("sub.modelAccurateHint");
+    id === "tiny" ? t("sub.modelFastHint") : id === "base" ? t("sub.modelBalancedHint") : id === "medium" ? t("sub.modelMaxHint") : t("sub.modelAccurateHint");
 
   async function generate() {
     if (targetClips.length === 0) {
