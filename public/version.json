@@ -1,7 +1,50 @@
 {
   "name": "GalaxyCut",
-  "version": "9.0.0",
+  "version": "9.1.0",
   "changelog": [
+    {
+      "version": "9.1.0",
+      "date": "2026-11-01",
+      "items": [
+        "ANIMATED PREVIEW TILES: every visual effect, transition and ready-made animation now shows a live animated square demonstrating what it does, right in the catalog — no more guessing from a static icon.",
+        "5 NEW VOICE EFFECTS (9 total): Studio (room reverb), Underwater, Alien (640 Hz ring modulation), Telephone and Deep Bass — plus the whole voice-effect rack is now visible in the Inspector's audio section, not hidden inside 'Enhance audio'. The 'Enable filters' switch also moved away from the dialog's close button.",
+        "DIRECT VIDEO SHARE LINK: new option in Share — 'Direct video link' opens straight into a fullscreen shorts-style player (tap to pause, autoplay when allowed), skipping the link presentation screen entirely.",
+        "SMARTER SHARING LEVELS: view-only links no longer offer 'Copy for me' (the level only lets you watch); 'Edit' links now reuse a stable local project — reopening the same link updates the recipient's local copy instead of piling up duplicates; 'Copy' still always duplicates.",
+        "SFX SEARCH FIXED: the sound-effects tab could come back completely empty when the Openverse API was down or rate-limited — it now falls back to the Internet Archive (12+ results even offline-ish). Empty states in every search tab suggest popular working searches instead of just 'try other words'.",
+        "VIDEO PREVIEW FIXED: clicking a video in the library used to play it invisibly in the music player bar — now the bar shows a real mini-video (click expands the big player, which also stopped double-playing). The big preview grew to a proper 74vh frame that follows the video's real aspect ratio instead of a squashed strip.",
+        "CAPTION STYLE PREVIEWS NO LONGER CLIP: the preset tiles measure their container and auto-fit the font — long demo text finally shows in full.",
+        "STICKERS & EMOJIS WITH CATEGORIES: the Stickers tab gained 10 quick category chips (hearts, anime, memes, cute animals, party...) and the emoji picker now has 10 category filters with 160 emojis.",
+        "WHISPER MEDIUM + RICHER AI CATALOG: a fourth local transcription model (~750 MB, maximum accuracy) joins tiny/base/small, and the AI catalog lists named models per task — UVR-MDX & HT-Demucs (voice separation), RNNoise & DeepFilterNet (denoise), Piper & XTTS (TTS), MODNet & MediaPipe (background removal), NLLB & M2M100 (translation).",
+        "NEUTRAL WORDING: 'Shorts' branding removed from the music tab (now 'Instrumental styles') and from the README — GalaxyCut is for every kind of video creator.",
+        "RECORD-VOICE BUTTON: its label was missing from translations (showed a raw key overflowing the button) — fixed with proper EN/PT/ES text that wraps safely."
+      ],
+      "items_pt": [
+        "QUADRADINHOS ANIMADOS: cada efeito visual, transição e animação pronta agora mostra uma prévia viva animada no catálogo — sem advinhar pelo ícone parado.",
+        "5 NOVOS EFEITOS DE VOZ (9 no total): Estúdio (reverb de sala), Subaquático, Alienígena (modulação a 640 Hz), Telefone e Grave encorpado — e a prateleira inteira de efeitos de voz ficou visível na seção de áudio do Inspetor, escondida dentro de 'Melhorar áudio'. O interruptor 'Ativar filtros' também saiu de cima do X de fechar.",
+        "LINK DE VÍDEO DIRETO NO COMPARTILHAR: nova opção — quem abre cai direto num player em tela cheia estilo shorts (toque pausa, autoplay quando o navegador deixa), sem a tela de apresentação do link.",
+        "NÍVEIS DE COMPARTILHAMENTO MAIS SINCEROS: link somente visualização não oferece mais 'Copiar pra mim' (o nível só deixa assistir); link de edição agora reusa um projeto local estável — abrir o mesmo link de novo ATUALIZA a edição local de quem abriu em vez de empilhar cópias; 'Cópia' continua duplicando sempre.",
+        "BUSCA DE EFEITOS CONCERTADA: a aba de efeitos sonoros podia voltar totalmente vazia quando o Openverse caía/limitava — agora cai pro Internet Archive de reserva (12+ resultados até em dia ruim). Os estados vazios de todas as abas sugerem buscas populares que funcionam em vez de só 'tente outras palavras'.",
+        "PRÉVIA DE VÍDEO CONCERTADA: clicar num vídeo da biblioteca tocava ele invisível na barrinha de música — agora a barrinha mostra um mini-vídeo de verdade (clicar expande o player grande, que também parou de tocar dobrado). O preview grande cresceu pra 74vh de altura seguindo o formato real do vídeo, sem faixa achatada.",
+        "PRÉVIA DOS ESTILOS DE LEGENDA SEM CORTE: os quadradinhos de preset medem o container e ajustam a fonte — texto demo comprido aparece inteiro.",
+        "FIGURINHAS E EMOJIS COM CATEGORIAS: a aba de Stickers ganhou 10 chips de categoria (corações, anime, memes, fofinhos, festa...) e o seletor de emojis agora tem 10 categorias com 160 emojis.",
+        "WHISPER MEDIUM + CATÁLOGO DE IA MAIS RICO: um quarto modelo local de transcrição (~750 MB, precisão máxima) junta-se ao tiny/base/small, e o catálogo de IA lista modelos com nome por tarefa — UVR-MDX & HT-Demucs (separação de voz), RNNoise & DeepFilterNet (redução de ruído), Piper & XTTS (TTS), MODNet & MediaPipe (remoção de fundo), NLLB & M2M100 (tradução).",
+        "PALAVRAS NEUTRAS: o branding 'Shorts' saiu da aba de músias (agora 'Estilos instrumentais') e do README — o GalaxyCut é pra quem faz vídeo de todo tipo.",
+        "BOTÃO DE GRAVAR VOZ: o rótulo não existia nas traduções (mostrava a chave crua vazando do botão) — corrigido com texto em PT/EN/ES que quebra linha sem vazar."
+      ],
+      "items_es": [
+        "TILES ANIMADOS: cada efecto visual, transición y animación lista ahora muestra una miniatura animada en vivo en el catálogo — sin adivinar por el ícono quieto.",
+        "5 NUEVOS EFECTOS DE VOZ (9 en total): Estudio (reverberación de sala), Subacuático, Alienígena (modulación a 640 Hz), Teléfono y Grave corpulento — y toda la bandeja de efectos de voz quedó visible en la sección de audio del Inspector, escondida dentro de 'Mejorar audio'. El interruptor 'Activar filtros' también se alejó de la X de cerrar.",
+        "ENLACE DE VÍDEO DIRECTO AL COMPARTIR: nueva opción — quien lo abre cae directo en un reproductor a pantalla completa estilo shorts (toque pausa, autoplay cuando el navegador lo permite), sin pantalla de presentación.",
+        "NIVELES DE COMPARTIR MÁS HONESTOS: el enlace de solo visualización ya no ofrece 'Copiar para mí' (el nivel solo deja mirar); el enlace de edición ahora reutiliza un proyecto local estable — reabrir el mismo enlace ACTUALIZA la edición local de quien lo abrió en vez de amontonar copias; 'Copia' sigue duplicando siempre.",
+        "BÚSQUEDA DE EFECTOS ARREGLADA: la pestaña de efectos sonoros podía volver totalmente vacía cuando Openverse caía o limitaba — ahora cae al Internet Archive de respaldo (12+ resultados incluso en mal día). Los estados vacíos de todas las pestañas sugieren búsquedas populares que funcionan en vez de solo 'prueba otras palabras'.",
+        "PREVIEW DE VÍDEO ARREGLADO: hacer clic en un vídeo de la biblioteca lo reproducía invisible en la barra de música — ahora la barra muestra un mini-vídeo de verdad (clic expande el reproductor grande, que también dejó de sonar doble). El preview grande creció a 74vh siguiendo el formato real del vídeo, sin franja aplastada.",
+        "PREVIEW DE ESTILOS DE SUBTÍTULOS SIN CORTES: los tiles de preset miden el contenedor y ajustan la fuente — el texto demo largo aparece completo.",
+        "STICKERS Y EMOJIS CON CATEGORÍAS: la pestaña de Stickers ganó 10 chips de categoría (corazones, anime, memes, animalitos, fiesta...) y el selector de emojis ahora tiene 10 categorías con 160 emojis.",
+        "WHISPER MEDIUM + CATÁLOGO DE IA MÁS RICO: un cuarto modelo local de transcripción (~750 MB, precisión máxima) se suma a tiny/base/small, y el catálogo de IA lista modelos con nombre por tarea — UVR-MDX & HT-Demucs (separación de voz), RNNoise & DeepFilterNet (reducción de ruido), Piper & XTTS (TTS), MODNet & MediaPipe (quitar fondo), NLLB & M2M100 (traducción).",
+        "PALABRAS NEUTRAS: el branding 'Shorts' salió de la pestaña de músicas (ahora 'Estilos instrumentales') y del README — GalaxyCut es para quien hace vídeo de todo tipo.",
+        "BOTÓN DE GRABAR VOZ: la etiqueta no existía en las traducciones (mostraba la clave cruda desbordando el botón) — corregido con texto en PT/EN/ES que ajusta sin desbordar."
+      ]
+    },
     {
       "version": "9.0.0",
       "date": "2026-11-01",
@@ -162,5 +205,5 @@
       ]
     }
   ],
-  "date": "2026-11-01T01:01:38.420Z"
+  "date": "2026-11-01T01:21:47.090Z"
 }
