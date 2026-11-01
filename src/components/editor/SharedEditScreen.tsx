@@ -4,6 +4,14 @@
 // editar ou criar uma cópia. Nada é persistido sem escolha explícita.
 // v9.1: links com &w=1 (modo vídeo direto) abrem direto no player estilo
 // shorts — sem a tela de apresentação.
+// v9.2:
+//  - link de VISUALIZAÇÃO também cai direto no player (o modo shorts virou o
+//    modo padrão de assistir — não existe mais um "modo shorts" separado);
+//  - o player espera a mídia ficar pronta (tela "Preparando…" com progresso)
+//    antes de dar play — antes tocava com placeholder atrás e engasgava;
+//  - controles de áudio (volume/mudo) no player;
+//  - nível EDIÇÃO explica como as mudanças voltam pra edição local de quem
+//    compartilhou (mesmo ID → atualiza em vez de duplicar).
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -11,11 +19,11 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import {
   Eye, PencilLine, CopyPlus, Play, Pause, SkipBack, ChevronLeft, ChevronRight,
-  ArrowLeft, FileVideo, TriangleAlert,
+  ArrowLeft, FileVideo, TriangleAlert, Volume2, VolumeX, Loader2, RefreshCw,
 } from "lucide-react";
 import { useProject, usePlayback, setActiveProject } from "@/lib/editor/store";
 import { engine } from "@/lib/editor/playback";
-import { rehydrateMedia } from "@/lib/editor/media";
+import { rehydrateMediaWithSources } from "@/lib/editor/media";
 import { fmtTime } from "@/lib/editor/types";
 import { useT, useLang } from "@/lib/editor/i18n";
 import { shareLevelInfo, type SharePayload } from "@/lib/editor/share";
@@ -37,7 +45,8 @@ export function SharedEditScreen({
 }) {
   const t = useT();
   const lang = useLang((s) => s.lang);
-  const [watching, setWatching] = useState(direct);
+  // v9.2: visualização agora É o player direto (modo shorts padrão)
+  const [watching, setWatching] = useState(direct || payload?.lvl === "view");
 
   // link inválido/corrompido — erro amigável, sem stack na cara do usuário
   if (!payload) {
@@ -68,7 +77,7 @@ export function SharedEditScreen({
       <ShareViewer
         payload={payload}
         onBack={() => setWatching(false)}
-        direct={direct}
+        direct={direct || payload.lvl === "view"}
         onMakeCopy={payload.lvl === "view" ? undefined : () => onImport(payload, "copy")}
       />
     );
@@ -100,6 +109,16 @@ export function SharedEditScreen({
             <span className="text-zinc-400"> — {t(info.descKey)}</span>
           </p>
         </div>
+
+        {/* v9.2 — explicação do round-trip de edição: as mudanças feitas por
+            este link ATUALIZAM a edição local (mesmo ID) quando o link
+            atualizado volta pra quem compartilhou */}
+        {payload.lvl === "edit" && (
+          <div className="mt-4 rounded-lg border border-[var(--gc-accent-40)] bg-[var(--gc-accent-7)] p-3">
+            <p className="text-[11px] font-semibold text-[var(--gc-accent)]">{t("shared.editRoundTripTitle")}</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">{t("shared.editRoundTripDesc")}</p>
+          </div>
+        )}
 
         <p className="mt-4 font-mono text-[10px] tracking-wide text-zinc-600">
           {t("shared.madeWith", { v: payload.app, date })}
@@ -166,7 +185,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 /** Visualizador travado: play/scrub no canvas do engine, zero edição.
  * v9.1: `direct` = modo vídeo (link #s=…&w=1): tela cheia estilo shorts,
- * autoplay com tentativa de desbloqueio por toque, controles mínimos. */
+ * autoplay com tentativa de desbloqueio por toque, controles mínimos.
+ * v9.2: espera a mídia ficar pronta ("Preparando…" com progresso) ANTES de
+ * tocar; mídia de stock é re-baixada da fonte; volume/mudo do player. */
 function ShareViewer({
   payload,
   onBack,
@@ -185,10 +206,25 @@ function ShareViewer({
   const playing = usePlayback((s) => s.playing);
   const projectName = useProject((s) => s.project.name);
   const [blocked, setBlocked] = useState(false); // navegador exigiu gesto pra tocar
+  // v9.2: preparação da mídia (gate antes do play) + áudio do player — o estado
+  // inicial nasce do lazy initializer (setState sincrono no effect é proibido
+  // pelo lint do React Compiler)
+  const [prep, setPrep] = useState<{ done: number; total: number } | null>(() => {
+    const n = payload.media.filter((m) => m.stockUrl).length;
+    return n > 0 ? { done: 0, total: n } : null;
+  });
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+
+  const directMode = direct;
 
   // carrega a edição em memória SEM projeto ativo (não polui a biblioteca nem
-  // persiste nada — o autosave guarda activeProjectId nulo) e liga o engine
+  // persiste nada — o autosave guarda activeProjectId nulo) e liga o engine.
+  // v9.2: a mídia de stock é re-baixada da fonte ANTES do autoplay — quem abriu
+  // o link assiste a edição de verdade (não um placeholder preto sem áudio).
   useEffect(() => {
+    let cancelled = false;
+    let autoTid: ReturnType<typeof setTimeout> | undefined;
     setActiveProject(null);
     useProject.getState().loadSnapshot({
       project: payload.project,
@@ -200,35 +236,46 @@ function ShareViewer({
     if (canvasRef.current) engine.bind(canvasRef.current);
     engine.seek(0);
     engine.markDirty();
-    // se quem abriu é o próprio autor (mesma máquina), os blobs estão no
-    // IndexedDB e a edição toca COM mídia; senão vira placeholder — honesto
-    void rehydrateMedia(payload.media).then((media) => {
+
+    void rehydrateMediaWithSources(payload.media, (done, total) => {
+      if (!cancelled) setPrep({ done, total });
+    }).then((media) => {
+      if (cancelled) return;
       useProject.setState({ media });
       engine.markDirty();
+      setPrep(null);
+      // mídia pronta: agora sim, autoplay (modo vídeo direto); se depois de
+      // meio segundo o engine não tocar (gesto bloqueado pelo navegador),
+      // acende o botão grande de toque
+      if (directMode) {
+        engine.play();
+        autoTid = setTimeout(() => {
+          if (!usePlayback.getState().playing) setBlocked(true);
+        }, 500);
+      }
     });
-    // modo vídeo direto: tenta dar play sozinho (estilo shorts); se depois
-    // de meio segundo o engine não tocar (gesto bloqueado pelo navegador),
-    // acende o botão grande de toque
-    if (direct) {
-      engine.play();
-      const tid = setTimeout(() => {
-        if (!usePlayback.getState().playing) setBlocked(true);
-      }, 500);
-      return () => {
-        clearTimeout(tid);
-        engine.pause();
-      };
-    }
-    return () => engine.pause();
-  }, [payload, direct]);
+
+    return () => {
+      cancelled = true;
+      if (autoTid) clearTimeout(autoTid);
+      engine.pause();
+    };
+  }, [payload, directMode]);
+
+  // áudio do player (master do engine)
+  useEffect(() => {
+    engine.setMasterVolume(volume, muted);
+  }, [volume, muted]);
 
   const tapPlay = () => {
     setBlocked(false);
     void engine.play();
   };
 
+  const isPreparing = prep !== null;
+
   // ---- modo VÍDEO DIRETO: tela cheia, toque pausa/retoma, controles esquivos
-  if (direct) {
+  if (directMode) {
     return (
       <div className="flex h-screen w-full flex-col bg-black text-zinc-200 select-none">
         <div className="relative flex min-h-0 flex-1 items-center justify-center">
@@ -239,7 +286,24 @@ function ShareViewer({
             onClick={() => (playing ? engine.pause() : tapPlay())}
             className="max-h-full max-w-full bg-black object-contain"
           />
-          {(blocked || (!playing && playhead === 0)) && (
+
+          {/* v9.2: gate de preparação — a edição NÃO começa no escuro: mostra
+              que a mídia tá chegando (com progresso) e dá play sozinha depois */}
+          {isPreparing && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/85 backdrop-blur-xs">
+              <Loader2 className="h-9 w-9 animate-spin text-[var(--gc-accent)]" />
+              <p className="text-sm font-semibold text-zinc-200">{t("shared.preparing")}</p>
+              <div className="h-1.5 w-44 overflow-hidden rounded-full bg-[#1c2430]">
+                <div
+                  className="h-full rounded-full bg-[var(--gc-accent)] transition-all"
+                  style={{ width: `${prep.total ? Math.round((prep.done / prep.total) * 100) : 0}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-zinc-500">{t("shared.preparingDesc", { d: prep.done, n: prep.total })}</p>
+            </div>
+          )}
+
+          {(blocked || (!playing && playhead === 0 && !isPreparing)) && (
             <button
               type="button"
               onClick={tapPlay}
@@ -273,6 +337,33 @@ function ShareViewer({
             onValueChange={(v) => engine.seek(v[0], { mode: "free" })}
             className="flex-1"
           />
+
+          {/* v9.2: configuração de áudio do player (volume/mudo) */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-zinc-300 hover:bg-white/10 hover:text-white"
+            onClick={() => setMuted((m) => !m)}
+            aria-label={muted ? t("lib.unmute") : t("lib.mute")}
+            title={muted ? t("lib.unmute") : t("lib.mute")}
+          >
+            {muted || volume === 0 ? <VolumeX className="h-4 w-4 text-red-400" /> : <Volume2 className="h-4 w-4" />}
+          </Button>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={muted ? 0 : volume}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setVolume(v);
+              if (muted && v > 0) setMuted(false);
+            }}
+            className="gc-range h-1.5 w-16 cursor-pointer accent-[var(--gc-accent)] sm:w-20"
+            aria-label={t("shared.volume")}
+          />
+
           <span className="hidden max-w-[180px] truncate text-[11px] text-zinc-500 sm:block">{projectName}</span>
           <Button
             variant="ghost"
@@ -321,13 +412,26 @@ function ShareViewer({
         )}
       </header>
 
-      <div className="flex min-h-0 flex-1 items-center justify-center p-4">
+      <div className="relative flex min-h-0 flex-1 items-center justify-center p-4">
         <canvas
           ref={canvasRef}
           width={payload.project.width}
           height={payload.project.height}
           className="max-h-full max-w-full rounded-lg border border-[#1c2430] bg-black object-contain shadow-[0_0_40px_rgba(0,0,0,0.6)]"
         />
+        {isPreparing && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-lg bg-[#080b11]/80">
+            <Loader2 className="h-8 w-8 animate-spin text-[var(--gc-accent)]" />
+            <p className="text-sm font-semibold text-zinc-200">{t("shared.preparing")}</p>
+            <div className="h-1.5 w-44 overflow-hidden rounded-full bg-[#1c2430]">
+              <div
+                className="h-full rounded-full bg-[var(--gc-accent)] transition-all"
+                style={{ width: `${prep.total ? Math.round((prep.done / prep.total) * 100) : 0}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-zinc-500">{t("shared.preparingDesc", { d: prep.done, n: prep.total })}</p>
+          </div>
+        )}
       </div>
 
       <footer className="flex h-16 shrink-0 items-center gap-3 border-t border-[#1c2430] bg-[#07070a] px-4">
@@ -376,6 +480,49 @@ function ShareViewer({
           onValueChange={(v) => engine.seek(v[0], { mode: "free" })}
           className="flex-1"
         />
+        {/* v9.2: áudio também no modo assistindo normal */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 text-zinc-400 hover:text-white"
+          onClick={() => setMuted((m) => !m)}
+          aria-label={muted ? t("lib.unmute") : t("lib.mute")}
+          title={muted ? t("lib.unmute") : t("lib.mute")}
+        >
+          {muted || volume === 0 ? <VolumeX className="h-4 w-4 text-red-400" /> : <Volume2 className="h-4 w-4" />}
+        </Button>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={muted ? 0 : volume}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            setVolume(v);
+            if (muted && v > 0) setMuted(false);
+          }}
+          className="gc-range hidden h-1.5 w-16 cursor-pointer accent-[var(--gc-accent)] sm:block"
+          aria-label={t("shared.volume")}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 text-zinc-400 hover:text-white"
+          onClick={() => {
+            // recarrega a mídia que faltou (re-tenta as fontes)
+            setPrep({ done: 0, total: 1 });
+            void rehydrateMediaWithSources(payload.media, (done, total) => setPrep({ done, total })).then((media) => {
+              useProject.setState({ media });
+              engine.markDirty();
+              setPrep(null);
+            });
+          }}
+          aria-label={t("shared.retryMedia")}
+          title={t("shared.retryMedia")}
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
       </footer>
     </div>
   );

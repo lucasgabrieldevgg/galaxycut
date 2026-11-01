@@ -5,6 +5,7 @@
 "use client";
 
 import type { Clip, MediaFolder, MediaMeta, ProjectMeta, Track } from "./types";
+import { uid } from "./types";
 
 export type ShareLevel = "view" | "edit" | "copy";
 
@@ -19,6 +20,14 @@ export interface SharePayload {
   clips: Clip[];
   folders: MediaFolder[];
   media: MediaMeta[];
+  /** v9.2 — ID estável do link: gerado UMA vez por quem compartilhou. Reabrir
+   *  o link (ou um link ATUALIZADO devolvido por quem editou) atualiza a MESMA
+   *  edição local em vez de criar cópias infinitas. */
+  sid?: string;
+  /** v9.2 — ID do projeto ORIGINAL na máquina de quem compartilhou. Quando um
+   *  link de retorno chega de volta pro autor, o app dele reconhece o oid e
+   *  atualiza a edição local dele em vez de duplicar. */
+  oid?: string;
 }
 
 /** tamanho máximo do link codificado — acima disso o link é inviável de colar */
@@ -184,6 +193,8 @@ export function validateSharePayload(raw: unknown): SharePayload {
     name: r.name,
     made: typeof r.made === "number" && Number.isFinite(r.made) ? r.made : Date.now(),
     app: typeof r.app === "string" ? r.app.slice(0, 20) : "?",
+    sid: typeof r.sid === "string" && /^[a-z0-9]{4,32}$/i.test(r.sid) ? r.sid.slice(0, 32) : undefined,
+    oid: typeof r.oid === "string" && /^[a-zA-Z0-9_-]{4,64}$/.test(r.oid) ? r.oid.slice(0, 64) : undefined,
     project: {
       name: typeof proj.name === "string" && proj.name ? proj.name.slice(0, 60) : r.name,
       width: clampDim(proj.width, 1080),
@@ -197,4 +208,62 @@ export function validateSharePayload(raw: unknown): SharePayload {
       : [],
     media: (r.media as MediaMeta[]).filter((m) => typeof m?.id === "string").slice(0, MAX_MEDIA),
   };
+}
+
+// ---------- v9.2: IDs estáveis de compartilhamento (round-trip) ----------
+
+const SHARE_IDS_KEY = "galaxycut_share_ids_v1";
+
+export interface ShareIds {
+  sid: string;
+  oid: string | null;
+}
+
+function readShareIds(): Record<string, ShareIds> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(SHARE_IDS_KEY) ?? "{}") as Record<string, ShareIds>;
+  } catch {
+    return {};
+  }
+}
+
+/** IDs de compartilhamento de uma edição local (sid/oid persistidos entre
+ *  gerações de link — o round-trip depende deles serem ESTÁVEIS). */
+export function getShareIds(projectId: string | null): ShareIds | null {
+  if (!projectId) return null;
+  return readShareIds()[projectId] ?? null;
+}
+
+/** Gera (uma vez) ou recupera os IDs de uma edição. `oid` = o projeto local
+ *  original de quem está compartilhando — viaja no link pro round-trip. */
+export function ensureShareIds(projectId: string, oid?: string | null): ShareIds {
+  const all = readShareIds();
+  const existing = all[projectId];
+  if (existing) {
+    // mantém o oid original mesmo em regenerações (autor reabre o diálogo)
+    if (oid && !existing.oid) {
+      all[projectId] = { ...existing, oid };
+      try {
+        localStorage.setItem(SHARE_IDS_KEY, JSON.stringify(all));
+      } catch {}
+    }
+    return all[projectId] ?? existing;
+  }
+  const ids: ShareIds = { sid: uid().slice(0, 12), oid: oid ?? projectId };
+  all[projectId] = ids;
+  try {
+    localStorage.setItem(SHARE_IDS_KEY, JSON.stringify(all));
+  } catch {}
+  return ids;
+}
+
+/** Grava os IDs vindos de um link importado na cópia local do IMPORTADOR —
+ *  assim o link que ELE gerar devolve o mesmo sid/oid (round-trip fecha). */
+export function setShareIds(projectId: string, ids: ShareIds) {
+  const all = readShareIds();
+  all[projectId] = ids;
+  try {
+    localStorage.setItem(SHARE_IDS_KEY, JSON.stringify(all));
+  } catch {}
 }

@@ -118,3 +118,36 @@ describe("caps", () => {
     expect(MAX_ENCODED_CHARS).toBe(2_500_000);
   });
 });
+
+// ---- v9.2: IDs estáveis (sid/oid) — o round-trip da edição ----
+describe("share v2 — sid/oid", () => {
+  it("roundtrip preserva sid e oid", async () => {
+    const payload = samplePayload("edit");
+    payload.sid = "abc123def456";
+    payload.oid = "proj_original_1";
+    const link = await buildShareLink(payload);
+    const decoded = await parseShareLink(link.split("#s=")[1]);
+    expect(decoded.sid).toBe("abc123def456");
+    expect(decoded.oid).toBe("proj_original_1");
+  });
+
+  it("sid sujo é descartado (charset restrito), link ainda vale", () => {
+    const p = samplePayload("edit");
+    (p as unknown as Record<string, unknown>).sid = "!!!invalido!!!";
+    const out = validateSharePayload(p);
+    expect(out.sid).toBeUndefined();
+  });
+
+  it("oid malformado não passa", () => {
+    const p = samplePayload("edit");
+    (p as unknown as Record<string, unknown>).oid = "oid com espaço";
+    expect(validateSharePayload(p).oid).toBeUndefined();
+  });
+
+  it("links v1 (sem sid) continuam válidos — nada quebra pra quem já tem link", () => {
+    const out = validateSharePayload(samplePayload("edit"));
+    expect(out.sid).toBeUndefined();
+    expect(out.oid).toBeUndefined();
+    expect(out.lvl).toBe("edit");
+  });
+});

@@ -33,6 +33,20 @@ const EFFECT_CLASS: Record<string, string> = {
   fisheye: "gcfx-fisheye",
   thermal: "gcfx-thermal",
   emboss: "gcfx-emboss",
+  // v9.2 — Pessoas & Beleza
+  skinSmooth: "gcfx-skinSmooth",
+  beautyGlow: "gcfx-beautyGlow",
+  manGrade: "gcfx-manGrade",
+  womanGrade: "gcfx-womanGrade",
+  kidPop: "gcfx-kidPop",
+  clarity: "gcfx-clarity",
+  // v9.2 — Clima & Impacto
+  lightning: "gcfx-lightning",
+  godRays: "gcfx-godRays",
+  rain: "gcfx-rain",
+  snowfall: "gcfx-snowfall",
+  sciFiScan: "gcfx-sciFiScan",
+  halftone: "gcfx-halftone",
 };
 
 /** animações de entrada/saída contínuas: o id do catálogo vira a classe */

@@ -4,6 +4,7 @@
 
 import { create } from "zustand";
 import type { StockItem } from "./stockClient";
+import { pickIaFile } from "./stockClient";
 
 export interface LibItem {
   id: string;
@@ -17,6 +18,9 @@ export interface LibItem {
   license?: string;
   duration?: number;
   rawStockItem?: StockItem;
+  /** v9.2: abre direto no modo PARTES (multi-trechos) — usado pelo botão ✂
+   *  do card de mídia e pela tela de “cortar vídeo na importação” */
+  parts?: boolean;
 }
 
 interface LibPlayerState {
@@ -70,17 +74,14 @@ export const useLibPlayer = create<LibPlayerState>((set, get) => ({
 
           if (!iaId) throw new Error("ID do Internet Archive ausente");
 
+          // v9.2: resolveIaFile escolhe o DERIVADO LEVE (h.264/mp3 de menor
+          // tamanho) — antes a barra puxava o arquivo original (4K/flac) e o
+          // preview engasgava. Mesma escolha do modal de prévia.
+          const kind = it.kind === "video" ? "video" : "audio";
           const r = await fetch(`https://archive.org/metadata/${iaId}`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
-          const files: { name: string; size?: string }[] = data?.files ?? [];
-          const audios = files
-            .filter((f) => /\.(mp3|ogg|flac|m4a|wav)$/i.test(f.name))
-            .sort((a, b) => Number(b.size ?? 0) - Number(a.size ?? 0));
-          const videos = files
-            .filter((f) => /\.(mp4|m4v|webm|mkv)$/i.test(f.name) && !/sample/i.test(f.name))
-            .sort((a, b) => Number(b.size ?? 0) - Number(a.size ?? 0));
-          const pick = it.kind === "video" ? (videos[0] ?? audios[0]) : (audios[0] ?? videos[0]);
+          const pick = pickIaFile(data?.files ?? [], kind);
           if (!pick) throw new Error("sem arquivo");
           const url = `https://archive.org/download/${iaId}/${encodeURIComponent(pick.name)}`;
           if (get().item?.id === it.id) {

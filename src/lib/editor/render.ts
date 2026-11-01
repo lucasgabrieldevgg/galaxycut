@@ -36,6 +36,7 @@ interface LayerOpts {
   dy?: number;
   scaleMul?: number;
   blurPx?: number;
+  rotDeg?: number; // rotação extra (graus) — usada pela transição Giro 3D
 }
 
 const IDENTITY: LayerOpts = { alpha: 1 };
@@ -199,6 +200,101 @@ function drawVisualClip(
     case "blurIn": {
       old({ alpha: 1 - p });
       cur({ alpha: p, blurPx: (1 - p) * (H * 0.03) });
+      break;
+    }
+    // ---- v9.2: novas transições ----
+    case "slideUp": {
+      old({ dy: -p * H * 0.3 });
+      cur({ dy: (1 - p) * H });
+      break;
+    }
+    case "slideDown": {
+      old({ dy: p * H * 0.3 });
+      cur({ dy: -(1 - p) * H });
+      break;
+    }
+    case "wipeUp": {
+      old({});
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, H - p * H, W, p * H);
+      ctx.clip();
+      cur({});
+      ctx.restore();
+      break;
+    }
+    case "wipeDown": {
+      old({});
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, p * H);
+      ctx.clip();
+      cur({});
+      ctx.restore();
+      break;
+    }
+    case "zoomOut": {
+      old({ alpha: 1 - p });
+      cur({ alpha: p, scaleMul: 0.65 + 0.35 * p });
+      break;
+    }
+    case "spin": {
+      old({ alpha: 1 - p });
+      cur({ alpha: p, scaleMul: 0.2 + 0.8 * p, rotDeg: (1 - p) * 180 });
+      break;
+    }
+    case "whipPan": {
+      // chicote: aceleração quadrática + desfoque de movimento — velório de vlog
+      const ease = p * p;
+      old({ dx: -ease * W * 1.1, blurPx: Math.sin(p * Math.PI) * H * 0.025 });
+      cur({ dx: (1 - p) * (1 - p) * W * 1.1, blurPx: Math.sin(p * Math.PI) * H * 0.025 });
+      break;
+    }
+    case "blinds": {
+      old({});
+      const strips = 6;
+      const sw = W / strips;
+      for (let i = 0; i < strips; i++) {
+        const local = Math.max(0, Math.min(1, (p - i * 0.05) / 0.75));
+        if (local <= 0) continue;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(i * sw, 0, sw + 0.5, H);
+        ctx.clip();
+        cur({ alpha: local });
+        ctx.restore();
+      }
+      break;
+    }
+    case "iris": {
+      old({});
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(W / 2, H / 2, p * (Math.hypot(W, H) / 2), 0, Math.PI * 2);
+      ctx.clip();
+      cur({});
+      ctx.restore();
+      break;
+    }
+    case "glitchT": {
+      old({ alpha: 1 - p });
+      cur({ alpha: p });
+      // fatias deslocadas na virada (mesma PRNG determinística do efeito glitch)
+      const seed = Math.floor(p * 8);
+      const slices = 5;
+      for (let i = 0; i < slices; i++) {
+        const r = Math.sin(seed * 37 + i * 19);
+        if (r <= 0.2) continue;
+        const sy = (Math.sin(seed * 23 + i * 11) * 0.5 + 0.5) * H;
+        const sh = ((Math.cos(seed * 41 + i * 17) * 0.5 + 0.5) * 0.12 + 0.04) * H;
+        const off = Math.sin(seed * 53 + i * 7) * W * 0.05;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, sy, W, sh);
+        ctx.clip();
+        cur({ dx: off });
+        ctx.restore();
+      }
       break;
     }
     default:
@@ -583,6 +679,271 @@ function applyPostEffects(
         ctx.restore();
         break;
       }
+
+      // ================= v9.2: PESSOAS & BELEZA =================
+      case "skinSmooth": {
+        if (!d) break;
+        // filtro de beleza clássico: cópia desfocada por cima esconde
+        // imperfeições; o original por baixo mantém olhos/cabelo nítidos
+        ctx.save();
+        ctx.filter = `blur(${Math.max(3, Math.round(H * 0.012 * intensity))}px) brightness(1.04)`;
+        ctx.globalAlpha = 0.55 * intensity;
+        try {
+          ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+        } catch {}
+        ctx.restore();
+        break;
+      }
+      case "beautyGlow": {
+        if (!d) break;
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.filter = `blur(${Math.max(6, Math.round(H * 0.02 * intensity))}px) brightness(1.18)`;
+        ctx.globalAlpha = 0.32 * intensity;
+        try {
+          ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+        } catch {}
+        ctx.restore();
+        ctx.save();
+        ctx.globalCompositeOperation = "soft-light";
+        ctx.globalAlpha = 0.22 * intensity;
+        ctx.fillStyle = "#ffe9d6";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+        break;
+      }
+      case "manGrade": {
+        if (!d) break;
+        // aço frio: contraste (auto-overlay) + gradiente teal/steel + dessaturação leve
+        ctx.save();
+        ctx.globalCompositeOperation = "overlay";
+        ctx.globalAlpha = 0.3 * intensity;
+        try {
+          ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+        } catch {}
+        ctx.globalCompositeOperation = "overlay";
+        ctx.globalAlpha = 0.42 * intensity;
+        const g = ctx.createLinearGradient(-dw / 2, -dh / 2, dw / 2, dh / 2);
+        g.addColorStop(0, "#1e3a5f");
+        g.addColorStop(1, "#94a3b8");
+        ctx.fillStyle = g;
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.globalCompositeOperation = "color";
+        ctx.globalAlpha = 0.12 * intensity;
+        ctx.fillStyle = "#64748b";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+        break;
+      }
+      case "womanGrade": {
+        if (!d) break;
+        // rosa quente + bloom suave
+        ctx.save();
+        ctx.globalCompositeOperation = "soft-light";
+        ctx.globalAlpha = 0.26 * intensity;
+        ctx.fillStyle = "#fda4af";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.globalCompositeOperation = "lighter";
+        ctx.filter = `blur(${Math.max(5, Math.round(H * 0.016 * intensity))}px) brightness(1.12)`;
+        ctx.globalAlpha = 0.26 * intensity;
+        try {
+          ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+        } catch {}
+        ctx.restore();
+        break;
+      }
+      case "kidPop": {
+        if (!d) break;
+        // versão viva e brilhante: reprocessa com saturação/brilho e mistura
+        ctx.save();
+        ctx.filter = "saturate(1.55) brightness(1.08) contrast(1.06)";
+        ctx.globalAlpha = 0.62 * intensity;
+        try {
+          ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+        } catch {}
+        ctx.restore();
+        break;
+      }
+      case "clarity": {
+        if (!d) break;
+        // clareza: contraste local simulado com auto-overlay + micro-arestas
+        ctx.save();
+        ctx.globalCompositeOperation = "overlay";
+        ctx.globalAlpha = 0.38 * intensity;
+        try {
+          ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+        } catch {}
+        ctx.globalCompositeOperation = "difference";
+        ctx.globalAlpha = 0.14 * intensity;
+        const shift = Math.max(1, H * 0.0015);
+        try {
+          ctx.drawImage(d.el, -dw / 2 - shift, -dh / 2 - shift, dw, dh);
+        } catch {}
+        ctx.restore();
+        break;
+      }
+
+      // ================= v9.2: CLIMA & IMPACTO =================
+      case "lightning": {
+        // descargas periódicas: clarão + raios em zigue-zague (PRNG determinística)
+        const seed = Math.floor(tRel * spd * 1.6);
+        const gate = Math.sin(seed * 12.9898) * 43758.5453;
+        const frac = Math.abs(gate % 1);
+        const strikeActive = frac > 0.72;
+        if (!strikeActive) break;
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = (0.3 + 0.55 * Math.abs(Math.sin(seed * 7.3))) * Math.min(1.2, intensity);
+        ctx.fillStyle = "#dbeafe";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = "rgba(255,255,255,0.95)";
+        ctx.lineWidth = Math.max(1.5, H * 0.0035);
+        ctx.shadowColor = "rgba(191, 219, 254, 0.9)";
+        ctx.shadowBlur = Math.max(6, H * 0.012);
+        const bolts = 2;
+        for (let b = 0; b < bolts; b++) {
+          ctx.beginPath();
+          let bx = -dw / 2 + dw * (0.25 + 0.5 * Math.abs(Math.sin(seed * 31.7 + b * 9.1)));
+          let by = -dh / 2;
+          ctx.moveTo(bx, by);
+          const segs = 7;
+          for (let s = 1; s <= segs; s++) {
+            bx += (Math.sin(seed * 13.3 + s * 5.1 + b * 3.7) * dw * 0.055);
+            by += dh / segs;
+            ctx.lineTo(bx, by);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+      case "godRays": {
+        // feixes diagonais girando devagar a partir do topo (screen)
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        const cx0 = 0;
+        const cy0 = -dh / 2;
+        const rays = 5;
+        const baseRot = tRel * spd * 0.18;
+        for (let i = 0; i < rays; i++) {
+          const ang = baseRot + (i / rays) * Math.PI * 2;
+          const spread = 0.10 + 0.05 * Math.sin(i * 3.3);
+          const len = Math.hypot(dw, dh) * 1.2;
+          const grad = ctx.createLinearGradient(cx0, cy0, cx0 + Math.sin(ang) * len, cy0 + Math.cos(ang) * len);
+          grad.addColorStop(0, `rgba(255, 236, 160, ${0.34 * intensity})`);
+          grad.addColorStop(0.55, `rgba(255, 214, 120, ${0.12 * intensity})`);
+          grad.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.moveTo(cx0, cy0);
+          const a1 = ang - spread;
+          const a2 = ang + spread;
+          ctx.lineTo(cx0 + Math.sin(a1) * len, cy0 + Math.cos(a1) * len);
+          ctx.lineTo(cx0 + Math.sin(a2) * len, cy0 + Math.cos(a2) * len);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+      case "rain": {
+        ctx.save();
+        ctx.strokeStyle = `rgba(190, 215, 255, ${0.32 * Math.min(1.2, intensity)})`;
+        ctx.lineWidth = Math.max(1, H * 0.0012);
+        const drops = Math.round(110 * intensity);
+        const slant = dw * 0.05;
+        for (let i = 0; i < drops; i++) {
+          const rx = (Math.sin(i * 127.1) * 43758.5453) % 1;
+          const x = -dw / 2 + ((rx >= 0 ? rx : -rx)) * dw;
+          const speed = 520 + (i % 3) * 240;
+          const y = ((tRel * spd * speed + i * 977) % (dh + 60)) - 30;
+          const len = dh * (0.045 + (i % 4) * 0.012);
+          ctx.beginPath();
+          ctx.moveTo(x, -dh / 2 + y);
+          ctx.lineTo(x - slant * (len / dh) * 8, -dh / 2 + y + len);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+      case "snowfall": {
+        ctx.save();
+        ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+        const flakes = Math.round(80 * intensity);
+        for (let i = 0; i < flakes; i++) {
+          const fx0 = (Math.sin(i * 91.7) * 43758.5453) % 1;
+          const depth = i % 3; // 3 camadas de profundidade
+          const x0 = -dw / 2 + ((fx0 >= 0 ? fx0 : -fx0)) * dw;
+          const sway = Math.sin(tRel * (0.6 + depth * 0.25) + i) * (dw * 0.02 * (depth + 1));
+          const speed = 60 + depth * 55;
+          const y = ((tRel * spd * speed + i * 761) % (dh + 40)) - 20;
+          const r = (H * 0.0012) * (1 + depth * 0.8) + (i % 5) * 0.35;
+          ctx.globalAlpha = 0.35 + depth * 0.2;
+          ctx.beginPath();
+          ctx.arc(x0 + sway, -dh / 2 + y, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+      case "sciFiScan": {
+        ctx.save();
+        const prog = (tRel * spd * 0.32) % 1;
+        const y = -dh / 2 + prog * dh;
+        // tinta ciano fraca em tudo que já foi varrido
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.1 * intensity;
+        ctx.fillStyle = "#22d3ee";
+        ctx.fillRect(-dw / 2, -dh / 2, dw, Math.max(0, y + dh / 2));
+        // banda de brilho
+        const band = ctx.createLinearGradient(0, y - dh * 0.03, 0, y + dh * 0.03);
+        band.addColorStop(0, "rgba(34, 211, 238, 0)");
+        band.addColorStop(0.5, `rgba(103, 232, 249, ${0.55 * intensity})`);
+        band.addColorStop(1, "rgba(34, 211, 238, 0)");
+        ctx.fillStyle = band;
+        ctx.fillRect(-dw / 2, y - dh * 0.03, dw, dh * 0.06);
+        // linha nítida + marcas laterais
+        ctx.fillStyle = `rgba(165, 243, 252, ${0.85 * intensity})`;
+        ctx.fillRect(-dw / 2, y - Math.max(1, H * 0.001), dw, Math.max(2, H * 0.002));
+        ctx.restore();
+        break;
+      }
+      case "halftone": {
+        if (!d) break;
+        // retícula de pontos: reduz pra células, mede luminância, desenha bolinha
+        const pitch = Math.max(10, Math.round(26 * intensity));
+        const cw = Math.max(2, Math.floor(dw / pitch));
+        const ch = Math.max(2, Math.floor(dh / pitch));
+        const pCan = getPixelCanvas(cw, ch);
+        if (!pCan) break;
+        const pCtx = pCan.getContext("2d");
+        if (!pCtx) break;
+        try {
+          pCtx.clearRect(0, 0, cw, ch);
+          pCtx.drawImage(d.el, 0, 0, cw, ch);
+          const px = pCtx.getImageData(0, 0, cw, ch).data;
+          ctx.save();
+          ctx.fillStyle = "rgba(15, 15, 20, 0.88)";
+          ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+          const cellW = dw / cw;
+          const cellH = dh / ch;
+          for (let y = 0; y < ch; y++) {
+            for (let x = 0; x < cw; x++) {
+              const i = (y * cw + x) * 4;
+              const lum = (px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114) / 255;
+              const r = (lum * Math.min(cellW, cellH)) * 0.62;
+              if (r < 0.4) continue;
+              ctx.fillStyle = `rgb(${px[i]},${px[i + 1]},${px[i + 2]})`;
+              ctx.beginPath();
+              ctx.arc(-dw / 2 + (x + 0.5) * cellW, -dh / 2 + (y + 0.5) * cellH, r, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          ctx.restore();
+        } catch {}
+        break;
+      }
       default:
         break;
     }
@@ -622,7 +983,7 @@ function drawMediaLayer(
   const effY = st.y + st.extraDy + st.shakeOffsetY + ((opts.dy ?? 0) * 2 / H);
   const cx = W / 2 + (effX * W) / 2;
   const cy = H / 2 + (effY * H) / 2;
-  const rot = st.rotation + st.extraRot + st.shakeRot;
+  const rot = st.rotation + st.extraRot + st.shakeRot + (opts.rotDeg ?? 0);
 
   ctx.save();
   ctx.globalAlpha = effAlpha;
@@ -763,6 +1124,70 @@ function drawTextTransition(
       old({ alpha: 1 - p });
       cur({ alpha: p });
       break; // texto não suporta blur incremental confiável — usa dissolve
+    // ---- v9.2: novas transições (as que fazem sentido pra texto) ----
+    case "slideUp":
+      old({ dy: -p * H * 0.3 });
+      cur({ dy: (1 - p) * H });
+      break;
+    case "slideDown":
+      old({ dy: p * H * 0.3 });
+      cur({ dy: -(1 - p) * H });
+      break;
+    case "zoomOut":
+      old({ alpha: 1 - p });
+      cur({ alpha: p, scaleMul: 0.65 + 0.35 * p });
+      break;
+    case "spin":
+      old({ alpha: 1 - p });
+      cur({ alpha: p, scaleMul: 0.2 + 0.8 * p, rotDeg: (1 - p) * 180 });
+      break;
+    case "whipPan":
+      old({ dx: -(p * p) * W * 1.1 });
+      cur({ dx: (1 - p) * (1 - p) * W * 1.1 });
+      break;
+    case "wipeUp":
+      old({});
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, H - p * H, W, p * H);
+      ctx.clip();
+      cur({});
+      ctx.restore();
+      break;
+    case "wipeDown":
+      old({});
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, p * H);
+      ctx.clip();
+      cur({});
+      ctx.restore();
+      break;
+    case "blinds": {
+      old({});
+      const strips = 6;
+      const sw = W / strips;
+      for (let i = 0; i < strips; i++) {
+        const local = Math.max(0, Math.min(1, (p - i * 0.05) / 0.75));
+        if (local <= 0) continue;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(i * sw, 0, sw + 0.5, H);
+        ctx.clip();
+        cur({ alpha: local });
+        ctx.restore();
+      }
+      break;
+    }
+    case "iris":
+      old({});
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(W / 2, H / 2, p * (Math.hypot(W, H) / 2), 0, Math.PI * 2);
+      ctx.clip();
+      cur({});
+      ctx.restore();
+      break;
     case "dissolve":
     default:
       old({ alpha: 1 - p });
@@ -889,7 +1314,7 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, W: number, H: number, c: C
   const effY = st.y + st.extraDy + st.shakeOffsetY + ((opts.dy ?? 0) * 2 / H);
   const cx = W / 2 + (effX * W) / 2;
   const cy = H / 2 + (effY * H) / 2;
-  const rot = st.rotation + st.extraRot + st.shakeRot;
+  const rot = st.rotation + st.extraRot + st.shakeRot + (opts.rotDeg ?? 0);
 
   ctx.save();
   ctx.globalAlpha = effAlpha;

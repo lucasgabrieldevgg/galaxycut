@@ -54,3 +54,19 @@
 - [x] "Shorts" removido da aba de músicas (→ "Estilos instrumentais") e do README ("creators of every kind")
 - [x] mp.recordVoice existia em PT?? não — nem existia: mostrava a chave crua. Corrigido ×3 idiomas + layout line-clamp
 - [x] Bump 9.1.0 + changelog trilingue (11 itens × 3) + 63/63 testes + lint no nível do HEAD + build verde
+
+## Lote 5 — feedback do Lucas pós-9.1.0 (sessão de 2026-11-01, v9.2.0)
+- [x] Preview do IA não trava mais: pickIaFile escolhe o DERIVADO leve (h.264/512Kb ~480p) em vez do maior arquivo (o 4K de 3h) — resolveIaFile + libPlayer + reidratação de link usam a mesma escolha (8 testes novos)
+- [x] Barra do player não abre mais junto com o modal da busca (clicou resultado = SÓ modal; a barra segue na aba Mídia)
+- [x] Cortar vídeo na mídia com SUBPARTES: importar 1 vídeo abre o editor de partes (dica com "Não mostrar de novo"); marcar in/out + VÁRIAS partes, cada uma vira um clipe; remover/adicionar partes; botão ✂ do lado de converter/excluir nos cards
+- [x] +12 efeitos (Pessoas & Beleza: pele suave/glow/homem/mulher/criança/nítido + raio/god rays/chuva/neve/sci-fi/halftone) e +10 transições (empurrar↑↓, cortina↑↓, zoom afastando, giro 3D, glitch, whip pan, persianas, íris) — paridade automática (drawFrame única)
+- [x] Abas Efeitos/Animar do painel ESQUERDO com quadradinhos animados + chips de categoria (o inspetor já tinha)
+- [x] Links compartilhados: mídia de stock é re-baixada da fonte em quem abre (antes: placeholder preto/sem áudio), gate "Preparando…" com progresso antes do autoplay, volume/mudo no player + retry de mídia
+- [x] Round-trip de edição: links carregam sid (id estável) + oid (id do projeto original) — link de retorno ABERTO PELO AUTOR atualiza a edição local dele em lugar (toast próprio); explicações no ShareDialog e na tela do link; descrições dos níveis reescritas ×3 idiomas
+- [x] Modo shorts unificado: o nível Visualização JÁ abre no player direto (toggle "vídeo direto" removido do diálogo)
+- [x] Busca avançada: filtro de licença + orientação (vídeo/foto), "Carregar mais" (paginação), popover em todas as abas
+- [x] Figurinhas multi-fonte (Openverse + Wikimedia PNG) — Openverse caindo não zera mais a aba
+- [x] Catálogo de IA: 3-5 modelos por categoria "em breve" — TTS com voz masculina/feminina/infantil, U²-Net/RVM, MDX23C, DFN2 Light, Opus-MT
+- [x] 78/78 testes (26 novos: pickIaFile 8, share sid/oid 4, catálogos 3 + os 11 do share v1), lint no nível do HEAD, build verde
+- [x] Verificado no navegador: import→partes→2 clipes na timeline, aba Pessoas (6 efeitos), link view → player direto com volume, modal da busca sem a barra, IA 480p derivado TOCANDO, Whip Pan aplicado, sem erros de console
+- [ ] Push + deploy: tokens da sessão expiraram (eram só de ambiente) — Lucas roda `git push` (a action Deploy Web cuida da Vercel) ou manda token novo

@@ -44,6 +44,16 @@ class PlaybackEngine {
   // deslize suave da seta (modo "Suave")
   private glideRaf = 0;
   private glideTarget: number | null = null;
+  /** v9.2: volume/mudo global do player de link compartilhado (#s=) —
+   *  multiplica o volume de TODOS os clipes (configuração de áudio do viewer) */
+  private masterVol = 1;
+  private masterMuted = false;
+
+  /** define o volume mestre do playback (0..1) e o mudo global */
+  setMasterVolume(v: number, muted = false) {
+    this.masterVol = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 1));
+    this.masterMuted = muted;
+  }
 
   bind(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -533,7 +543,9 @@ class PlaybackEngine {
       const track = tracks.find((tr) => tr.id === c.trackId);
       const isActive = c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001;
       const fade = isActive ? fadeEnvelope(c, t) : 0;
-      const eff = c.muted || track?.muted ? 0 : c.volume * fade;
+      // v9.2: masterVolume (player de link compartilhado) multiplica tudo
+      const master = this.masterMuted ? 0 : this.masterVol;
+      const eff = c.muted || track?.muted ? 0 : c.volume * fade * master;
 
       const needsDsp = !!c.enhance || !!(c.audioFilters && c.audioFilters.enabled);
       if (needsDsp) {

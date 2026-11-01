@@ -58,6 +58,7 @@ export function EffectsInspector({ clip }: { clip: Clip }) {
     { id: "retro", label: "Retrô & VHS" },
     { id: "light", label: "Luz & Brilho" },
     { id: "stylize", label: "Cinema & Estilização" },
+    { id: "people", label: "Pessoas & Beleza" },
   ] as const;
 
   return (

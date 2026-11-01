@@ -1,6 +1,55 @@
 {
-  "version": "9.1.0",
+  "version": "9.2.0",
   "entries": [
+    {
+      "version": "9.2.0",
+      "date": "2026-11-01",
+      "items": [
+        "VIDEO PREVIEW THAT ACTUALLY PLAYS: Internet Archive previews used to stream the LARGEST file (a 4K 3-hour original — frozen picture, one scene per minute). The resolver now picks the light h.264 derivative (480p-class) for previews AND re-downloads, so the exact video reported as stuck now plays smoothly.",
+        "THE PLAYER BAR NO LONGER SITS ON TOP OF THE VIDEO: clicking a search result opens ONLY the big preview modal — the library bar (mini-video) no longer pops up together with it. The bar keeps existing for the Media tab, where it belongs.",
+        "MULTI-PART TRIM IN THE MEDIA (✂): when a single video is imported, the parts editor opens right away (with a 'Don't show again' hint). Mark in/out points, add SEVERAL parts — one here, another there — each part becomes its own clip on the timeline ('Add 2 parts' = 2 clips). Remove or add parts freely. A scissors button also sits next to convert/delete on every media card.",
+        "12 NEW VISUAL EFFECTS including a whole 'People & Beauty' line: Smooth Skin (beauty filter), Beauty Glow, Man Cinema (cold steel grade), Woman Glow (warm rose bloom), Kid Vibrant, Portrait Clarity — plus Lightning, God Rays, Rain, Snowfall, Sci-Fi Scan and Comic Halftone. All with live animated tiles and full preview = export parity.",
+        "10 NEW TRANSITIONS: Push up/down, Curtain up/down, Zoom out, 3D Spin, Glitch, Whip Pan (with motion blur), Venetian Blinds and Iris (circle reveal).",
+        "ANIMATED TILES IN THE LEFT PANEL TOO: the 'Effects' and 'Animate' tabs next to Media/Text/Search now show the same live animated squares as the inspector (with category chips — Impact, People, Retro, Light, Cinema).",
+        "SHARED LINKS THAT ACTUALLY PLAY: whoever opens a #s= link now gets the stock media re-downloaded from the source before playback (before: black placeholders and missing audio on any machine other than the author's). The direct player shows a 'Preparing media…' progress gate and only then autoplays.",
+        "AUDIO SETTINGS IN THE SHARED PLAYER: volume slider and mute in the fullscreen viewer — plus a retry button to re-download missing media.",
+        "EDIT ROUND-TRIP (the edit affects the sharer's local edit): share links now carry a stable share id (sid) plus the original project id (oid). Whoever edits can send the link back — when the author opens it, THEIR local edit is updated in place instead of duplicated. Both the Share dialog and the link landing screen explain exactly how the round-trip works.",
+        "ONE WAY TO WATCH: the separate 'shorts mode' toggle is gone — the View-only link IS the shorts-style player (fullscreen, autoplay). Edit and Copy links still show the presentation screen.",
+        "ADVANCED SEARCH: license filter (any / free CC0 / with credit CC-BY), orientation filter (any / landscape / portrait) for videos and photos, and a 'Load more' button that appends the next page of results. The filters popover is now available on every search tab.",
+        "STICKERS THAT COME BACK: sticker search is now multi-source (Openverse + Wikimedia Commons PNGs) — when one API is down or rate-limited, the other answers.",
+        "RICHER 'COMING SOON' AI CATALOG: every planned category now lists 3-5 named models — TTS gains male, female and child voices (Piper variants, Kokoro-82M, XTTS-v2 voice cloning), background removal gains RVM (video) and U²-Net (max precision), voice separation adds MDX23C, denoise adds DeepFilterNet 2 Light, translation adds Opus-MT."
+      ],
+      "items_pt": [
+        "PRÉVIA DE VÍDEO QUE TOCA DE VERDADE: os previews do Internet Archive puxavam o MAIOR arquivo (o original 4K de 3 horas — imagem congelada, uma cena por minuto). Agora o resolvedor escolhe o DERIVADO leve h.264 (~480p) — o mesmo vídeo que você reportou travado hoje toca liso.",
+        "A BARRA DO PLAYER SAIU DE CIMA DO VÍDEO: clicar num resultado da busca abre SÓ o modal de prévia grande — a barrinha da biblioteca (mini-vídeo) não abre mais junto. A barra continua existindo na aba Mídia, onde ela é útil.",
+        "CORTAR VÍDEO NA MÍDIA COM SUBPARTES (✂): ao importar um vídeo (arquivo único), o editor de partes abre direto (com dica e 'Não mostrar de novo'). Marque início/fim, adicione VÁRIAS partes — uma aqui, outra ali — e cada parte vira um clipe próprio na timeline ('Adicionar 2 trechos' = 2 clipes). Remova ou acrescente partes à vontade. O botão de tesoura também ficou do lado do converter/excluir nos cards de mídia.",
+        "12 NOVOS EFEITOS VISUAIS incluindo a linha 'Pessoas & Beleza': Pele Suave (filtro de beleza), Glow de Beleza, Homem Cinema (aço frio), Mulher Glow (rosa quente), Criança Vibrante, Retrato Nítido — mais Raio/Relâmpago, Raios de Luz (God Rays), Chuva, Neve, Varredura Sci-Fi e Quadrinho (Halftone). Todos com quadradinho animado e paridade total preview = exportação.",
+        "10 NOVAS TRANSIÇÕES: Empurrar ↑/↓, Cortina ↑/↓, Zoom Afastando, Giro 3D, Glitch, Whip Pan (com desfoque de movimento), Persianas e Íris (círculo).",
+        "QUADRADINHOS ANIMADOS NO PAINEL DA ESQUERDA TAMBÉM: as abas 'Efeitos' e 'Animar' (do lado de Mídia/Texto/Busca) agora mostram as mesmas prévias vivas do inspetor, com chips de categoria (Impacto, Pessoas, Retrô, Luz, Cinema).",
+        "LINKS COMPARTILHADOS QUE TOCAM DE VERDADE: quem abre um link #s= agora recebe a mídia de stock baixada de novo da fonte ANTES de tocar (antes: placeholder preto e áudio sumido em qualquer máquina que não a do autor). O player direto mostra o 'Preparando a mídia…' com progresso e só depois dá play sozinho.",
+        "CONFIGURAÇÃO DE ÁUDIO NO PLAYER COMPARTILHADO: controle de volume e mudo no player em tela cheia — mais um botão de tentar de novo a mídia que faltou.",
+        "A EDIÇÃO VOLTA PRA QUEM COMPARTILHOU (round-trip): os links agora carregam um id estável de compartilhamento (sid) e o id do projeto original (oid). Quem editou manda o link de volta — ao abrir, a edição local de QUEM COMPARTILHOU é atualizada em lugar, sem duplicar. O diálogo de Compartilhar e a tela do link explicam exatamente como o ciclo funciona.",
+        "UM JEITO SÓ DE ASSISTIR: o 'modo shorts' como opção separada acabou — o link Somente visualização JÁ É o player estilo shorts (tela cheia, autoplay). Editar e Cópia continuam mostrando a tela de apresentação.",
+        "BUSCA AVANÇADA: filtro de licença (qualquer / livres CC0 / com crédito CC-BY), filtro de orientação (qualquer / horizontal / vertical) pra vídeo e foto, e o botão 'Carregar mais' que anexa a próxima página de resultados. O popover de filtros agora existe em todas as abas de busca.",
+        "FIGURINHAS QUE VOLTAM: a busca de stickers agora é multi-fonte (Openverse + PNGs do Wikimedia Commons) — quando uma API cai ou limita, a outra responde.",
+        "CATÁLOGO DE IA 'EM BREVE' MAIS GORDO: cada categoria planejada agora lista 3-5 modelos com nome — o TTS ganha vozes masculina, feminina e infantil (variantes Piper, Kokoro-82M, XTTS-v2 com clonagem), remoção de fundo ganha RVM (vídeo) e U²-Net (precisão máxima), separação de voz ganha MDX23C, denoise ganha DeepFilterNet 2 Light e tradução ganha Opus-MT."
+      ],
+      "items_es": [
+        "PREVIEW DE VÍDEO QUE TOCA DE VERDAD: los previews del Internet Archive bajaban el archivo MÁS GRANDE (el original 4K de 3 horas — imagen congelada, una escena por minuto). Ahora el resolvedor elige el DERIVADO ligero h.264 (~480p) — el mismo vídeo que reportaste trabado hoy corre liso.",
+        "LA BARRA DEL PLAYER YA NO SE PONE ENCIMA DEL VÍDEO: hacer clic en un resultado de búsqueda abre SOLO el modal de vista previa grande — la barrinha de la biblioteca (mini-vídeo) ya no se abre junto. La barra sigue existiendo en la pestaña Medios, donde es útil.",
+        "CORTAR VÍDEO EN LA MEDIA CON SUBPARTES (✂): al importar un vídeo (archivo único), el editor de partes abre directo (con consejo y 'No mostrar de nuevo'). Marca inicio/fin, añade VARIAS partes — una aquí, otra allá — y cada parte se convierte en su propio clip ('Añadir 2 fragmentos' = 2 clips). Quita o añade partes a gusto. El botón de tijera también quedó al lado de convertir/eliminar en las tarjetas.",
+        "12 NUEVOS EFECTOS VISUALES incluyendo la línea 'Personas y Belleza': Piel Suave (filtro de belleza), Glow de Belleza, Hombre Cine (acero frío), Mujer Glow (rosa cálido), Niño Vibrante, Retrato Nítido — más Rayo/Relámpago, Rayos de Luz (God Rays), Lluvia, Nieve, Barrido Sci-Fi y Cómic (Halftone). Todos con tile animado y paridad total preview = exportación.",
+        "10 NUEVAS TRANSICIONES: Empujar ↑/↓, Cortina ↑/↓, Zoom alejando, Giro 3D, Glitch, Whip Pan (con desenfoque de movimiento), Persianas e Iris (círculo).",
+        "TILES ANIMADOS EN EL PANEL IZQUIERDO TAMBIÉN: las pestañas 'Efectos' y 'Animar' (al lado de Medios/Texto/Búsqueda) ahora muestran las mismas previas vivas del inspector, con chips de categoría (Impacto, Personas, Retro, Luz, Cine).",
+        "ENLACES COMPARTIDOS QUE TOCAN DE VERDAD: quien abre un enlace #s= ahora recibe la media de stock descargada de nuevo de la fuente ANTES de reproducir (antes: placeholder negro y audio perdido en cualquier máquina que no fuera la del autor). El player directo muestra 'Preparando el contenido…' con progreso y solo después reproduce solo.",
+        "AJUSTES DE AUDIO EN EL PLAYER COMPARTIDO: control de volumen y silencio en el reproductor a pantalla completa — más un botón para reintentar la media faltante.",
+        "LA EDICIÓN VUELVE A QUIEN LA COMPARTIÓ (ida y vuelta): los enlaces ahora llevan un id estable de compartido (sid) y el id del proyecto original (oid). Quien editó manda el enlace de vuelta — al abrirlo, la edición local DE QUIEN COMPARTIÓ se actualiza en lugar, sin duplicar. El diálogo de Compartir y la pantalla del enlace explican exactamente cómo funciona el ciclo.",
+        "UNA SOLA FORMA DE VER: el 'modo shorts' como opción aparte se acabó — el enlace de Sólo visualización YA ES el player estilo shorts (pantalla completa, autoplay). Editar y Copia siguen mostrando la pantalla de presentación.",
+        "BÚSQUEDA AVANZADA: filtro de licencia (cualquiera / libres CC0 / con crédito CC-BY), filtro de orientación (cualquiera / horizontal / vertical) para vídeo y foto, y el botón 'Cargar más' que anexa la siguiente página de resultados. El popover de filtros ahora existe en todas las pestañas de búsqueda.",
+        "STICKERS QUE VUELVEN: la búsqueda de stickers ahora es multifuente (Openverse + PNGs de Wikimedia Commons) — cuando una API cae o limita, la otra responde.",
+        "CATÁLOGO DE IA 'PRONTO' MÁS RICO: cada categoría planeada ahora lista 3-5 modelos con nombre — el TTS gana voces masculina, femenina e infantil (variantes Piper, Kokoro-82M, XTTS-v2 con clonación), quitar fondo gana RVM (vídeo) y U²-Net (precisión máxima), separación de voz gana MDX23C, denoise gana DeepFilterNet 2 Light y traducción gana Opus-MT."
+      ]
+    },
     {
       "version": "9.1.0",
       "date": "2026-11-01",

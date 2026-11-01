@@ -29,7 +29,6 @@ import { useSettings } from "@/lib/editor/settings";
 import { registry } from "@/lib/editor/media";
 import { licenseLevel, LICENSE_STYLE } from "@/lib/editor/types";
 import { StockItem, downloadStockFile, searchStock, searchStickers } from "@/lib/editor/stockClient";
-import { useLibPlayer } from "@/lib/editor/libPlayer";
 import { useFavorites } from "@/lib/editor/favorites";
 import { useT } from "@/lib/editor/i18n";
 import {
@@ -159,6 +158,12 @@ export function StockSearch() {
   const [stickTab, setStickTab] = useState<"stickers" | "emojis">("stickers");
   const [emojiCat, setEmojiCat] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
+  // v9.2 — busca avançada: licença, orientação e paginação (carregar mais)
+  const [license, setLicense] = useState<"any" | "free" | "credit">("any");
+  const [orientation, setOrientation] = useState<"any" | "landscape" | "portrait">("any");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Modal de Prévia Grande
   const [previewItem, setPreviewItem] = useState<StockItem | null>(null);
@@ -166,7 +171,6 @@ export function StockSearch() {
 
   const addMedia = useProject((s) => s.addMedia);
   const addClipFromMedia = useProject((s) => s.addClipFromMedia);
-  const openPlayer = useLibPlayer((s) => s.open);
   const isFavorite = useFavorites((s) => s.isFavorite);
   const toggleFavorite = useFavorites((s) => s.toggleFavorite);
   const favoriteItems = useFavorites((s) => s.items);
@@ -215,11 +219,15 @@ export function StockSearch() {
         type: type as "video" | "image" | "music" | "sfx",
         dur,
         genre,
+        license,
+        orientation: orientation as "any" | "landscape" | "portrait",
         ...(dur === "custom" ? { dmin: Math.max(0, Math.min(cmin, cmax)), dmax: Math.max(1, Math.max(cmin, cmax)) } : {}),
         pexelsKey: keys.pexels || undefined,
         pixabayKey: keys.pixabay || undefined,
       });
       setItems(results);
+      setPage(1);
+      setHasMore(results.length >= 20);
       if (tr && tr !== query) setTranslated(tr);
       if (!results.length && !isShortsMode) {
         toast.info(t("ss.nothing"), { description: t("ss.nothingDesc") });
@@ -243,11 +251,15 @@ export function StockSearch() {
         type: searchType as "video" | "image" | "music" | "sfx",
         dur: searchDur,
         genre: searchGenre,
+        license,
+        orientation: orientation as "any" | "landscape" | "portrait",
         ...(searchDur === "custom" ? { dmin: Math.max(0, Math.min(cmin, cmax)), dmax: Math.max(1, Math.max(cmin, cmax)) } : {}),
         pexelsKey: keys.pexels || undefined,
         pixabayKey: keys.pixabay || undefined,
       });
       setItems(results);
+      setPage(1);
+      setHasMore(results.length >= 20);
       if (tr && tr !== qClean) setTranslated(tr);
       if (!results.length && !isShortsMode) {
         toast.info(t("ss.nothing"), { description: t("ss.nothingDesc") });
@@ -256,6 +268,40 @@ export function StockSearch() {
       toast.error(t("ss.fail"), { description: t("ss.failDesc") });
     } finally {
       setLoading(false);
+    }
+  }
+
+  /** v9.2 — “Carregar mais”: próxima página da MESMA busca, anexando (sem
+   *  perder o que já achou). Se as fontes acabaram, o botão some. */
+  async function loadMore() {
+    if (!query.trim() || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const keys = useSettings.getState().keys;
+      const nextPage = page + 1;
+      const { results } = await searchStock({
+        q: query,
+        type: type as "video" | "image" | "music" | "sfx",
+        page: nextPage,
+        dur,
+        genre,
+        license,
+        orientation: orientation as "any" | "landscape" | "portrait",
+        ...(dur === "custom" ? { dmin: Math.max(0, Math.min(cmin, cmax)), dmax: Math.max(1, Math.max(cmin, cmax)) } : {}),
+        pexelsKey: keys.pexels || undefined,
+        pixabayKey: keys.pixabay || undefined,
+      });
+      setItems((prev) => {
+        const base = prev ?? [];
+        const seen = new Set(base.map((p) => p.id));
+        return [...base, ...results.filter((r) => !seen.has(r.id))];
+      });
+      setPage(nextPage);
+      setHasMore(results.length >= 12);
+    } catch {
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -316,21 +362,11 @@ export function StockSearch() {
   }
 
   function handleOpenPreview(it: StockItem) {
+    // v9.2: clicar num resultado abre SÓ o modal de prévia (grande). A barra
+    // do player da biblioteca NÃO abre mais junto — ela ficava na frente do
+    // vídeo e atrapalhava a prévia que a pessoa acabou de pedir.
     setPreviewItem(it);
     setPreviewOpen(true);
-    openPlayer({
-      id: it.id,
-      title: it.title,
-      url: it.url,
-      kind: it.audio ? "audio" : "video",
-      thumb: it.thumb,
-      isIa: it.provider.includes("Internet Archive"),
-      provider: it.provider,
-      creator: it.creator,
-      license: it.license,
-      duration: it.duration,
-      rawStockItem: it,
-    });
   }
 
   async function addSticker(emoji: string) {
@@ -475,17 +511,18 @@ export function StockSearch() {
             <span className="text-[11px] font-semibold">{favoriteItems.length}</span>
           </button>
 
-          {/* Toggle de Filtros Avançados */}
-          {(showDur || showGenre) && !onlyFavorites && (
+          {/* Toggle de Filtros Avançados (v9.2: agora em TODAS as abas de
+              busca — vídeo/foto também ganham licença e orientação) */}
+          {!isSticker && !onlyFavorites && (
             <button
               type="button"
               onClick={() => setShowFilters((s) => !s)}
               className={`flex h-7 w-7 items-center justify-center shrink-0 rounded-md border transition ${
-                showFilters || genre !== "all" || dur !== "any"
+                showFilters || genre !== "all" || dur !== "any" || license !== "any" || orientation !== "any"
                   ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)]"
                   : "border-[#2a3546] bg-[#121722] text-zinc-400 hover:text-zinc-200"
               }`}
-              title="Filtros de estilo e duração"
+              title={t("ss.advFilters")}
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
             </button>
@@ -722,6 +759,62 @@ export function StockSearch() {
           </div>
         )}
 
+        {/* v9.2 — FILTROS AVANÇADOS: licença + orientação (vídeo/foto) */}
+        {showFilters && !isSticker && !onlyFavorites && (type === "video" || type === "image") && (
+          <div className="rounded-lg border border-[#232d3d] bg-[#101520] p-2 space-y-2">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
+                <Sparkles className="h-3 w-3 text-emerald-400" /> {t("ss.license")}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {(["any", "free", "credit"] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => {
+                      setLicense(l);
+                      searchedRef.current = true;
+                      void searchDirect(query, type, dur, genre);
+                    }}
+                    className={`rounded-md border px-2 py-0.5 text-[10px] transition ${
+                      license === l
+                        ? "border-emerald-500 bg-emerald-500/20 text-emerald-300 font-semibold"
+                        : "border-[#232d3d] bg-[#121722] text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    {t(`ss.lic.${l}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
+                <ImageIcon className="h-3 w-3 text-sky-400" /> {t("ss.orientation")}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {(["any", "landscape", "portrait"] as const).map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => {
+                      setOrientation(o);
+                      searchedRef.current = true;
+                      void searchDirect(query, type, dur, genre);
+                    }}
+                    className={`rounded-md border px-2 py-0.5 text-[10px] transition ${
+                      orientation === o
+                        ? "border-sky-500 bg-sky-500/20 text-sky-300 font-semibold"
+                        : "border-[#232d3d] bg-[#121722] text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    {t(`ss.ori.${o}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Emojis Prontos (filtrados pela categoria escolhida) */}
         {isSticker && stickTab === "emojis" && !onlyFavorites && (
           <div className="space-y-3">
@@ -888,6 +981,23 @@ export function StockSearch() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* v9.2 — CARREGAR MAIS: próxima página das fontes (mais conteúdo além
+            dos primeiros ~20 resultados de cada busca) */}
+        {!loading && !onlyFavorites && !isSticker && hasMore && displayItems && displayItems.length > 0 && (
+          <div className="flex justify-center py-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              className="h-8 gap-1.5 border-[#2a3546] bg-[#121722] px-4 text-xs text-zinc-300 hover:border-[var(--gc-accent-60)] hover:text-white"
+            >
+              {loadingMore ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {t("ss.loadMore")}
+            </Button>
           </div>
         )}
 

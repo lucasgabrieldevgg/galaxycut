@@ -263,18 +263,69 @@ function parseIaLength(v: unknown): number | undefined {
 }
 
 // ---------- Internet Archive: resolver o arquivo real ----------
+
+export interface IaFile {
+  name: string;
+  format?: string;
+  length?: string;
+  size?: string;
+}
+
+/** Escolhe o melhor arquivo do Internet Archive pra TOCAR NO NAVEGADOR.
+ * v9.2: antes pegávamos o MAIOR arquivo (o original 4K de 3h virava um stream
+ * impossível — vídeo travado, "uma cena por minuto"). Agora a regra é:
+ *  1. só formatos que o browser decodifica bem (mp4/h.264, webm; mp3/ogg…);
+ *  2. prioriza DERIVADOS leves do próprio IA (h.264/512Kb/MPEG4) em vez do
+ *     original gigante (mkv 4K, flac etc.);
+ *  3. entre os candidatos, o MENOR que passe de um piso mínimo (evita sample
+ *     de 30s) — 480p derivado toca liso onde o 4K engasga.
+ * Pure function (testada): recebe a lista de files do metadata, devolve a escolha. */
+export function pickIaFile(files: IaFile[], kind: "video" | "audio"): IaFile | null {
+  const size = (f: IaFile) => Number(f.size ?? 0) || 0;
+  const isDerived = (f: IaFile) =>
+    /h\.?264|mpeg4|512\s*kb|derived|ia\./i.test(`${f.format ?? ""} ${f.name}`) && !/original/i.test(f.name);
+  const notSample = (f: IaFile) => !/sample|trailer(?:[^a-z]|$)|readme|thumb/i.test(f.name);
+
+  if (kind === "video") {
+    const playable = files.filter(
+      (f) => /\.(mp4|m4v|webm)$/i.test(f.name) && notSample(f) && size(f) > 0
+    );
+    if (!playable.length) {
+      // último recurso: mkv direto (Chrome às vezes toca; melhor que nada)
+      const mkv = files.filter((f) => /\.mkv$/i.test(f.name) && notSample(f) && size(f) > 0);
+      if (mkv.length) return mkv.sort((a, b) => size(a) - size(b))[0];
+      return null;
+    }
+    // derivado leve (>= 1.5 MB pra não ser um sample)…
+    const derived = playable.filter((f) => isDerived(f) && size(f) >= 1_500_000);
+    if (derived.length) return derived.sort((a, b) => size(a) - size(b))[0];
+    // …senão o menor mp4/webm com tamanho decente, e por fim o menor de todos
+    const decent = playable.filter((f) => size(f) >= 1_500_000);
+    if (decent.length) return decent.sort((a, b) => size(a) - size(b))[0];
+    return playable.sort((a, b) => size(a) - size(b))[0];
+  }
+
+  // áudio: mp3/ogg/m4a/opus decodificam em todo browser; flac/wav pesam à toa
+  const playable = files.filter(
+    (f) => /\.(mp3|ogg|oga|m4a|opus)$/i.test(f.name) && notSample(f) && size(f) > 0
+  );
+  if (!playable.length) {
+    const lossless = files.filter((f) => /\.(flac|wav)$/i.test(f.name) && notSample(f) && size(f) > 0);
+    if (lossless.length) return lossless.sort((a, b) => size(a) - size(b))[0];
+    return null;
+  }
+  // 64-192 kbps é ótimo pra ouvir; pega o menor acima de 800 KB (~1 min de áudio)
+  const decent = playable.filter((f) => size(f) >= 800_000);
+  if (decent.length) return decent.sort((a, b) => size(a) - size(b))[0];
+  return playable.sort((a, b) => size(a) - size(b))[0];
+}
+
 export async function resolveIaFile(id: string): Promise<{ url: string; duration?: number }> {
   const r = await fetchT(`https://archive.org/metadata/${id}`, { timeoutMs: 8000 });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const data = await r.json();
-  const files: { name: string; format?: string; length?: string; size?: string }[] = data?.files ?? [];
-  const audios = files
-    .filter((f) => /\.(mp3|ogg|flac|m4a|wav)$/i.test(f.name))
-    .sort((a, b) => Number(b.size ?? 0) - Number(a.size ?? 0));
-  const videos = files
-    .filter((f) => /\.(mp4|m4v|webm|mkv)$/i.test(f.name) && !/sample/i.test(f.name))
-    .sort((a, b) => Number(b.size ?? 0) - Number(a.size ?? 0));
-  const pick = audios[0] ?? videos[0];
+  const files: IaFile[] = data?.files ?? [];
+  const pick = pickIaFile(files, "video") ?? pickIaFile(files, "audio");
   if (!pick) throw new Error("Nenhum arquivo utilizável neste item");
   return { url: `https://archive.org/download/${id}/${encodeURIComponent(pick.name)}`, duration: parseIaLength(pick.length) };
 }
@@ -310,28 +361,96 @@ async function openverseImages(q: string, page: number): Promise<StockItem[]> {
 
 /** v7.1: busca de STICKERS (figurinhas com fundo transparente) — PNGs do
  *  Openverse. A query ganha "sticker" e o filtro extension=png prioriza
- *  arquivos com transparência. 100% sem chave de API. */
+ *  arquivos com transparência. 100% sem chave de API.
+ *  v9.2: o Openverse vive fora do ar/limitando taxa ("não achou figurinha
+ *  DE NOVO") — agora a busca é MULTI-FONTE: Openverse + Wikimedia Commons
+ *  (PNGs com cara de figurinha). Se uma cai, a outra responde. */
 export async function searchStickers(q: string, page = 1): Promise<StockItem[]> {
   const term = /\bsticker\b/i.test(q) ? q : `${q} sticker`;
-  // page_size 20: anônimo não passa disso na API do Openverse
-  const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&page_size=20&page=${page}&mature=false&extension=png`;
-  const r = await fetchT(url, { timeoutMs: 12000 });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const data = await r.json();
-  const items = (data.results ?? []) as Record<string, unknown>[];
-  const out = items
-    .map((x): StockItem => ({
-      id: `ovs-${x.id}`,
-      title: String(x.title ?? "Sticker").slice(0, 80),
-      thumb: (x.thumbnail as string) ?? "",
-      url: (x.url as string) ?? "",
-      provider: (x.provider as string) ?? "Openverse",
-      license: normLicense(String(x.license ?? ""), String(x.license_url ?? "")),
-      width: x.width as number | undefined,
-      height: x.height as number | undefined,
-      creator: (x.creator as string) ?? undefined,
-    }))
-    .filter((x) => !!x.url && !!x.thumb);
+  const jobs: Promise<StockItem[]>[] = [];
+
+  // 1. Openverse (PNG)
+  jobs.push(
+    (async () => {
+      // page_size 20: anônimo não passa disso na API do Openverse
+      const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&page_size=20&page=${page}&mature=false&extension=png`;
+      const r = await fetchT(url, { timeoutMs: 12000 });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const items = (data.results ?? []) as Record<string, unknown>[];
+      return items
+        .map((x): StockItem => ({
+          id: `ovs-${x.id}`,
+          title: String(x.title ?? "Sticker").slice(0, 80),
+          thumb: (x.thumbnail as string) ?? "",
+          url: (x.url as string) ?? "",
+          provider: (x.provider as string) ?? "Openverse",
+          license: normLicense(String(x.license ?? ""), String(x.license_url ?? "")),
+          width: x.width as number | undefined,
+          height: x.height as number | undefined,
+          creator: (x.creator as string) ?? undefined,
+        }))
+        .filter((x) => !!x.url && !!x.thumb);
+    })()
+  );
+
+  // 2. Wikimedia Commons: PNG de verdade (transparência) com termo de figurinha
+  jobs.push(
+    (async () => {
+      const offset = (page - 1) * 20;
+      const url =
+        `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*` +
+        `&generator=search&gsrsearch=${encodeURIComponent(`filetype:bitmap ${term}`)}&gsrnamespace=6&gsrlimit=24&gsroffset=${offset}` +
+        `&prop=imageinfo&iiprop=url|size|mime|thumb|extmetadata&iiurlwidth=320&iiextmetadatafilter=LicenseShortName|Artist`;
+      const r = await fetchT(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      type WcStickerPage = {
+        title?: string;
+        imageinfo?: {
+          url?: string;
+          thumburl?: string;
+          width?: number;
+          height?: number;
+          mime?: string;
+          extmetadata?: Record<string, { value?: string }>;
+        }[];
+      };
+      const pages = Object.values(data?.query?.pages ?? {}) as WcStickerPage[];
+      return pages
+        .map((p): StockItem | null => {
+          const info = p.imageinfo?.[0];
+          if (!info || info.mime !== "image/png") return null; // PNG = chance de fundo transparente
+          const meta = info.extmetadata ?? {};
+          const licRaw = String(meta.LicenseShortName?.value ?? "");
+          const artistRaw = String(meta.Artist?.value ?? "").replace(/<[^>]+>/g, "").trim();
+          return {
+            id: `wcs-${String(p.title ?? "").replace(/^File:/, "").slice(0, 60)}`,
+            title: String(p.title ?? "").replace(/^File:/, "").slice(0, 80),
+            thumb: info.thumburl ?? info.url ?? "",
+            url: info.url ?? "",
+            provider: "Wikimedia Commons",
+            license: normLicense(licRaw),
+            width: info.width,
+            height: info.height,
+            creator: artistRaw.slice(0, 60) || undefined,
+          };
+        })
+        .filter((x): x is StockItem => !!x && !!x.url && !!x.thumb);
+    })()
+  );
+
+  const settled = await Promise.allSettled(jobs);
+  const out: StockItem[] = [];
+  const seen = new Set<string>();
+  for (const s of settled) {
+    if (s.status !== "fulfilled") continue;
+    for (const it of s.value) {
+      if (seen.has(it.id)) continue;
+      seen.add(it.id);
+      out.push(it);
+    }
+  }
   // melhor esforço: prioriza títulos que mencionam sticker/ícone (mais chance
   // de ser figurinha de verdade e não foto qualquer)
   out.sort((a, b) => Number(/stick|clip|art|icon|png/i.test(b.title)) - Number(/stick|clip|art|icon|png/i.test(a.title)));
@@ -532,6 +651,25 @@ export interface StockSearchParams {
   genre?: string;
   pexelsKey?: string;
   pixabayKey?: string;
+  /** v9.2 busca avançada: só licenças livres (cc0/pdm/pexels/pixabay) ou com crédito */
+  license?: "any" | "free" | "credit";
+  /** v9.2 busca avançada: orientação (só faz sentido p/ imagem/vídeo) */
+  orientation?: "any" | "landscape" | "portrait";
+}
+
+/** Pós-filtro de licença da busca avançada */
+function inLicense(item: StockItem, mode: "any" | "free" | "credit"): boolean {
+  if (mode === "any") return true;
+  const l = (item.license ?? "").toLowerCase();
+  if (mode === "free") return l === "cc0" || l.includes("pdm") || l.includes("pexels") || l.includes("pixabay");
+  return l === "by" || l.includes("by"); // crédito = CC-BY (uso comercial ok, cite o autor)
+}
+
+/** Pós-filtro de orientação da busca avançada */
+function inOrientation(item: StockItem, mode: "any" | "landscape" | "portrait"): boolean {
+  if (mode === "any") return true;
+  if (!item.width || !item.height) return false;
+  return mode === "landscape" ? item.width >= item.height : item.height > item.width;
 }
 
 export async function searchStock(params: StockSearchParams): Promise<{ results: StockItem[]; translated: string | null }> {
@@ -598,9 +736,13 @@ export async function searchStock(params: StockSearchParams): Promise<{ results:
 
   await Promise.all(jobs);
 
-  // ---- pós-filtro: duração + separação música/efeito + relevância ----
+  // ---- pós-filtro: duração + licença + orientação + relevância ----
   const tokens = [...new Set([...tokenize(q), ...(en ? tokenize(en) : [])])];
   let filtered = results.filter((r) => inDuration(r, dur, dmin, dmax));
+  if (params.license && params.license !== "any") filtered = filtered.filter((r) => inLicense(r, params.license!));
+  if (params.orientation && params.orientation !== "any" && (type === "image" || type === "video")) {
+    filtered = filtered.filter((r) => inOrientation(r, params.orientation!));
+  }
   if (type === "sfx") {
     filtered = filtered.filter((r) => !/jamendo/i.test(r.provider) && (!r.duration || r.duration <= 180));
   }

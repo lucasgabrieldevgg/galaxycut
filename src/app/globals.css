@@ -368,6 +368,117 @@ canvas {
 @keyframes gcfx-t-flashov { 0% { opacity: 0; } 30% { opacity: 0; } 38% { opacity: 1; } 55% { opacity: 0; } 100% { opacity: 0; } }
 .gcfx-t-flash { animation: gcfx-t-dissolve 1.9s steps(1) infinite; }
 
+/* ---------- TRANSIÇÕES v9.2 ---------- */
+@keyframes gcfx-t-slideUpT { 0% { transform: translateY(115%); } 70%, 100% { transform: translateY(0); } }
+@keyframes gcfx-t-slideDownT { 0% { transform: translateY(-115%); } 70%, 100% { transform: translateY(0); } }
+@keyframes gcfx-t-wipeUpT { 0% { clip-path: inset(100% 0 0 0); } 70%, 100% { clip-path: inset(0 0 0 0); } }
+@keyframes gcfx-t-wipeDownT { 0% { clip-path: inset(0 0 100% 0); } 70%, 100% { clip-path: inset(0 0 0 0); } }
+@keyframes gcfx-t-zoomOutT { 0% { transform: scale(1.9); opacity: 0; } 70%, 100% { transform: scale(1); opacity: 1; } }
+@keyframes gcfx-t-spinT { 0% { transform: rotate(-200deg) scale(.3); opacity: 0; } 70%, 100% { transform: rotate(0deg) scale(1); opacity: 1; } }
+@keyframes gcfx-t-whipT {
+  0% { transform: translateX(130%) skewX(-14deg); filter: blur(3px); opacity: .5; }
+  55% { transform: translateX(0) skewX(0deg); filter: blur(0); opacity: 1; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes gcfx-t-blindsT {
+  0% { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
+  20% { clip-path: polygon(0 0, 33% 0, 33% 100%, 0 100%); }
+  40% { clip-path: polygon(0 0, 66% 0, 66% 100%, 0 100%); }
+  60%, 100% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+@keyframes gcfx-t-irisT { 0% { clip-path: circle(0% at 50% 50%); } 70%, 100% { clip-path: circle(75% at 50% 50%); } }
+@keyframes gcfx-t-glitchT {
+  0% { clip-path: inset(28% 0 32% 0); transform: translateX(-16%); filter: hue-rotate(70deg); opacity: .4; }
+  14% { clip-path: inset(0 0 58% 0); transform: translateX(14%); }
+  28% { clip-path: inset(62% 0 0 0); transform: translateX(-9%); filter: hue-rotate(-40deg); }
+  42%, 100% { clip-path: inset(0 0 0 0); transform: translateX(0); filter: none; opacity: 1; }
+}
+.gcfx-t-slideUp { animation: gcfx-t-slideUpT 1.7s cubic-bezier(.22,.9,.3,1) infinite; }
+.gcfx-t-slideDown { animation: gcfx-t-slideDownT 1.7s cubic-bezier(.22,.9,.3,1) infinite; }
+.gcfx-t-wipeUp { animation: gcfx-t-wipeUpT 1.7s cubic-bezier(.22,.9,.3,1) infinite; }
+.gcfx-t-wipeDown { animation: gcfx-t-wipeDownT 1.7s cubic-bezier(.22,.9,.3,1) infinite; }
+.gcfx-t-zoomOut { animation: gcfx-t-zoomOutT 1.7s cubic-bezier(.22,.9,.3,1) infinite; }
+.gcfx-t-spin { animation: gcfx-t-spinT 1.7s cubic-bezier(.3,1.2,.4,1) infinite; }
+.gcfx-t-whipPan { animation: gcfx-t-whipT 1.5s cubic-bezier(.6,.05,.3,1) infinite; }
+.gcfx-t-blinds { animation: gcfx-t-blindsT 1.8s steps(1) infinite; }
+.gcfx-t-iris { animation: gcfx-t-irisT 1.7s cubic-bezier(.22,.9,.3,1) infinite; }
+.gcfx-t-glitchT { animation: gcfx-t-glitchT 1.9s steps(2) infinite; }
+
+/* ---------- EFEITOS v9.2: Pessoas & Beleza ---------- */
+@keyframes gcfx-skinSmooth { 0%, 100% { filter: blur(1.2px) brightness(1.05); } 50% { filter: blur(1.8px) brightness(1.09); } }
+.gcfx-skinSmooth { animation: gcfx-skinSmooth 2.2s ease-in-out infinite; background: linear-gradient(135deg, #fde8d8, #f9c5b5); }
+
+@keyframes gcfx-beautyGlow { 0%, 100% { filter: brightness(1.05) saturate(1.05); box-shadow: 0 0 4px rgba(255, 214, 186, .5); } 50% { filter: brightness(1.25) saturate(1.12); box-shadow: 0 0 12px rgba(255, 214, 186, .95); } }
+.gcfx-beautyGlow { animation: gcfx-beautyGlow 2s ease-in-out infinite; background: linear-gradient(135deg, #ffe9d6, #ffb4a2); }
+
+@keyframes gcfx-manGrade { 0%, 100% { filter: saturate(.72) contrast(1.18) brightness(1.02) hue-rotate(-8deg); } 50% { filter: saturate(.62) contrast(1.28) brightness(.98) hue-rotate(-14deg); } }
+.gcfx-manGrade { animation: gcfx-manGrade 2.4s ease-in-out infinite; background: linear-gradient(135deg, #1e3a5f, #94a3b8); }
+
+@keyframes gcfx-womanGrade { 0%, 100% { filter: saturate(1.12) brightness(1.08); box-shadow: 0 0 5px rgba(253, 164, 175, .55); } 50% { filter: saturate(1.2) brightness(1.16); box-shadow: 0 0 10px rgba(253, 164, 175, .85); } }
+.gcfx-womanGrade { animation: gcfx-womanGrade 2.2s ease-in-out infinite; background: linear-gradient(135deg, #fda4af, #fecdd3); }
+
+@keyframes gcfx-kidPop { 0%, 100% { filter: saturate(1.5) brightness(1.1) contrast(1.05); transform: scale(1); } 50% { filter: saturate(1.75) brightness(1.2) contrast(1.1); transform: scale(1.05); } }
+.gcfx-kidPop { animation: gcfx-kidPop 1.6s ease-in-out infinite; background: linear-gradient(135deg, #fde047, #34d399, #60a5fa); }
+
+@keyframes gcfx-clarity { 0%, 100% { filter: contrast(1.12) saturate(1.08) brightness(1.03); } 50% { filter: contrast(1.38) saturate(1.15) brightness(1.08); } }
+.gcfx-clarity { animation: gcfx-clarity 1.9s ease-in-out infinite; }
+
+/* ---------- EFEITOS v9.2: Clima & Impacto ---------- */
+@keyframes gcfx-lightning {
+  0%, 58%, 100% { filter: brightness(1); box-shadow: none; }
+  62% { filter: brightness(2.4); box-shadow: 0 0 14px rgba(219, 234, 254, 1); }
+  66% { filter: brightness(1); }
+  70% { filter: brightness(2.1); box-shadow: 0 0 10px rgba(219, 234, 254, .9); }
+  74%, 100% { filter: brightness(1); box-shadow: none; }
+}
+.gcfx-lightning { animation: gcfx-lightning 2.1s linear infinite; background: linear-gradient(160deg, #0f172a, #334155); }
+
+@keyframes gcfx-godRays { 0% { background-position: 0 0; } 100% { background-position: 26px 0; } }
+.gcfx-godRays {
+  animation: gcfx-godRays 1.4s linear infinite;
+  background-image: repeating-linear-gradient(115deg, rgba(255, 236, 160, .95) 0 3px, rgba(255, 236, 160, 0) 3px 13px);
+  background-color: #2a2113;
+}
+
+@keyframes gcfx-rain { 0% { background-position: 0 -22px; } 100% { background-position: -14px 22px; } }
+.gcfx-rain {
+  animation: gcfx-rain .5s linear infinite;
+  background-image: repeating-linear-gradient(105deg, transparent 0 5px, rgba(190, 215, 255, .85) 5px 6px, transparent 6px 11px);
+  background-color: #101725;
+}
+
+@keyframes gcfx-snowfall { 0% { background-position: 0 -16px, 4px -10px; } 100% { background-position: 3px 16px, -4px 10px; } }
+.gcfx-snowfall {
+  animation: gcfx-snowfall 1.7s linear infinite;
+  background-image:
+    radial-gradient(circle at 30% 20%, rgba(255,255,255,.95) 1px, transparent 1.6px),
+    radial-gradient(circle at 70% 60%, rgba(255,255,255,.8) 1.3px, transparent 1.9px);
+  background-size: 11px 11px, 14px 14px;
+  background-color: #131a28;
+}
+
+.gcfx-sciFiScan::after {
+  content: "";
+  position: absolute;
+  left: 6%; right: 6%;
+  height: 2px;
+  top: 0;
+  border-radius: 2px;
+  background: #67e8f9;
+  box-shadow: 0 0 6px rgba(103, 232, 249, .9);
+  animation: gcfx-scan 1.5s linear infinite;
+}
+@keyframes gcfx-scan { 0% { top: 4%; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { top: 92%; opacity: 0; } }
+.gcfx-sciFiScan { background: linear-gradient(180deg, #083344, #062a38); }
+
+@keyframes gcfx-halftone { 0%, 100% { background-size: 5px 5px; } 50% { background-size: 9px 9px; } }
+.gcfx-halftone {
+  animation: gcfx-halftone 1.6s ease-in-out infinite;
+  background-image: radial-gradient(circle, #e2e8f0 1.3px, transparent 1.6px);
+  background-size: 6px 6px;
+  background-color: #171320;
+}
+
 /* ---------- ANIMAÇÕES (entrada/saída/contínuas) ---------- */
 @keyframes gcfx-a-zoomIn { 0% { transform: scale(.1); opacity: 0; } 70%, 100% { transform: scale(1); opacity: 1; } }
 @keyframes gcfx-a-zoomOut { 0% { transform: scale(1.9); opacity: 0; } 70%, 100% { transform: scale(1); opacity: 1; } }

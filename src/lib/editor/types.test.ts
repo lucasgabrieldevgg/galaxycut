@@ -106,3 +106,39 @@ describe("evaluateClipState (keyframes)", () => {
     expect(evaluateClipState(c, 12).scale).toBeCloseTo(3);
   });
 });
+
+// ---- v9.2: integridade dos catálogos novos (efeitos/transições) ----
+import { ANIMATIONS_IN, ANIMATIONS_OUT, ANIMATIONS_COMBO, EFFECT_CATALOG, TRANSITIONS } from "./types";
+
+describe("catálogos v9.2", () => {
+  it("TRANSITIONS não tem tipo repetido e cobre as novas (iris, blinds, whipPan…)", () => {
+    const ids = TRANSITIONS.map((t) => t.type);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const must of ["slideUp", "slideDown", "wipeUp", "wipeDown", "zoomOut", "spin", "glitchT", "whipPan", "blinds", "iris"] as const) {
+      expect(ids).toContain(must);
+    }
+    expect(ids[0]).toBe("none"); // "Nenhuma" sempre em primeiro
+  });
+
+  it("EFFECT_CATALOG não tem efeito repetido e a categoria Pessoas & Beleza existe", () => {
+    const ids = EFFECT_CATALOG.map((e) => e.type);
+    expect(new Set(ids).size).toBe(ids.length);
+    const people = EFFECT_CATALOG.filter((e) => e.category === "people");
+    expect(people.length).toBeGreaterThanOrEqual(6);
+    for (const must of ["skinSmooth", "manGrade", "womanGrade", "kidPop"] as const) {
+      expect(ids).toContain(must);
+    }
+    // todo efeito do catálogo tem nome/descrição (a UI mostra os dois)
+    for (const e of EFFECT_CATALOG) {
+      expect(e.name.length).toBeGreaterThan(2);
+      expect(e.description.length).toBeGreaterThan(10);
+    }
+  });
+
+  it("animações continuam sem duplicatas nas três listas", () => {
+    for (const list of [ANIMATIONS_IN, ANIMATIONS_OUT, ANIMATIONS_COMBO]) {
+      const ids = list.map((a) => a.type);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+  });
+});

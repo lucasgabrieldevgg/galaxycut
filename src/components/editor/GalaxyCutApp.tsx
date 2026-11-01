@@ -15,7 +15,7 @@ import { desktop } from "@/lib/editor/desktop";
 import { useSettings } from "@/lib/editor/settings";
 import { t as tr, useLang } from "@/lib/editor/i18n";
 import { uid } from "@/lib/editor/types";
-import { parseShareLink, shareFragmentFromLocation, shareIsDirectVideo, type SharePayload } from "@/lib/editor/share";
+import { parseShareLink, shareFragmentFromLocation, shareIsDirectVideo, setShareIds, type SharePayload } from "@/lib/editor/share";
 import { HomeScreen } from "./HomeScreen";
 import { UpdateDialog } from "./UpdateDialog";
 import { NewProjectDialog } from "./NewProjectDialog";
@@ -189,16 +189,36 @@ export function GalaxyCutApp() {
    *  - "edit" usa um ID estável derivado do link: abrir o mesmo link de novo
    *    ATUALIZA a mesma edição local (a edição local de quem abriu é afetada),
    *    em vez de criar cópias infinitas;
-   *  - "copy" sempre duplica com nome (cópia) — nunca toca numa edição existente. */
+   *  - "copy" sempre duplica com nome (cópia) — nunca toca numa edição existente.
+   * v9.2 — round-trip DE VERDADE: o link carrega sid (id estável do
+   * compartilhamento) e oid (id do projeto ORIGINAL de quem compartilhou).
+   *  - abrindo na máquina do AUTOR (link de retorno): oid bate com um projeto
+   *    local existente → ATUALIZA a edição dele em lugar (as edições de quem
+   *    abriu o link AFETAM a edição local de quem compartilhou);
+   *  - abrindo na máquina de OUTRA pessoa: cria/reaproveita "shared-{sid}"
+   *    (estável), e os sid/oid são herdados — se essa pessoa gerar um link
+   *    de volta, o ciclo continua fechando na máquina do autor. */
   function importShared(payload: SharePayload, mode: "edit" | "copy") {
     let id = uid();
+    let updatingOriginal = false;
+
     if (mode === "edit") {
-      // hash estável e curto de nome+data: mesmo link → mesma edição local
-      let h = 0;
-      const key = `${payload.name}|${payload.made}|${payload.clips.length}`;
-      for (let i = 0; i < key.length; i++) h = (Math.imul(31, h) + key.charCodeAt(i)) | 0;
-      id = `shared-${(h >>> 0).toString(36)}`;
+      // 1) link de RETORNO na máquina do autor? atualiza o original em lugar
+      if (payload.oid && projects.getSavedAt(payload.oid) != null) {
+        id = payload.oid;
+        updatingOriginal = true;
+      } else if (payload.sid) {
+        // 2) id estável do próprio link (reabrir atualiza a mesma cópia local)
+        id = `shared-${payload.sid}`;
+      } else {
+        // link v1 (sem sid): hash estável de nome+data (comportamento 9.1)
+        let h = 0;
+        const key = `${payload.name}|${payload.made}|${payload.clips.length}`;
+        for (let i = 0; i < key.length; i++) h = (Math.imul(31, h) + key.charCodeAt(i)) | 0;
+        id = `shared-${(h >>> 0).toString(36)}`;
+      }
     }
+
     const name = mode === "copy" ? `${payload.name} (cópia)`.slice(0, 60) : payload.name.slice(0, 60);
     projects.saveProjectSnapshot(id, {
       project: { ...payload.project, name },
@@ -207,12 +227,19 @@ export function GalaxyCutApp() {
       media: payload.media,
       folders: payload.folders,
     });
+
+    // v9.2: herda sid/oid na cópia local — os links gerados daqui pra frente
+    // devolvem o mesmo id (é isso que fecha o ciclo com quem compartilhou)
+    if (mode === "edit" && payload.sid) {
+      setShareIds(id, { sid: payload.sid, oid: payload.oid ?? null });
+    }
+
     stripShareHash();
     setShare("none");
     // quem chegou por link na 1ª visita considera-se apresentado (o onboarding
     // pode ser revisto em Configurações)
     if (!useSettings.getState().onboarded) useSettings.getState().set({ onboarded: true });
-    toast.success(tr("shared.imported"));
+    toast.success(updatingOriginal ? tr("shared.updatedOriginal") : tr("shared.imported"));
     void openProject(id);
   }
 

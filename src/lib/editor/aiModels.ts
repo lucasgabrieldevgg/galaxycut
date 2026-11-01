@@ -66,20 +66,28 @@ export const AI_MODELS: AiModelInfo[] = [
   // ---- SEPARAÇÃO VOZ / MÚSICA (planejados, com nome real) ----
   { id: "planned-uvr-mdx", name: "UVR-MDX-NET InstHQ", task: "voice-separate", sizeMb: 80, langs: "—", speed: 2, accuracy: 3, memory: "4 GB", local: true, status: "planned" },
   { id: "planned-htdemucs", name: "HT-Demucs (Meta)", task: "voice-separate", sizeMb: 300, langs: "—", speed: 1, accuracy: 3, memory: "6 GB", local: true, status: "planned" },
+  { id: "planned-mdx23c", name: "MDX23C Instrumental", task: "voice-separate", sizeMb: 270, langs: "—", speed: 1, accuracy: 3, memory: "6 GB", local: true, status: "planned" },
 
   // ---- REDUÇÃO DE RUÍDO (planejado) ----
   { id: "planned-rnnoise", name: "RNNoise (Xiph)", task: "denoise", sizeMb: 5, langs: "—", speed: 3, accuracy: 2, memory: "1 GB", local: true, status: "planned" },
   { id: "planned-denoise", name: "DeepFilterNet 3", task: "denoise", sizeMb: 30, langs: "—", speed: 3, accuracy: 3, memory: "2 GB", local: true, status: "planned" },
+  { id: "planned-dfn2", name: "DeepFilterNet 2 Light", task: "denoise", sizeMb: 16, langs: "—", speed: 3, accuracy: 2, memory: "1 GB", local: true, status: "planned" },
 
-  // ---- SÍNTESE DE VOZ (planejado) ----
-  { id: "planned-tts-piper", name: "Piper TTS", task: "tts", sizeMb: 60, langs: "20+", speed: 3, accuracy: 2, memory: "2 GB", local: true, status: "planned" },
-  { id: "planned-tts-xtts", name: "XTTS-v2 (Coqui)", task: "tts", sizeMb: 900, langs: "17", speed: 1, accuracy: 3, memory: "6 GB", local: true, status: "planned" },
+  // ---- SÍNTESE DE VOZ (planejado — v9.2: homem, mulher, criança…) ----
+  { id: "planned-tts-piper-f", name: "Piper — Voz feminina (PT)", task: "tts", sizeMb: 60, langs: "PT + 20", speed: 3, accuracy: 2, memory: "2 GB", local: true, status: "planned" },
+  { id: "planned-tts-piper-m", name: "Piper — Voz masculina (PT)", task: "tts", sizeMb: 60, langs: "PT + 20", speed: 3, accuracy: 2, memory: "2 GB", local: true, status: "planned" },
+  { id: "planned-tts-piper-k", name: "Piper — Voz infantil", task: "tts", sizeMb: 60, langs: "EN/ES", speed: 3, accuracy: 2, memory: "2 GB", local: true, status: "planned" },
+  { id: "planned-tts-kokoro", name: "Kokoro-82M (multi-voz)", task: "tts", sizeMb: 330, langs: "8", speed: 2, accuracy: 3, memory: "4 GB", local: true, status: "planned" },
+  { id: "planned-tts-xtts", name: "XTTS-v2 (clonagem de voz)", task: "tts", sizeMb: 1900, langs: "17", speed: 1, accuracy: 3, memory: "8 GB", local: true, status: "planned" },
 
   // ---- REMOÇÃO DE FUNDO (planejado) ----
-  { id: "planned-bg-modnet", name: "MODNet", task: "bg-remove", sizeMb: 25, langs: "—", speed: 2, accuracy: 3, memory: "4 GB", local: true, status: "planned" },
   { id: "planned-bg-mediapipe", name: "MediaPipe Selfie", task: "bg-remove", sizeMb: 10, langs: "—", speed: 3, accuracy: 2, memory: "2 GB", local: true, status: "planned" },
+  { id: "planned-bg-modnet", name: "MODNet", task: "bg-remove", sizeMb: 25, langs: "—", speed: 2, accuracy: 3, memory: "4 GB", local: true, status: "planned" },
+  { id: "planned-bg-rvm", name: "RVM (fundo em vídeo)", task: "bg-remove", sizeMb: 27, langs: "—", speed: 2, accuracy: 3, memory: "4 GB", local: true, status: "planned" },
+  { id: "planned-bg-u2net", name: "U²-Net (máxima precisão)", task: "bg-remove", sizeMb: 170, langs: "—", speed: 1, accuracy: 3, memory: "6 GB", local: true, status: "planned" },
 
   // ---- TRADUÇÃO DE LEGENDAS (planejado) ----
-  { id: "planned-nllb", name: "NLLB-200 distilled", task: "translate", sizeMb: 350, langs: "200", speed: 1, accuracy: 3, memory: "4 GB", local: true, status: "planned" },
   { id: "planned-m2m", name: "M2M100 418M", task: "translate", sizeMb: 200, langs: "100", speed: 2, accuracy: 2, memory: "4 GB", local: true, status: "planned" },
+  { id: "planned-nllb", name: "NLLB-200 distilled", task: "translate", sizeMb: 350, langs: "200", speed: 1, accuracy: 3, memory: "4 GB", local: true, status: "planned" },
+  { id: "planned-opusmt", name: "Opus-MT (por par de idiomas)", task: "translate", sizeMb: 310, langs: "60+", speed: 3, accuracy: 2, memory: "2 GB", local: true, status: "planned" },
 ];

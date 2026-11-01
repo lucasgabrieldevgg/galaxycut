@@ -6,6 +6,8 @@ import { idbDel, idbGet, idbPut } from "./mediaDB";
 import { decodeAudioOf, peaksFromBuffer } from "./wav";
 import { t } from "./i18n";
 import { toast } from "sonner";
+// v9.2: re-download de mídia de stock na reidratação de links compartilhados
+import { resolveIaFile, downloadStockFile } from "./stockClient";
 
 // arquivo grande demais pra cota do IndexedDB: avisa 1x a cada 10s — sem isso,
 // importar uma pasta de vídeos pesados dispara um toast por arquivo
@@ -416,6 +418,59 @@ export async function rehydrateMedia(metas: MediaMeta[]): Promise<MediaMeta[]> {
   }
   if (!fixed.size) return metas;
   return metas.map((m) => (fixed.has(m.id) ? { ...m, missing: false } : m));
+}
+
+/**
+ * v9.2 — reidratação COM RE-DOWNLOAD da fonte (links compartilhados).
+ * Quem abre um #s=… não tem os blobs do autor no IndexedDB — mídia de stock
+ * (stockUrl) é baixada de novo aqui pra edição tocar de verdade na máquina
+ * de quem abriu (antes: tudo vira placeholder → vídeo preto, áudio sumido).
+ * Itens do Internet Archive entram pelo DERIVADO LEVE (resolveIaFile), não
+ * pelo original 4K. onProgress informa a carga (pra tela "Preparando…").
+ */
+export async function rehydrateMediaWithSources(
+  metas: MediaMeta[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<MediaMeta[]> {
+  // 1ª passada: o que já existe no navegador (IndexedDB) — rápido e offline
+  let out = await rehydrateMedia(metas);
+  const stillMissing = out.filter((m) => !registry.hasBlob(m.id) && !m.decodeError);
+  if (!stillMissing.length) {
+    onProgress?.(1, 1);
+    return out;
+  }
+
+  // 2ª passada: mídia de stock — baixa da fonte original
+  const fixed = new Set<string>();
+  const total = stillMissing.length;
+  let done = 0;
+  for (const m of stillMissing) {
+    try {
+      const stockUrl = m.stockUrl;
+      if (!stockUrl) continue;
+      let url = stockUrl;
+      // Internet Archive details → resolve o arquivo leve derivado
+      const iaMatch = stockUrl.match(/archive\.org\/details\/([^/?#]+)/);
+      if (iaMatch) {
+        const r = await resolveIaFile(iaMatch[1]);
+        url = r.url;
+      }
+      const blob = await downloadStockFile(url);
+      if (blob && blob.size > 0) {
+        registry.put(m.id, blob); // persiste: próximo F5 não baixa de novo
+        fixed.add(m.id);
+      }
+    } catch {
+      /* a fonte pode ter caído — segue sem essa mídia (placeholder honesto) */
+    } finally {
+      done++;
+      onProgress?.(done, total);
+    }
+  }
+
+  if (!fixed.size) return out;
+  out = out.map((m) => (fixed.has(m.id) ? { ...m, missing: false } : m));
+  return out;
 }
 
 export const registry = new MediaRegistry();

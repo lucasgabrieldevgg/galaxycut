@@ -40,7 +40,7 @@ import { toast } from "sonner";
 import {
   Upload, FolderOpen, FolderPlus, Folder, ChevronRight, ArrowLeft, Trash2, Plus, Type, Sparkles,
   Search, Film, ImageIcon, Music2, Loader2, PlusCircle, Mic, Play as PlayIcon,
-  Pencil, Check, X, Wand2, Star, FileText,
+  Pencil, Check, X, Wand2, Star, FileText, Scissors,
 } from "lucide-react";
 import { SubtitleDialog } from "./SubtitleDialog";
 import { StockSearch } from "./StockSearch";
@@ -51,8 +51,19 @@ import { useT } from "@/lib/editor/i18n";
 import { PresetPreview } from "./PresetPreview";
 import { useFavorites } from "@/lib/editor/favorites";
 import { downloadStockFile, resolveIaFile } from "@/lib/editor/stockClient";
+import { FxTile } from "./FxTile";
 
 const MEDIA_DND_TYPE = "application/x-galaxycut-media";
+
+/** categorias dos efeitos (chip de filtro) — v9.2: + Pessoas & Beleza */
+const EFFECT_CATEGORIES: { id: "all" | "motion" | "retro" | "light" | "stylize" | "people"; label: string }[] = [
+  { id: "all", label: "Todos" },
+  { id: "motion", label: "Impacto" },
+  { id: "people", label: "Pessoas" },
+  { id: "retro", label: "Retrô" },
+  { id: "light", label: "Luz" },
+  { id: "stylize", label: "Cinema" },
+];
 
 /** filtros da aba Mídia (achar vídeo/áudio/imagem fácil) */
 const KIND_FILTERS: { id: "all" | "video" | "audio" | "image"; key: string }[] = [
@@ -126,6 +137,8 @@ export function MediaPanel() {
   const isFavorite = useFavorites((s) => s.isFavorite);
   const toggleFavorite = useFavorites((s) => s.toggleFavorite);
   const syncFavorites = useFavorites((s) => s.syncToProjectFolders);
+  /** v9.2: chip de categoria ativo na aba de efeitos (com prévia animada) */
+  const [fxCategory, setFxCategory] = useState<(typeof EFFECT_CATEGORIES)[number]["id"]>("all");
 
   useEffect(() => {
     syncFavorites();
@@ -284,6 +297,28 @@ export function MediaPanel() {
           ? t("mp.importedPartial", { ok, n: mediaFiles.length, fail })
           : t("mp.importedN", { n: ok })
       );
+
+      // v9.2 — “cortar vídeo na mídia” na JANELA DE IMPORTAÇÃO: quando entra UM
+      // vídeo (arquivo único), abre o editor de PARTES direto pra escolher os
+      // trechos antes de jogar na timeline (com “não mostrar de novo” na dica).
+      // Vários arquivos de uma vez? Não interrompe — o ✂ fica no card.
+      if (importedVideos.length === 1 && mediaFiles.length === 1) {
+        const v = importedVideos[0];
+        const url = await registry.ensureUrl(v.id);
+        if (url) {
+          openLibPlayer({
+            id: v.id,
+            title: v.name,
+            url,
+            kind: "video",
+            thumb: v.thumbnail,
+            duration: v.duration,
+            parts: true,
+          });
+        }
+      } else if (importedVideos.length > 1) {
+        toast.info(t("mp.partsHintMany", { n: importedVideos.length }));
+      }
 
       // Se vídeos que NÃO são MP4 foram importados (ex: MKV, AVI, MOV, WMV, etc.),
       // pergunta se deseja converter para MP4 para máxima compatibilidade
@@ -850,6 +885,30 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                         {m.name}
                       </span>
                       <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                        {/* v9.2: ✂ PARTES — escolher trechos (vários!) antes de
+                            jogar na timeline; fica do lado do converter/excluir */}
+                        {(m.kind === "video" || m.kind === "audio") && m.source !== "stock" && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const playUrl = await registry.ensureUrl(m.id);
+                              if (!playUrl) return;
+                              openLibPlayer({
+                                id: m.id,
+                                title: m.name,
+                                url: playUrl,
+                                kind: m.kind as "video" | "audio",
+                                thumb: m.thumbnail,
+                                duration: m.duration,
+                                parts: true,
+                              });
+                            }}
+                            className="text-zinc-500 transition hover:text-[var(--gc-accent)]"
+                            title={t("mp.partsBtn")}
+                          >
+                            <Scissors className="h-3 w-3" />
+                          </button>
+                        )}
                         {m.kind === "video" && (
                           <button
                             onClick={(e) => {
@@ -892,20 +951,44 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
 
         {/* ---------- EFEITOS ---------- */}
         <TabsContent value="effects" className="min-h-0 flex-1 overflow-hidden pt-0">
-          <ScrollArea className="h-full p-2.5">
-            <div className="grid grid-cols-2 gap-2">
-              {EFFECT_CATALOG.map((eff) => (
+          <div className="flex h-full min-h-0 flex-col">
+            {/* chips de categoria */}
+            <div className="flex shrink-0 flex-wrap gap-1 border-b border-[#1c2430] px-2.5 py-1.5">
+              {EFFECT_CATEGORIES.map((c) => (
                 <button
-                  key={eff.type}
-                  onClick={() => applyEffectToSelection(eff)}
-                  className="flex flex-col items-start rounded-lg border border-[#1e2633] bg-[#121722] p-2 text-left transition hover:border-emerald-400/50 hover:bg-[#161c2a]"
+                  key={c.id}
+                  type="button"
+                  onClick={() => setFxCategory(c.id)}
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                    fxCategory === c.id
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50"
+                      : "border border-[#232d3d] bg-[#121722] text-zinc-400 hover:text-zinc-200"
+                  }`}
                 >
-                  <span className="text-xs font-semibold text-zinc-200">{eff.name}</span>
-                  <span className="text-[9px] text-zinc-500 line-clamp-1">{eff.description}</span>
+                  {c.label}
                 </button>
               ))}
             </div>
-          </ScrollArea>
+            {/* grade com PRÉVIA ANIMADA (v9.2 — mesmo quadradinho vivo do inspetor) */}
+            <ScrollArea className="min-h-0 flex-1 p-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                {EFFECT_CATALOG.filter((e) => fxCategory === "all" || e.category === fxCategory).map((eff) => (
+                  <button
+                    key={eff.type}
+                    onClick={() => applyEffectToSelection(eff)}
+                    className="flex items-start gap-2 rounded-lg border border-[#1e2633] bg-[#121722] p-2 text-left transition hover:border-emerald-400/50 hover:bg-[#161c2a]"
+                    title={eff.description}
+                  >
+                    <FxTile kind="effect" type={eff.type} className="mt-0.5 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block text-[11px] font-semibold leading-tight text-zinc-200">{eff.name}</span>
+                      <span className="mt-0.5 block text-[9px] leading-snug text-zinc-500 line-clamp-2">{eff.description}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
         </TabsContent>
 
         {/* ---------- ANIMAÇÕES ---------- */}
@@ -919,9 +1002,10 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                     <button
                       key={anim.type}
                       onClick={() => applyAnimationToSelection(anim.type, "in")}
-                      className="rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
+                      className="flex items-center gap-2 rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
                     >
-                      {anim.label}
+                      <FxTile kind="animIn" type={anim.type} className="shrink-0" />
+                      <span className="truncate">{anim.label}</span>
                     </button>
                   ))}
                 </div>
@@ -934,9 +1018,10 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                     <button
                       key={anim.type}
                       onClick={() => applyAnimationToSelection(anim.type, "combo")}
-                      className="rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
+                      className="flex items-center gap-2 rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
                     >
-                      {anim.label}
+                      <FxTile kind="animCombo" type={anim.type} className="shrink-0" />
+                      <span className="truncate">{anim.label}</span>
                     </button>
                   ))}
                 </div>
@@ -949,9 +1034,10 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                     <button
                       key={anim.type}
                       onClick={() => applyAnimationToSelection(anim.type, "out")}
-                      className="rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
+                      className="flex items-center gap-2 rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
                     >
-                      {anim.label}
+                      <FxTile kind="animOut" type={anim.type} className="shrink-0" />
+                      <span className="truncate">{anim.label}</span>
                     </button>
                   ))}
                 </div>

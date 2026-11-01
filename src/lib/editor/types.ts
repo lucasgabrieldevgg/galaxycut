@@ -51,9 +51,19 @@ export type TransitionType =
   | "dissolve" // crossfade direto
   | "slideLeft" // entra empurrando da direita
   | "slideRight" // entra empurrando da esquerda
+  | "slideUp" // v9.2: empurrão vertical
+  | "slideDown" // v9.2
   | "wipeLeft" // cortina revelando da esquerda
   | "wipeRight" // cortina revelando da direita
+  | "wipeUp" // v9.2: cortina vertical
+  | "wipeDown" // v9.2
   | "zoom" // zoom in entrando
+  | "zoomOut" // v9.2: começa colado e afasta até encaixar
+  | "spin" // v9.2: giro 3D com escala
+  | "glitchT" // v9.2: fatias + RGB na virada
+  | "whipPan" // v9.2: chicote lateral com desfoque (estilo vlog)
+  | "blinds" // v9.2: persianas verticais
+  | "iris" // v9.2: círculo crescendo do centro
   | "flash" // clarão branco
   | "blurIn"; // do borrado pro nítido
 
@@ -68,9 +78,19 @@ export const TRANSITIONS: { type: TransitionType; label: string; icon: string }[
   { type: "fade", label: "Fade preto", icon: "◐" },
   { type: "slideLeft", label: "Deslizar ←", icon: "⇤" },
   { type: "slideRight", label: "Deslizar →", icon: "⇥" },
+  { type: "slideUp", label: "Empurrar ↑", icon: "⇡" },
+  { type: "slideDown", label: "Empurrar ↓", icon: "⇣" },
   { type: "wipeLeft", label: "Cortina ←", icon: "▤" },
   { type: "wipeRight", label: "Cortina →", icon: "▥" },
+  { type: "wipeUp", label: "Cortina ↑", icon: "▥" },
+  { type: "wipeDown", label: "Cortina ↓", icon: "▤" },
   { type: "zoom", label: "Zoom", icon: "⤢" },
+  { type: "zoomOut", label: "Zoom Afastando", icon: "⤡" },
+  { type: "spin", label: "Giro 3D", icon: "⟳" },
+  { type: "glitchT", label: "Glitch", icon: "👾" },
+  { type: "whipPan", label: "Whip Pan", icon: "≫" },
+  { type: "blinds", label: "Persianas", icon: "☰" },
+  { type: "iris", label: "Íris (Círculo)", icon: "◯" },
   { type: "flash", label: "Clarão", icon: "✦" },
   { type: "blurIn", label: "Desfoque", icon: "≈" },
 ];
@@ -225,7 +245,21 @@ export type EffectType =
   | "matrix"
   | "invert"
   | "duotone"
-  | "emboss";
+  | "emboss"
+  // ---- v9.2: Pessoas & Beleza ----
+  | "skinSmooth"
+  | "beautyGlow"
+  | "manGrade"
+  | "womanGrade"
+  | "kidPop"
+  | "clarity"
+  // ---- v9.2: Clima & Impacto ----
+  | "lightning"
+  | "godRays"
+  | "rain"
+  | "snowfall"
+  | "sciFiScan"
+  | "halftone";
 
 export interface ClipEffect {
   id: string;
@@ -241,7 +275,7 @@ export interface ClipEffect {
 export interface EffectMeta {
   type: EffectType;
   name: string;
-  category: "motion" | "retro" | "light" | "stylize";
+  category: "motion" | "retro" | "light" | "stylize" | "people";
   icon: string;
   description: string;
   defaultIntensity: number;
@@ -280,6 +314,22 @@ export const EFFECT_CATALOG: EffectMeta[] = [
   { type: "fisheye", name: "Lente Olho de Peixe", category: "stylize", icon: "🐟", description: "Curvatura convexa de lente ultra-angular estilo GoPro", defaultIntensity: 1 },
   { type: "thermal", name: "Visão Térmica", category: "stylize", icon: "🌡️", description: "Mapa de calor infravermelho simulando câmera militar", defaultIntensity: 1 },
   { type: "emboss", name: "Relevo 3D Metálico", category: "stylize", icon: "🗿", description: "Textura escultural em baixo-relevo de metal escovado", defaultIntensity: 1 },
+
+  // Pessoas & Beleza (v9.2 — presets pra retrato: homem, mulher, criança…)
+  { type: "skinSmooth", name: "Pele Suave (Beleza)", category: "people", icon: "🧖", description: "Filtro de beleza: suaviza a pele mantendo os detalhes dos olhos e do cabelo", defaultIntensity: 1 },
+  { type: "beautyGlow", name: "Glow de Beleza", category: "people", icon: "💫", description: "Luz difusa quente que ilumina o rosto e disfarça imperfeições", defaultIntensity: 1 },
+  { type: "manGrade", name: "Homem Cinema", category: "people", icon: "🕴️", description: "Cor masculina de cinema: aço frio, contraste forte e saturação contida", defaultIntensity: 1 },
+  { type: "womanGrade", name: "Mulher Glow", category: "people", icon: "👩", description: "Tom rosado quente com bloom suave — pele iluminada estilo beauty", defaultIntensity: 1 },
+  { type: "kidPop", name: "Criança Vibrante", category: "people", icon: "🧒", description: "Cores saltadas e brilho alto, visual alegre pra vídeos infantis", defaultIntensity: 1 },
+  { type: "clarity", name: "Retrato Nítido", category: "people", icon: "🔎", description: "Clareza: realça contornos e olhar sem exagerar na saturação", defaultIntensity: 1 },
+
+  // Clima & Impacto (v9.2)
+  { type: "lightning", name: "Raio / Relâmpago", category: "motion", icon: "🌩️", description: "Descargas elétricas com clarões rápidos para cortes de tensão", defaultIntensity: 1 },
+  { type: "godRays", name: "Raios de Luz (God Rays)", category: "light", icon: "🌞", description: "Feixes de luz diagonais atravessando a cena, estilo cinematográfico", defaultIntensity: 1 },
+  { type: "rain", name: "Chuva na Tela", category: "motion", icon: "🌧️", description: "Gotas caindo com rincoins de vidro — clima melancólico/dramático", defaultIntensity: 1 },
+  { type: "snowfall", name: "Neve", category: "motion", icon: "❄️", description: "Flocos de neve flutuando com profundidade, estilo natal/winter", defaultIntensity: 1 },
+  { type: "sciFiScan", name: "Varredura Sci-Fi", category: "retro", icon: "🛸", description: "Linha de varredura futurista com brilho ciano estilo interface alienígena", defaultIntensity: 1 },
+  { type: "halftone", name: "Quadrinho (Halftone)", category: "retro", icon: "🖨️", description: "Retícula de pontos de impressão estilo graphic novel retrô", defaultIntensity: 1 },
 ];
 
 export interface AudioFilterConfig {
