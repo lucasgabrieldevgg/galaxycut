@@ -27,6 +27,7 @@ export class AudioEngine {
   private recDest: MediaStreamAudioDestinationNode | null = null;
   private chains = new Map<string, Chain>();
   private linked = new WeakMap<HTMLMediaElement, Chain>();
+  private allChains = new Set<Chain>();
 
   ensureContext(): AudioContext {
     if (!this.ctx) {
@@ -37,12 +38,22 @@ export class AudioEngine {
       this.master = this.ctx.createGain();
       this.master.gain.value = 1;
       this.master.connect(this.ctx.destination);
-      // v9.4: pré-carrega o worklet de pitch o quanto antes (as vias de
-      // pitch ligam via enablePitch() assim que o módulo assenta)
-      void ensureVoicePitch(this.ctx);
+      // v9.4.1: pré-carrega o worklet de pitch e RELIGA as vias de pitch das
+      // cadeias que já existirem quando o módulo assentar (antes ninguém
+      // religava — os efeitos de tonalidade ficavam em bypass pra sempre)
+      void ensureVoicePitch(this.ctx).then((ok) => {
+        if (ok) for (const c of this.allChains) c.voice.enablePitch();
+      });
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
     return this.ctx;
+  }
+
+  /** v9.4.1: este elemento já foi capturado pelo WebAudio? (criar
+   *  MediaElementSource é IRREVERSÍVEL — depois disso o áudio do elemento
+   *  SEMPRE passa pela cadeia; o volume nativo dele vira só um pré-ganho) */
+  isLinked(el: HTMLMediaElement): boolean {
+    return this.linked.has(el);
   }
 
   /** Cria (ou recupera) o grafo de um elemento. Seguro chamar repetidamente. */
@@ -82,9 +93,14 @@ export class AudioEngine {
       voice.output.connect(hp).connect(comp).connect(limiter).connect(makeup).connect(gain).connect(this.master!);
       const chain: Chain = { source, hp, comp, limiter, makeup, gain, voice, lastGain: 1, lastEnhance: false };
       this.linked.set(el, chain);
+      this.allChains.add(chain);
       this.chains.set(key, chain);
       // worklet de pitch pode ter ficado pronto depois do build — religa agora
       chain.voice.enablePitch();
+      // v9.4.1: elemento capturado nasce LIMPO (volume nativo 1 / sem mudo —
+      // o ganho real da prévia é sempre o nó de ganho da cadeia)
+      el.muted = false;
+      el.volume = 1;
       return chain;
     } catch {
       // elemento já conectado a outro contexto ou contexto indisponível
@@ -247,4 +263,9 @@ export class AudioEngine {
 }
 
 export const audioEngine = new AudioEngine();
+
+// hook de depuração/testes (mesmo espírito do __gcEngine do playback) — só dev
+if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+  (window as unknown as { __gcAudio?: AudioEngine }).__gcAudio = audioEngine;
+}
 

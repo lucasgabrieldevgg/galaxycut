@@ -32,11 +32,25 @@ class PlaybackEngine {
   private lastAttach = new Map<string, MediaEl>();
   private startingPlays = new Set<HTMLMediaElement>();
   private raf = 0;
-  private last = 0;
   private dirty = true;
   private disposed = false;
   /** deu play com mídia ainda carregando? segura e toca sozinho quando 100% chegar */
   private pendingPlay = false;
+
+  // v9.4.1 RELÓGIO MONÓTONO: o playhead anda pelo RELÓGIO DE PAREDE (nunca em
+  // câmera lenta) e só é re-ancorado suavemente no hardware de áudio (nunca
+  // dá "ticks" pra trás). Se a mídia não acompanha, o relógio CONGELA até ela
+  // se recuperar (buffering honesto) em vez de pular/seek descontrolado.
+  private clockT0 = 0; // performance.now() do último anchor
+  private clockStart = 0; // playhead no último anchor
+  private stallSince = 0; // performance.now() desde quando a mídia está travada (0 = solta)
+  private stallReleased = false; // v9.4.1: válvula da trava atual já abriu (não re-congela)
+
+  /** ancora o relógio interno num instante T (chamado no play/seek/sync) */
+  private anchorClock(t: number, now: number) {
+    this.clockT0 = now;
+    this.clockStart = t;
+  }
 
   /** v9.4: tem um play esperando a mídia terminar de carregar? (indicador UI) */
   isPrepending(): boolean {
@@ -118,37 +132,92 @@ class PlaybackEngine {
 
   private startLoop() {
     if (this.disposed) return;
-    this.last = performance.now();
     const loop = (now: number) => {
       if (this.disposed) return;
-      const dt = Math.min(0.1, (now - this.last) / 1000);
-      this.last = now;
       const pb = usePlayback.getState();
       if (pb.playing) {
-        // Encontra o elemento de áudio/vídeo líder ativo para travar o relógio no hardware de som
-        let leaderTime: number | null = null;
+        const wallT = this.clockStart + (now - this.clockT0) / 1000;
+
+        // líder = primeiro elemento de vídeo/áudio ativo tocando com dados
+        // (é ele quem sintoniza o relógio no hardware de som)
+        let leaderEl: HTMLMediaElement | null = null;
+        let leaderT = 0;
+        let anyMediaActive = false;
         const active = this.activeClips(pb.playhead);
         for (const clip of active) {
           if (clip.kind !== "video" && clip.kind !== "audio") continue;
-          if (clip.muted) continue;
           const key = this.bindings.get(clip.id);
           const el = key ? this.elements.get(key) : undefined;
-          if (el instanceof HTMLMediaElement && !el.paused && !el.seeking && el.readyState >= 2) {
-            const elT = clip.start + (el.currentTime - clip.inPoint) / (clip.speed || 1);
-            if (isFinite(elT) && elT >= clip.start - 0.05 && elT <= clip.start + clip.duration + 0.05) {
-              leaderTime = elT;
-              break;
-            }
+          if (!(el instanceof HTMLMediaElement)) continue;
+          anyMediaActive = true;
+          if (clip.muted) continue; // sem áudio não trava o relógio
+          if (el.paused || el.seeking || el.readyState < 2) continue;
+          const elT = clip.start + (el.currentTime - clip.inPoint) / (clip.speed || 1);
+          if (isFinite(elT) && elT >= clip.start - 0.05 && elT <= clip.start + clip.duration + 0.05) {
+            leaderEl = el;
+            leaderT = elT;
+            break;
           }
         }
 
-        let nextT = pb.playhead;
-        if (leaderTime !== null) {
-          // A agulha segue com precisão atômica o hardware de som
-          nextT = leaderTime;
+        let nextT = wallT;
+        if (leaderEl && leaderT - wallT <= 0.5 && leaderT - wallT >= -0.2) {
+          // sincronia atômica suave: re-anchor no hardware de som (janela
+          // assimétrica — até 0,2s pra trás e 0,5s pra frente: passos
+          // inaudíveis, e nunca mais os saltos do "trava no líder")
+          this.anchorClock(leaderT, now);
+          this.stallSince = 0;
+          this.stallReleased = false;
+          nextT = leaderT;
+        } else if (leaderEl && leaderT < wallT - 0.2) {
+          // líder ATRASADO em relação ao relógio: se ainda tem dados na frente
+          // (readyState≥3) o relógio segue e o syncMedia puxa o elemento; se
+          // não tem (buffering), o relógio CONGELA esperando a mídia — até
+          // 2,5s; depois abre a válvula UMA vez e segue pelo relógio até a
+          // mídia se recuperar (sem isso o playhead andava 1 frame a cada
+          // 2,5s num vídeo remoto sem buffer).
+          if (leaderEl.readyState >= 3) {
+            this.stallSince = 0;
+            this.stallReleased = false;
+            nextT = wallT;
+          } else if (!this.stallSince) {
+            this.stallSince = now;
+            this.stallReleased = false;
+            this.anchorClock(pb.playhead, now);
+            nextT = pb.playhead;
+          } else if (!this.stallReleased && now - this.stallSince < 2500) {
+            nextT = pb.playhead; // congelado (buffering) — a UI mostra o estado
+          } else if (!this.stallReleased) {
+            this.stallReleased = true; // abre a válvula UMA vez por trava
+            this.anchorClock(pb.playhead, now); // recomeça a contar daqui
+            nextT = pb.playhead;
+          } else {
+            nextT = wallT; // segue o relógio até a mídia se recuperar
+          }
+        } else if (!leaderEl && anyMediaActive) {
+          // tem mídia ativa mas nenhum elemento tocando (carregando): congela
+          // o relógio até 2,5s — depois a válvula abre e segue (mídia
+          // problemática não trava o projeto inteiro)
+          if (!this.stallSince) {
+            this.stallSince = now;
+            this.stallReleased = false;
+            this.anchorClock(pb.playhead, now);
+          }
+          if (!this.stallReleased && now - this.stallSince < 2500) {
+            nextT = pb.playhead;
+          } else if (!this.stallReleased) {
+            this.stallReleased = true;
+            this.anchorClock(pb.playhead, now);
+            nextT = pb.playhead;
+          } else {
+            nextT = wallT;
+          }
         } else {
-          // Sem elemento tocando: avança pelo timer rAF
-          nextT = pb.playhead + dt;
+          this.stallSince = 0;
+          this.stallReleased = false;
+          // só imagem/texto (ou líder adiantado — o sync corrige o elemento):
+          // relógio de parede puro
+          nextT = wallT;
         }
 
         const dur = pb.duration;
@@ -239,8 +308,11 @@ class PlaybackEngine {
       } catch {
         buffered = 0;
       }
-      const done = (el.readyState >= 4 && dur > 0 && buffered >= dur * 0.985) || (dur > 0 && buffered >= dur - 0.15) || el.error !== null;
-      const timedOut = performance.now() - startedAt > 60_000;
+      const done =
+        (el.readyState >= 4 && dur > 0 && buffered >= dur * 0.985) ||
+        (dur > 0 && buffered >= dur - 0.15) ||
+        el.error !== null;
+      const timedOut = performance.now() - startedAt > 12_000;
       if (!done && !timedOut && el.error === null) {
         this.dirty = true; // repinta a prévia (a % do placeholder anda)
         setTimeout(poll, 220);
@@ -252,10 +324,12 @@ class PlaybackEngine {
     setTimeout(poll, 240);
   }
 
-  /** v7.2: TODA a mídia do projeto (vídeo/áudio/imagem dos clipes) tá 100%
-   *  carregada? O play só deixa assistir com tudo pronto — nada de
-   *  "carregando" no meio da reprodução. v7.3: mídia que estourou o teto de
-   *  pré-carga não segura mais o play (válvula de escape). */
+  /** v7.2: TODA a mídia do projeto (vídeo/áudio/imagem dos clipes) tá pronta
+   *  pra ASSISTIR? v9.4.1: o gate ficou leve — o play começa assim que a
+   *  mídia tem o PRIMEIRO trecho decodificado (readyState≥2 + ~1,5s na
+   *  frente). Antes exigia ~100% do arquivo: vídeo grande = play travado
+   *  "carregando" por quase um minuto. O buffering do meio da reprodução é
+   *  tratado pelo freeze do relógio (sem câmera lenta, sem ticks). */
   allMediaReady(): boolean {
     const { clips, media } = useProject.getState();
     for (const c of clips) {
@@ -271,16 +345,8 @@ class PlaybackEngine {
         continue;
       }
       if (!(el instanceof HTMLMediaElement)) continue;
-      if (el.readyState >= 2) continue; // já tem frame pronto
-      const dur = isFinite(el.duration) ? el.duration : 0;
-      if (dur <= 0) return false; // metadado nem chegou
-      let buf = 0;
-      try {
-        buf = el.buffered.length ? el.buffered.end(el.buffered.length - 1) : 0;
-      } catch {
-        buf = 0;
-      }
-      if (buf < Math.min(dur - 0.3, dur * 0.90) && el.readyState < 2) return false;
+      if (el.readyState >= 2) continue; // já tem quadro/amostra pronta pra tocar
+      return false; // sem dados: espera o carregamento inicial
     }
     return true;
   }
@@ -516,8 +582,11 @@ class PlaybackEngine {
             if (el.playbackRate !== targetSpeed) {
               el.playbackRate = targetSpeed;
             }
+            // v9.4.1: só corrige o atraso com dados na mão (readyState≥2) —
+            // buscar posição num elemento sem buffer virava o loop infinito
+            // de seek/trava que empurrava o vídeo pra frente sozinho
             const drift = Math.abs(el.currentTime - expected);
-            if (drift > 0.4 && !el.seeking) {
+            if (drift > 0.4 && !el.seeking && el.readyState >= 2) {
               try {
                 el.currentTime = expected;
               } catch {
@@ -527,7 +596,7 @@ class PlaybackEngine {
           } else {
             // Faixas secundárias:
             const drift = el.currentTime - expected;
-            if (Math.abs(drift) > 0.4 && !el.seeking) {
+            if (Math.abs(drift) > 0.4 && !el.seeking && el.readyState >= 2) {
               try {
                 el.currentTime = expected;
               } catch {
@@ -577,15 +646,25 @@ class PlaybackEngine {
       const master = this.masterMuted ? 0 : this.masterVol;
       const eff = c.muted || track?.muted ? 0 : c.volume * fade * master;
 
-      // v9.4 CORREÇÃO CRÍTICA: voiceFx também exige a cadeia DSP — antes só
-      // enhance/filtros ligavam o WebAudio, e um clipe com efeito de voz
-      // (sem "melhorar áudio") ficava MUDO na prévia. Agora qualquer um dos
-      // três liga o processamento.
+      // v9.4.1 CORREÇÃO DO MUDO PERSISTENTE: capturar um elemento no WebAudio
+      // (createMediaElementSource) é IRREVERSÍVEL — a partir daí o áudio dele
+      // SEMPRE passa pela cadeia. O código antigo, no caminho "sem DSP",
+      // só mexia no volume NATIVO do elemento: o ganho da cadeia ficava
+      // travado em 0 (clipe inativo) e/ou o elemento ficava mudo — e o clipe
+      // silenciava PARA SEMPRE, mesmo voltando pro "Original". Agora:
+      // elemento capturado OU com efeito → SEMPRE pela cadeia, sempre com o
+      // ganho REAL do clipe do momento (cadeia transparente = ganho puro).
       const needsDsp = !!c.enhance || !!(c.audioFilters && c.audioFilters.enabled) || !!c.voiceFx;
-      if (needsDsp) {
+      if (needsDsp || audioEngine.isLinked(el)) {
         if (this.lastAttach.get(key) !== el) {
           audioEngine.attach(key, el);
           this.lastAttach.set(key, el);
+        }
+        if (audioEngine.isLinked(el)) {
+          // elemento capturado: o nível sai do GANHO da cadeia — o volume
+          // nativo fica neutro (senão a fonte silencia junto)
+          el.muted = false;
+          if (Math.abs(el.volume - 1) > 0.01) el.volume = 1;
         }
         audioEngine.update(key, {
           gain: eff,
@@ -594,9 +673,6 @@ class PlaybackEngine {
           voiceFx: c.voiceFx ?? null,
           voiceFxParams: c.voiceFx ? c.voiceFxParams ?? { intensity: 1, pitch: 0 } : null,
         });
-      } else if (this.lastAttach.has(key)) {
-        // desliga o efeito também (antes o último efeito continuava tocando)
-        audioEngine.update(key, { gain: eff, enhance: false, voiceFx: null, voiceFxParams: null });
       } else {
         const targetVol = Math.max(0, Math.min(1, eff));
         if (Math.abs(el.volume - targetVol) > 0.01) {
@@ -682,7 +758,9 @@ class PlaybackEngine {
     audioEngine.ensureContext();
     // v7.2: a pessoa só VÊ o vídeo com a mídia carregada INTEIRA. Enquanto
     // não tá tudo em 100%, o play segura (a tela mostra a % carregando) e
-    // dispara sozinho quando o último byte chega.
+    // dispara sozinho quando o último byte chega. (v9.4.1: o gate ficou bem
+    // mais leve — bastam dados suficientes pra começar; o freeze-on-stall
+    // cuida do buffering no meio da reprodução.)
     if (!this.allMediaReady()) {
       this.pendingPlay = true;
       this.dirty = true;
@@ -692,6 +770,10 @@ class PlaybackEngine {
     const from = pb.playhead >= pb.duration - 0.01 ? 0 : pb.playhead;
     usePlayback.getState().setPlayhead(from);
     usePlayback.getState().setPlaying(true);
+    // v9.4.1: liga o relógio de parede a partir daqui
+    this.anchorClock(from, performance.now());
+    this.stallSince = 0;
+    this.stallReleased = false;
     this.dirty = true;
   }
 
@@ -743,6 +825,12 @@ class PlaybackEngine {
     cancelAnimationFrame(this.glideRaf);
     this.glideRaf = 0;
     usePlayback.getState().setPlayhead(target);
+    // v9.4.1: seek durante o play re-ancora o relógio no novo instante
+    if (pb.playing) {
+      this.anchorClock(target, performance.now());
+      this.stallSince = 0;
+      this.stallReleased = false;
+    }
 
     this.syncMedia(target, pb.playing);
     this.updateAudio(target);
@@ -785,3 +873,18 @@ class PlaybackEngine {
 }
 
 export const engine = new PlaybackEngine();
+
+// hook de depuração/testes (estado do player + store) — só em dev
+if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+  (window as unknown as { __gcEngine?: PlaybackEngine }).__gcEngine = engine;
+  // getters lazy: store ⇄ playback tem import circular — acessar o binding no
+  // module-level estoura TDZ (ReferenceError)
+  (window as unknown as { __gcStore?: unknown }).__gcStore = {
+    get useProject() {
+      return useProject;
+    },
+    get usePlayback() {
+      return usePlayback;
+    },
+  };
+}

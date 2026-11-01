@@ -160,6 +160,10 @@ export async function transformVoiceBuffer(
   dest.connect(off.destination);
 
   onStage?.("render", 0.35);
+  // v9.4.1 CORREÇÃO CRÍTICA: o buffer source NUNCA era iniciado — o render
+  // offline devolvia silêncio absoluto (o clipe "gerava" mudo). Sem isso o
+  // botão de transformar voz produzia um WAV de puro silêncio.
+  src.start(0);
   const rendered = await off.startRendering();
   onStage?.("done", 1);
   return rendered;

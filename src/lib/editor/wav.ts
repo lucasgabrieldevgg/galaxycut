@@ -61,38 +61,51 @@ export function peaksFromBuffer(buf: AudioBuffer, buckets = 900): number[] {
   return peaks.map((p) => Math.round(Math.min(1, p / max) * 100) / 100);
 }
 
+/** v9.4.1: contexto de decodificação COMPARTILHADO. Cada chamada de
+ *  decodeAudioOf criava (e fechava) um AudioContext próprio — o Chrome tem
+ *  limite rígido de ~6 contextos simultâneos por página, e em fluxos com
+ *  muitas mídias (importar em lote, cortar, transformar voz) o limite estoura
+ *  e os próximos `new AudioContext()` lançam exceção → áudio quebrado em
+ *  cascata. Um contexto só, criado uma vez, resolve de raiz. */
+let sharedDecodeCtx: AudioContext | null = null;
+/** contexto de áudio COMPARTILHADO para decodificar/criar buffers fora do motor
+ *  de prévia (evita o limite de ~6 contextos do Chrome) */
+export function decodeCtx(): AudioContext {
+  if (!sharedDecodeCtx || sharedDecodeCtx.state === "closed") {
+    const AC: typeof AudioContext =
+      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    sharedDecodeCtx = new AC();
+  }
+  if (sharedDecodeCtx.state === "suspended") void sharedDecodeCtx.resume().catch(() => undefined);
+  return sharedDecodeCtx;
+}
+
 /**
  * Decodifica o áudio de QUALQUER mídia (vídeo ou áudio) num AudioBuffer.
  * Possui fallback em cascata para containers complexos (MKV, MOV, AVI, etc.)
  * e garante que nunca lance exceções fatais.
  */
 export async function decodeAudioOf(blob: Blob, durationHint = 5): Promise<AudioBuffer> {
-  const AC: typeof AudioContext =
-    window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  if (!AC) {
+  if (typeof window === "undefined" || !(window.AudioContext || (window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext)) {
     throw new Error("Web Audio API indisponível");
   }
 
-  const ctx = new AC();
+  const ctx = decodeCtx();
 
   // 1) Tentativa direta via Web Audio API (instantâneo para MP3, WAV, AAC, OGG, WebM, MP4)
   try {
     const ab = await blob.slice(0).arrayBuffer();
     const buf = await ctx.decodeAudioData(ab);
-    void ctx.close().catch(() => {});
     return buf;
   } catch {
     // 2) Fallback para containers onde decodeAudioData direto falha (MKV, AVI, etc.)
     try {
       const buf = await decodeAudioViaElement(blob, ctx, durationHint);
-      void ctx.close().catch(() => {});
       return buf;
     } catch {
       // 3) Fallback seguro: cria um buffer de silêncio para não quebrar a aplicação
       const safeDuration = Math.max(0.5, durationHint || 5);
-      const silentBuf = ctx.createBuffer(2, Math.max(1, Math.round(safeDuration * 48000)), 48000);
-      void ctx.close().catch(() => {});
-      return silentBuf;
+      return ctx.createBuffer(2, Math.max(1, Math.round(safeDuration * 48000)), 48000);
     }
   }
 }

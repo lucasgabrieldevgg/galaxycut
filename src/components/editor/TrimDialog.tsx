@@ -101,16 +101,14 @@ function TrimDialogInner({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const waveRef = useRef<HTMLCanvasElement | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const srcNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  // v9.4.1: posição da seta em ref (o medidor lê a cada frame sem re-render)
+  const headTRef = useRef(0);
 
   const [dur, setDur] = useState(media?.duration ?? 0);
   const [parts, setParts] = useState<Part[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [headT, setHeadT] = useState(0); // posição (tempo da FONTE)
   const [playing, setPlaying] = useState(false);
-  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [peaks, setPeaks] = useState<number[]>(media?.peaks ?? []);
   const [computing, setComputing] = useState(false);
   const [dontShow, setDontShow] = useState(trimAutoDismissed());
@@ -165,40 +163,24 @@ function TrimDialogInner({
     };
   }, [mediaId, media?.peaks, media?.duration]);
 
-  // ---------- medidor dB ao vivo (AnalyserNode na prévia) ----------
-  useEffect(() => {
-    if (!open) return;
-    const el = videoRef.current;
-    if (!el) return;
-    try {
-      const AC: typeof AudioContext = window.AudioContext;
-      const ctx = new AC();
-      const src = ctx.createMediaElementSource(el);
-      const an = ctx.createAnalyser();
-      an.fftSize = 1024;
-      src.connect(an);
-      an.connect(ctx.destination);
-      audioCtxRef.current = ctx;
-      srcNodeRef.current = src;
-      analyserRef.current = an;
-      setAnalyser(an);
-    } catch {
-      setAnalyser(null); // sem medidor (o áudio continua pelo elemento)
-    }
-    return () => {
-      try {
-        srcNodeRef.current?.disconnect();
-        analyserRef.current?.disconnect();
-        void audioCtxRef.current?.close();
-      } catch {
-        /* noop */
-      }
-      audioCtxRef.current = null;
-      srcNodeRef.current = null;
-      analyserRef.current = null;
-      setAnalyser(null);
-    };
-  }, [open]);
+  // ---------- medidor dB (v9.4.1: lê os PICOS da forma de onda na posição
+  // da seta — o antigo AnalyserNode num AudioContext próprio tinha 2 defeitos
+  // fatais: nascia suspenso (fora de gesto do usuário → medidor morto e a
+  // prévia SEQUESTRADA num contexto mudo) e nunca ligava porque o effect
+  // rodava antes do <video> montar. Os picos funcionam pausado, tocando,
+  // vídeo sem áudio (−∞ honesto) e sem capturar o áudio do elemento.) ----------
+  const peaksRef = useRef<number[]>(media?.peaks ?? []);
+  peaksRef.current = peaks;
+  const durRef = useRef(media?.duration ?? 0);
+  durRef.current = dur;
+  const levelAtHead = useCallback((): number => {
+    const p = peaksRef.current;
+    const d = durRef.current;
+    if (!p.length || d <= 0) return 0;
+    const t = Math.max(0, Math.min(d - 0.001, headTRef.current));
+    const idx = Math.min(p.length - 1, Math.floor((t / d) * p.length));
+    return p[idx] ?? 0;
+  }, []);
 
   // ---------- desenho da forma de onda (fundo ciano/teal, estilo timeline) ----------
   useEffect(() => {
@@ -256,6 +238,7 @@ function TrimDialogInner({
       const el = videoRef.current;
       if (el && !el.paused) {
         const cur = el.currentTime;
+        headTRef.current = cur;
         setHeadT(cur);
         // regra de ouro: ao passar do fim da parte ativa, pula pra PRÓXIMA
         // subparte (ou para no fim da última — nunca toca o intervalo descartado)
@@ -272,6 +255,7 @@ function TrimDialogInner({
             } else {
               el.pause();
               setPlaying(false);
+              headTRef.current = p.outPt;
               setHeadT(p.outPt);
             }
           }
@@ -290,6 +274,7 @@ function TrimDialogInner({
   const seekTo = useCallback((time: number) => {
     const el = videoRef.current;
     const clamped = Math.max(0, Math.min(dur || 0, time));
+    headTRef.current = clamped;
     setHeadT(clamped);
     if (el) {
       try {
@@ -314,7 +299,6 @@ function TrimDialogInner({
     if (!inside && sorted.length) startAt = sorted[0].inPt;
     if (Math.abs(startAt - headT) > 0.01) seekTo(startAt);
     if (inside) setActiveIdx(parts.indexOf(inside));
-    void audioCtxRef.current?.resume();
     el.play()
       .then(() => setPlaying(true))
       .catch(() => setPlaying(false));
@@ -504,14 +488,20 @@ function TrimDialogInner({
                 // partes iniciais (uma vez, quando a duração real chega)
                 setParts((prev) => (prev.length ? prev : [{ inPt: 0, outPt: v.duration }]));
               }}
-              onTimeUpdate={(e) => !playing && setHeadT(e.currentTarget.currentTime)}
+              onTimeUpdate={(e) => {
+                if (playing) return;
+                const cur = e.currentTarget.currentTime;
+                headTRef.current = cur;
+                setHeadT(cur);
+              }}
               onError={() => toast.error(t("trim.videoError"))}
             />
           </div>
-          {/* medidor de nível — o MESMO componente da barra do editor */}
+          {/* medidor de nível — o MESMO componente da barra do editor,
+              alimentado pelos picos da forma de onda na posição da seta */}
           <div className="flex w-40 shrink-0 flex-col justify-center gap-1 rounded-lg border border-[#1c2430] bg-[#10151d] p-2.5">
             <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">{t("pv.sound")}</p>
-            <DbMeter mode="live" analyser={analyser} className="w-full" label={t("pv.sound")} />
+            <DbMeter mode="fn" getLevel={levelAtHead} className="w-full" label={t("pv.sound")} />
             <p className="text-[8px] leading-tight text-zinc-600">{t("trim.meterHint")}</p>
           </div>
         </div>

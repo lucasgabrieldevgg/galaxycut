@@ -6,6 +6,7 @@
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Info, X } from "lucide-react";
 import {
   Search,
   Video,
@@ -130,6 +131,7 @@ function fmtDur(d: number) {
 
 export function StockSearch() {
   const t = useT();
+  const [noticeHidden, setNoticeHidden] = useState(false);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<StockType>("video");
   const [loading, setLoading] = useState(false);
@@ -393,6 +395,41 @@ export function StockSearch() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#0c1017]">
+      {/* v9.4.1: aviso honesto — as fontes de busca são limitadas; o caminho
+          pro conteúdo ilimitado é pesquisar no Google e arrastar pra cá (ou
+          baixar e importar). Dispensável (fica no localStorage). */}
+      {(() => {
+        let dismissed = false;
+        try {
+          dismissed = localStorage.getItem("galaxycut_search_notice_v1") === "1";
+        } catch {
+          /* noop */
+        }
+        if (noticeHidden || dismissed) return null;
+        return (
+          <div className="flex shrink-0 items-start gap-2 border-b border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold leading-tight text-amber-200">{t("ss.limitedTitle")}</p>
+              <p className="mt-0.5 text-[9px] leading-snug text-amber-200/70">{t("ss.limitedDesc")}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setNoticeHidden(true);
+                try {
+                  localStorage.setItem("galaxycut_search_notice_v1", "1");
+                } catch {
+                  /* noop */
+                }
+              }}
+              className="flex shrink-0 items-center gap-1 rounded border border-amber-500/40 px-1.5 py-0.5 text-[9px] font-semibold text-amber-300 transition hover:bg-amber-500/20"
+            >
+              {t("ss.limitedOk")} <X className="h-2.5 w-2.5" />
+            </button>
+          </div>
+        );
+      })()}
       {/* ==================== CABEÇALHO COMPACTO FIXO ==================== */}
       <div className="shrink-0 border-b border-[#1c2430] p-2 space-y-1.5 bg-[#0f141d]">
         {/* Linha 1: Abas de Tipo (Vídeo, Música, Efeito, Foto, Sticker) */}

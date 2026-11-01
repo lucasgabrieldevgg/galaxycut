@@ -175,6 +175,10 @@ interface Lane {
   gate: GainNode; // liga/desliga a via (crossfade global)
   dry: GainNode; // seco DENTRO da via (controle de intensidade)
   wet: GainNode; // saída do processamento
+  aux: GainNode; // v9.4.1: camadas de ambiente (chiado/estalos/estática) da via —
+  // antes elas tocavam direto no output da cadeia INTEIRA, ou seja: um
+  // chiado permanente mesmo sem efeito nenhum ligado. Agora seguem o gate
+  // e a intensidade da via (só tocam com o efeito ativo)
   pitch?: PitchStage; // estágio de pitch (se a via tiver)
 }
 
@@ -194,7 +198,7 @@ export function buildVoiceChain(ctx: BaseAudioContext, opts?: { only?: VoiceFxId
   const lanes = new Map<VoiceFxId, Lane>();
   const pitchStages: PitchStage[] = [];
 
-  /** via básica: gate → { dry, cadeia → wet } → output */
+  /** via básica: gate → { dry, cadeia → wet, ambiente → aux } → output */
   const makeLane = (): Lane => {
     const gate = ctx.createGain();
     gate.gain.value = 0;
@@ -202,11 +206,14 @@ export function buildVoiceChain(ctx: BaseAudioContext, opts?: { only?: VoiceFxId
     dry.gain.value = 0; // intensidade padrão = 100% efeito
     const wet = ctx.createGain();
     wet.gain.value = 1;
+    const aux = ctx.createGain();
+    aux.gain.value = 0;
     input.connect(gate);
     gate.connect(dry);
     dry.connect(output);
     gate.connect(wet);
-    return { gate, dry, wet };
+    aux.connect(output);
+    return { gate, dry, wet, aux };
   };
 
   /** estágio de pitch com fallback: se o worklet ainda não carregou nesta
@@ -673,7 +680,7 @@ export function buildVoiceChain(ctx: BaseAudioContext, opts?: { only?: VoiceFxId
         const lp = filt("lowpass", 5200);
         const sh = shaper(4);
         const out = gainNode(1.6);
-        // camada de "respiração": ruído suave na banda da voz
+        // camada de "respiração": ruído suave na banda da voz (via aux)
         const nBp = filt("bandpass", 1800, 0.7);
         connect(l.wet, hp);
         connect(hp, lp);
@@ -683,7 +690,7 @@ export function buildVoiceChain(ctx: BaseAudioContext, opts?: { only?: VoiceFxId
         noise("white", (g) => {
           g.gain.value = 0.045;
           g.connect(nBp);
-          connect(nBp, output);
+          connect(nBp, l.aux);
         });
         lanes.set(id, l);
         return;
@@ -701,18 +708,18 @@ export function buildVoiceChain(ctx: BaseAudioContext, opts?: { only?: VoiceFxId
         connect(lp, sh);
         connect(sh, out);
         connect(out, output);
-        // chiado de linha + estalos
+        // chiado de linha + estalos (pela via aux — só com o efeito ligado)
         const nBp = filt("bandpass", 1400, 0.8);
         const nHp = filt("highpass", 800);
         noise("white", (g) => {
           g.gain.value = 0.035;
           g.connect(nBp);
-          connect(nBp, output);
+          connect(nBp, l.aux);
         });
         noise("crackle", (g) => {
           g.gain.value = 0.05;
           g.connect(nHp);
-          connect(nHp, output);
+          connect(nHp, l.aux);
         });
         lanes.set(id, l);
         return;
@@ -731,7 +738,7 @@ export function buildVoiceChain(ctx: BaseAudioContext, opts?: { only?: VoiceFxId
         connect(bp, sh);
         connect(sh, out);
         connect(out, output);
-        // estática pulsando (a interferência entra e sai)
+        // estática pulsando (a interferência entra e sai) — via aux
         const nBp = filt("bandpass", 1150, 1.2);
         const nGate = gainNode(0.03);
         osc("square", 2.2, nGate.gain, 0.028);
@@ -739,7 +746,7 @@ export function buildVoiceChain(ctx: BaseAudioContext, opts?: { only?: VoiceFxId
           g.gain.value = 1;
           g.connect(nBp);
           connect(nBp, nGate);
-          connect(nGate, output);
+          connect(nGate, l.aux);
         });
         lanes.set(id, l);
         return;
@@ -760,18 +767,18 @@ export function buildVoiceChain(ctx: BaseAudioContext, opts?: { only?: VoiceFxId
         connect(sh, dl);
         connect(dl, out);
         connect(out, output);
-        // chiado de fita + estalos de vinil
+        // chiado de fita + estalos de vinil — via aux
         const nHp = filt("highpass", 5500);
         const cHp = filt("highpass", 700);
         noise("white", (g) => {
           g.gain.value = 0.02;
           g.connect(nHp);
-          connect(nHp, output);
+          connect(nHp, l.aux);
         });
         noise("crackle", (g) => {
           g.gain.value = 0.06;
           g.connect(cHp);
-          connect(cHp, output);
+          connect(cHp, l.aux);
         });
         lanes.set(id, l);
         return;
@@ -820,15 +827,19 @@ export function buildVoiceChain(ctx: BaseAudioContext, opts?: { only?: VoiceFxId
     lane.dry.gain.setTargetAtTime(1 - m, at, 0.02);
     lane.wet.gain.setTargetAtTime(m, at, 0.02);
   };
-
   return {
     input,
     output,
     setFx(id, at, params) {
       const tc = 0.02; // constante de tempo do crossfade (~50ms pra assentar)
+      const mix = id ? Math.max(0, Math.min(1, params?.intensity ?? 1)) : 0;
       dry.gain.setTargetAtTime(id ? 0 : 1, at, tc);
       for (const key of lanes.keys()) {
-        lanes.get(key)!.gate.gain.setTargetAtTime(key === id ? 1 : 0, at, tc);
+        const lane = lanes.get(key)!;
+        lane.gate.gain.setTargetAtTime(key === id ? 1 : 0, at, tc);
+        // v9.4.1: camadas de ambiente (chiado/estática) acompanham o gate e a
+        // intensidade — silêncio absoluto quando o efeito não está ativo
+        lane.aux.gain.setTargetAtTime(key === id ? mix : 0, at, tc);
       }
       if (id) {
         const lane = lanes.get(id);

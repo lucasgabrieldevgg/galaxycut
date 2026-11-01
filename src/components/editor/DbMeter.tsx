@@ -35,11 +35,16 @@ const SCALE: { db: number; label: string }[] = [
 export function DbMeter({
   mode = "playhead",
   analyser,
+  getLevel,
   className = "",
   label,
 }: {
-  mode?: "playhead" | "live";
+  mode?: "playhead" | "live" | "fn";
   analyser?: AnalyserNode | null;
+  /** v9.4.1: modo "fn" — o chamador fornece o nível (0..1) direto (ex.:
+   *  medidor do cortar-na-mídia, que lê os PICOS da forma de onda na
+   *  posição da seta — funciona pausado, tocando, com ou sem AudioContext) */
+  getLevel?: () => number;
   className?: string;
   label?: string;
 }) {
@@ -58,7 +63,11 @@ export function DbMeter({
 
     const loop = () => {
       let level = 0;
-      if (mode === "playhead") {
+      if (getLevel) {
+        // modo função: nível calculado pelo chamador (picos/analyser/…)
+        const v = getLevel();
+        level = Number.isFinite(v) ? Math.max(0, Math.min(1.5, v)) : 0;
+      } else if (mode === "playhead") {
         const t = usePlayback.getState().playhead;
         if (t !== lastT) {
           lastT = t;
@@ -97,7 +106,7 @@ export function DbMeter({
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [mode, analyser]);
+  }, [mode, analyser, getLevel]);
 
   return (
     <div ref={hostRef} className={`select-none ${className}`} aria-label={label ?? "Medidor de áudio"}>

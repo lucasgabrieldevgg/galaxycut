@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { VenetianMask, Loader2, Play, Check } from "lucide-react";
 import { useProject } from "@/lib/editor/store";
 import { registry } from "@/lib/editor/media";
-import { decodeAudioOf, encodeWav } from "@/lib/editor/wav";
+import { decodeAudioOf, decodeCtx, encodeWav } from "@/lib/editor/wav";
 import { VOICE_TRANSFORM_MODELS, transformVoiceBuffer, type VoiceTransformId } from "@/lib/editor/voiceTransform";
 import { engine } from "@/lib/editor/playback";
 import { useT } from "@/lib/editor/i18n";
@@ -98,8 +98,9 @@ export function TransformVoiceDialog({ open, onOpenChange }: { open: boolean; on
       const inS = Math.max(0, Math.min(full.duration - 0.05, source.inPoint || 0));
       const outS = Math.max(inS + 0.05, Math.min(full.duration, source.outPoint > 0 ? source.outPoint : full.duration));
       const need = outS - inS;
-      const AC: typeof AudioContext = window.AudioContext;
-      const probe = new AC();
+      // v9.4.1: usa o contexto COMPARTILHADO de decodificação (cada `new
+      // AudioContext()` contava contra o limite de ~6 do Chrome)
+      const probe = decodeCtx();
       const seg = probe.createBuffer(2, Math.ceil(need * full.sampleRate), full.sampleRate);
       for (let ch = 0; ch < Math.min(2, full.numberOfChannels); ch++) {
         const from = full.getChannelData(Math.min(ch, full.numberOfChannels - 1));
@@ -107,7 +108,6 @@ export function TransformVoiceDialog({ open, onOpenChange }: { open: boolean; on
         const start = Math.floor(inS * full.sampleRate);
         for (let i = 0; i < to.length && start + i < from.length; i++) to[i] = from[start + i];
       }
-      void probe.close();
       setProgress(0.2);
       setStage(t("vt.stageRender"));
       const converted = await transformVoiceBuffer(seg, model, intensity, (st, p) => {

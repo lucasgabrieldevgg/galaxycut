@@ -1,7 +1,38 @@
 {
   "name": "GalaxyCut",
-  "version": "9.4.0",
+  "version": "9.4.1",
   "changelog": [
+    {
+      "version": "9.4.1",
+      "date": "2026-11-02",
+      "items": [
+        "HOTFIX — VOICE EFFECTS NO LONGER SILENCE CLIPS: the ambient layers of the effect lanes (radio hiss, vinyl crackle, static) were wired straight into the chain output, summing noise even with no effect active; they now follow the effect's gate and intensity — absolute silence when no effect is on, full character when it is.",
+        "HOTFIX — SWITCHING BACK TO 'ORIGINAL' RESTORES THE SOUND: capturing a media element in WebAudio is irreversible, and the old code left captured elements muted with the chain gain stuck at zero forever. Captured elements now always run through the chain with the clip's real gain — a transparent path that behaves exactly like the native one.",
+        "HOTFIX — TRANSFORM VOICE NO LONGER GENERATES SILENT CLIPS: the offline renderer's buffer source was never started, so every conversion produced pure silence. It plays now — male, female, young and old conversions come out audible.",
+        "HOTFIX — PLAYBACK CLOCK REBUILT (no more slow motion, no more backward ticks): the playhead advances by wall clock at real speed and re-anchors softly on the audio hardware within inaudible steps. While a remote video buffers, the playhead freezes honestly for up to 2.5s and then moves on — it never crawls in slow motion and never ticks backwards again.",
+        "HOTFIX — TRIM DIALOG dB METER WORKS: it now reads the real waveform peaks at the playhead position (works paused or playing, with or without audio context). The old version created a suspended AudioContext that captured the preview's audio and never ran — dead meter AND hijacked preview audio.",
+        "ONE SHARED AUDIO-DECODE CONTEXT: batch imports, trims and voice transforms no longer hit Chrome's ~6 simultaneous AudioContext limit — the bug that broke audio in cascade (everything silent after importing lots of files).",
+        "HONEST SEARCH NOTICE: the media library now says it upfront — our built-in search sources are limited. To find anything, search on Google and DRAG the file straight into the Media tab, or download it and import; works exactly the same. The notice is dismissable and stays dismissed."
+      ],
+      "items_pt": [
+        "HOTFIX — EFEITOS DE VOZ NÃO SILENCIAM MAIS OS CLIPES: as camadas de ambiente das vias de efeito (chiado de rádio, estalo de vinil, estática) eram ligadas direto na saída da cadeia, somando ruído mesmo sem efeito nenhum ativo; agora seguem o gate e a intensidade do efeito — silêncio absoluto sem efeito, caráter completo com ele.",
+        "HOTFIX — VOLTAR PRO 'ORIGINAL' RECUPERA O SOM: capturar um elemento de mídia no WebAudio é irreversível, e o código antigo deixava elementos capturados mudos com o ganho da cadeia travado em zero pra sempre. Elementos capturados agora sempre passam pela cadeia com o ganho real do clipe — um caminho transparente que se comporta igual ao nativo.",
+        "HOTFIX — TRANSFORMAR VOZ NÃO GERA MAIS CLIPE MUDO: o buffer source do render offline nunca era iniciado, então toda conversão produzia silêncio puro. Agora toca — homem, mulher, jovem e idosa saem audíveis.",
+        "HOTFIX — RELÓGIO DO PLAYBACK RECONSTRUÍDO (chega de câmera lenta e de ticks pra trás): a seta anda pelo relógio de parede em velocidade real e re-ancora suavemente no hardware de áudio em passos inaudíveis. Quando um vídeo remoto está bufando, a seta congela honestamente por até 2,5s e depois segue — nunca mais rasteja em câmera lenta nem volta ticks.",
+        "HOTFIX — MEDIDOR DE dB DO CORTAR NA MÍDIA FUNCIONA: agora lê os picos reais da forma de onda na posição da seta (funciona pausado ou tocando, com ou sem contexto de áudio). A versão antiga criava um AudioContext suspenso que capturava o áudio da prévia e nunca rodava — medidor morto E áudio da prévia sequestrado.",
+        "UM CONTEXTO COMPARTILHADO DE DECODIFICAÇÃO DE ÁUDIO: importar em lote, cortar e transformar voz não bate mais no limite de ~6 AudioContext simultâneos do Chrome — o bug que quebrava o áudio em cascata (tudo mudo depois de importar muitos arquivos).",
+        "AVISO HONESTO NA BUSCA: a biblioteca de mídia agora fala de cara — nossas fontes de busca integradas são limitadas. Pra achar de tudo, pesquise no Google e ARRASTE o arquivo direto pra aba Mídia, ou baixe e importe; funciona igual. O aviso é dispensável e fica dispensado."
+      ],
+      "items_es": [
+        "HOTFIX — LOS EFECTOS DE VOZ YA NO SILENCIAN CLIPS: las capas de ambiente de las vías (siseo de radio, chasquido de vinilo, estática) iban directas a la salida de la cadena, sumando ruido incluso sin efecto activo; ahora siguen el gate y la intensidad del efecto — silencio absoluto sin efecto, carácter completo con él.",
+        "HOTFIX — VOLVER AL 'ORIGINAL' RECUPERA EL SONIDO: capturar un elemento en WebAudio es irreversible, y el código antiguo dejaba los elementos capturados mudos con la ganancia de la cadena trabada en cero para siempre. Los capturados ahora siempre pasan por la cadena con la ganancia real del clip — un camino transparente que se comporta igual al nativo.",
+        "HOTFIX — TRANSFORMAR VOZ YA NO GENERA CLIP MUDO: el buffer source del render offline nunca se iniciaba, así que cada conversión producía silencio puro. Ahora suena — hombre, mujer, joven y anciana salen audibles.",
+        "HOTFIX — RELOJ DE REPRODUCCIÓN RECONSTRUIDO (se acabó el cámara lenta y los tics hacia atrás): la cabeza avanza por el reloj de pared a velocidad real y se re-ancla suavemente en el hardware de audio en pasos inaudibles. Cuando un vídeo remoto está bufereando, la cabeza se congela honestamente hasta 2,5s y luego sigue — nunca más se arrastra en cámara lenta ni da tics.",
+        "HOTFIX — EL MEDIDOR DE dB DE CORTAR EN EL MEDIO FUNCIONA: ahora lee los picos reales de la forma de onda en la posición de la cabeza (funciona en pausa o reproduciendo). La versión vieja creaba un AudioContext suspendido que capturaba el audio de la vista previa y nunca arrancaba — medidor muerto Y audio secuestrado.",
+        "UN CONTEXTO COMPARTIDO DE DECODIFICACIÓN DE AUDIO: importar en lote, cortar y transformar voz ya no choca con el límite de ~6 AudioContext simultáneos de Chrome — el bug que rompía el audio en cascata (todo mudo tras importar muchos archivos).",
+        "AVISO HONESTO EN LA BÚSQUEDA: la biblioteca de medios ahora lo dice de entrada — nuestras fuentes integradas son limitadas. Para encontrar de todo, busca en Google y ARRASTRA el archivo directo a la pestaña Medios, o descárgalo e impórtalo; funciona igual. El aviso se puede cerrar y queda cerrado."
+      ]
+    },
     {
       "version": "9.4.0",
       "date": "2026-11-02",
@@ -322,5 +353,5 @@
       ]
     }
   ],
-  "date": "2026-11-01T18:38:51.945Z"
+  "date": "2026-11-01T21:11:42.307Z"
 }
