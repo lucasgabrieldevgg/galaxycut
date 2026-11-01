@@ -69,4 +69,4 @@
 - [x] Catálogo de IA: 3-5 modelos por categoria "em breve" — TTS com voz masculina/feminina/infantil, U²-Net/RVM, MDX23C, DFN2 Light, Opus-MT
 - [x] 78/78 testes (26 novos: pickIaFile 8, share sid/oid 4, catálogos 3 + os 11 do share v1), lint no nível do HEAD, build verde
 - [x] Verificado no navegador: import→partes→2 clipes na timeline, aba Pessoas (6 efeitos), link view → player direto com volume, modal da busca sem a barra, IA 480p derivado TOCANDO, Whip Pan aplicado, sem erros de console
-- [ ] Push + deploy: tokens da sessão expiraram (eram só de ambiente) — Lucas roda `git push` (a action Deploy Web cuida da Vercel) ou manda token novo
+- [x] Push + deploy concluídos (sessão de 2026-11-01, tokens novos do Lucas): main 1ad80ef + tag v9.2.0 no ar — CI #56 ✓, Deploy Web #55 ✓ (secret VERCEL_TOKEN renovado ANTES do push, senão a action morria com token rotacionado), Vercel dpl_8zku4xj READY servindo 9.2.0 em galaxycut.vercel.app (version.json confere), Release Desktop #22 ✓ com GalaxyCut-9.2.0.AppImage (103 MB) + GalaxyCut-Setup-9.2.0.exe (79 MB) + feeds electron-updater (latest.yml/latest-linux.yml/latest.json)
