@@ -120,7 +120,7 @@ export function AnimationInspector({ clip }: { clip: Clip }) {
                       : "border-[#232d3d] bg-[#121722] text-zinc-400 hover:border-violet-500/50 hover:text-zinc-200"
                   }`}
                 >
-                  <FxTile kind="animIn" type={item.type} className="mb-0.5" />
+                  <FxTile kind="animIn" type={item.type} size="md" className="mb-0.5" />
                   <span className="text-[9px] font-medium leading-tight">{item.label}</span>
                 </button>
               );
@@ -160,7 +160,7 @@ export function AnimationInspector({ clip }: { clip: Clip }) {
                       : "border-[#232d3d] bg-[#121722] text-zinc-400 hover:border-violet-500/50 hover:text-zinc-200"
                   }`}
                 >
-                  <FxTile kind="animOut" type={item.type} className="mb-0.5" />
+                  <FxTile kind="animOut" type={item.type} size="md" className="mb-0.5" />
                   <span className="text-[9px] font-medium leading-tight">{item.label}</span>
                 </button>
               );
@@ -200,7 +200,7 @@ export function AnimationInspector({ clip }: { clip: Clip }) {
                       : "border-[#232d3d] bg-[#121722] text-zinc-400 hover:border-violet-500/50 hover:text-zinc-200"
                   }`}
                 >
-                  <FxTile kind="animCombo" type={item.type} className="mb-0.5" />
+                  <FxTile kind="animCombo" type={item.type} size="md" className="mb-0.5" />
                   <span className="text-[9px] font-medium leading-tight">{item.label}</span>
                 </button>
               );

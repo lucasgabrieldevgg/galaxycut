@@ -2,6 +2,22 @@
 
 > Como continuar: leia `context.md` → este arquivo → pegue o primeiro item aberto do "próximo lote".
 
+## Lote 6 — fotos reais nos catálogos (sessão de 2026-11-01, v9.3.0)
+> Contexto: o Lucas testou a produção ANTES do deploy da v9.2.0 (que estava
+> preso sem token) e achou que nada tinha sido feito — a v9.2.0 já continha
+> todo o feedback dele. Antes de mexer, AUDITEI item por item contra o site
+> live (aba Efeitos/Pessoas/Homem Cinema/etc. confirmados no navegador) e
+> respondi com o mapa do que está onde. O pedido NOVO desta rodada: fotos
+> reais demonstrando efeitos e transições.
+- [x] Efeitos/transições/animações demonstrados com FOTOS REAIS: cada tile é um mini-projeto (1-2 clipes de imagem) renderizado pela drawFrame REAL (`fxDemo.ts` puro + `fxDemoRender.ts` desenha + `FxTile.tsx` canvas/fallback) — paridade por construção, zero duplicação do motor
+- [x] 4 fotos IA em public/fx-demo (~160KB total: mulher 46KB, homem 28KB, criança 31KB, cena urbana 55KB): Pessoas & Beleza usa o retrato na medida (Homem Cinema→homem, Mulher Glow→mulher, Criança Vibrante→criança, Pele Suave/Glow/Clareza→mulher); o resto usa a cena urbana; transições = cena→mulher
+- [x] Transições e animações em loop na foto (segura→transiciona→segura / entra→segura / segura→sai→vazio / combo contínuo); 8 efeitos de movimento animam (shake, glitch, flash, vhs, raio, chuva, neve, sci-fi); grades de cor em frame fixo escolhido por heurística de "frame mais presente" (diff de pixels vs foto crua)
+- [x] Performance: UM rAF compartilhado a ~30fps p/ todos os tiles, IntersectionObserver (fora da tela não desenha NADA), prefers-reduced-motion estático, fallback pro quadradinho CSS antigo se a foto falhar (nada quebra offline)
+- [x] Tiles maiores: lista de Efeitos 58px (size=lg), grids de transição/animação 46px (size=md), inspetores compactos seguem 34px (sm); nenhuma string nova de i18n (tiles são aria-hidden)
+- [x] Verificado no navegador (build local servido): 37/37 efeitos pintam conforme o scroll (lazy OK), assinaturas de cor comprovam o motor de verdade (noir saturação 0, matrix verde dominante, thermal quente, womanGrade rosado), Dissolver anima 9 estados no ciclo, zoomOut 4 estados, transições do Inspector idem, ZERO erros de console
+- [x] 83/83 testes (5 novos: fxDemo cobre o mapa foto↔efeito p/ o catálogo todo), tsc ok, lint 0 erros, build verde, bump 9.3.0 + changelog trilingue (4 itens x3) + README (linha de features nova)
+- [ ] Push + deploy v9.3.0 (main + tag) — CI, Deploy Web e Release Desktop
+
 ## Lote 0 — fixes de análise (TUDO FEITO)
 - [x] Rede de segurança: tsc strict + build sem ignore + ESLint religado (commit 20a4717)
 - [x] Deps mortas (mediabunny, tailwindcss-animate) + tailwind.config legado + gifenc tipado

@@ -552,7 +552,7 @@ function ClipInspector({ clip }: { clip: Clip }) {
                   : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
               }`}
             >
-              <FxTile kind="transition" type={t.type} />
+              <FxTile kind="transition" type={t.type} size="md" />
               <span className="w-full truncate text-center leading-tight">{t.label}</span>
             </button>
           ))}

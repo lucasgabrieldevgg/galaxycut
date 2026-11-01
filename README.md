@@ -34,6 +34,7 @@
 - **Trim before the timeline** — scissors mode in the library preview marks in/out points with live loop playback, then adds just that section.
 - **Import text & subtitles** — `.srt`, `.vtt` and `.txt` land as caption clips on the text track, styled like the automatic captions (tolerant parser: CRLF, indexless blocks, renamed files).
 - **Voice effects** — robot, radio, megaphone and echo, applied identically in the preview and in the exported file.
+- **Visual effects, transitions & animations with real-photo demos** — 37 effects (Hollywood grades, VHS, glitch, rain/snow, People & Beauty), 20 transitions and 30+ entrance/exit/loop animations. Every catalog tile renders a real photo through the very same engine used for preview and export — what you see in the tile is what comes out in the file.
 - **AI model catalog** — every model declares its task (transcription today; voice separation, denoise, TTS and more coming as optional packages), with size, speed, accuracy and memory requirements.
 - **Flexible export** — MP4 / WebM, animated **GIF**, audio-only **WAV** and single-frame **PNG**; from 240p up to 8K, 24–60 fps (defaults to 1080p/30). Vertical 1080p is a true 1080×1920. Subtitles export as `.srt`.
 - **Update checker** — the app notices new versions, shows the changelog and asks before you download.

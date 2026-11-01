@@ -979,7 +979,7 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                     className="flex items-start gap-2 rounded-lg border border-[#1e2633] bg-[#121722] p-2 text-left transition hover:border-emerald-400/50 hover:bg-[#161c2a]"
                     title={eff.description}
                   >
-                    <FxTile kind="effect" type={eff.type} className="mt-0.5 shrink-0" />
+                    <FxTile kind="effect" type={eff.type} size="lg" className="mt-0.5 shrink-0" />
                     <span className="min-w-0">
                       <span className="block text-[11px] font-semibold leading-tight text-zinc-200">{eff.name}</span>
                       <span className="mt-0.5 block text-[9px] leading-snug text-zinc-500 line-clamp-2">{eff.description}</span>
@@ -1004,7 +1004,7 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                       onClick={() => applyAnimationToSelection(anim.type, "in")}
                       className="flex items-center gap-2 rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
                     >
-                      <FxTile kind="animIn" type={anim.type} className="shrink-0" />
+                      <FxTile kind="animIn" type={anim.type} size="md" className="shrink-0" />
                       <span className="truncate">{anim.label}</span>
                     </button>
                   ))}
@@ -1020,7 +1020,7 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                       onClick={() => applyAnimationToSelection(anim.type, "combo")}
                       className="flex items-center gap-2 rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
                     >
-                      <FxTile kind="animCombo" type={anim.type} className="shrink-0" />
+                      <FxTile kind="animCombo" type={anim.type} size="md" className="shrink-0" />
                       <span className="truncate">{anim.label}</span>
                     </button>
                   ))}
@@ -1036,7 +1036,7 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                       onClick={() => applyAnimationToSelection(anim.type, "out")}
                       className="flex items-center gap-2 rounded border border-[#1e2633] bg-[#121722] p-1.5 text-left text-[11px] text-zinc-300 transition hover:border-violet-400/50 hover:bg-[#161c2a]"
                     >
-                      <FxTile kind="animOut" type={anim.type} className="shrink-0" />
+                      <FxTile kind="animOut" type={anim.type} size="md" className="shrink-0" />
                       <span className="truncate">{anim.label}</span>
                     </button>
                   ))}

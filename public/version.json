@@ -1,7 +1,29 @@
 {
   "name": "GalaxyCut",
-  "version": "9.2.0",
+  "version": "9.3.0",
   "changelog": [
+    {
+      "version": "9.3.0",
+      "date": "2026-11-01",
+      "items": [
+        "REAL-PHOTO DEMOS IN EVERY CATALOG: effect, transition and animation thumbnails are no longer colored squares — each one now renders a REAL PHOTO through the actual engine (the same drawFrame used by preview and export). What you see in the tile is exactly what the effect does to your footage.",
+        "THE RIGHT MODEL FOR EACH EFFECT: the People & Beauty line demos on matching portraits — Man Cinema on a man, Woman Glow on a woman, Kid Vibrant on a child, and Smooth Skin / Beauty Glow / Portrait Clarity on a beauty portrait. Everything else (color grades, VHS, rain, snow…) runs on a cinematic golden-hour street scene.",
+        "LIVING TILES, CHEAP: transitions and entrance/exit/combo animations loop on the photo (hold → transition → hold), and motion effects (shake, glitch, VHS, lightning, rain, snowfall, sci-fi scan) animate too — color grades stay as one fixed frame. A single shared requestAnimationFrame drives every visible tile at ~30fps; off-screen tiles don't draw at all, and prefers-reduced-motion gets a static frame.",
+        "BIGGER THUMBNAILS: the Effects list shows 58px photo demos, transition/animation grids 46px — finally big enough to judge an effect before applying it. If a photo can't load, the tile falls back to the old animated square (offline-first, nothing breaks)."
+      ],
+      "items_pt": [
+        "DEMONSTRAÇÃO COM FOTOS REAIS EM TODOS OS CATÁLOGOS: as miniaturas de efeitos, transições e animações não são mais quadradinhos coloridos — cada uma agora renderiza uma FOTO REAL pelo próprio motor (a mesma drawFrame da prévia e da exportação). O que você vê no quadradinho é exatamente o que o efeito faz com o seu vídeo.",
+        "O MODELO CERTO PARA CADA EFEITO: a linha Pessoas & Beleza demonstra no retrato na medida — Homem Cinema num homem, Mulher Glow numa mulher, Criança Vibrante numa criança, e Pele Suave / Glow de Beleza / Retrato Nítido num retrato de beleza. O resto (grades de cor, VHS, chuva, neve…) roda numa cena urbana cinematográfica na golden hour.",
+        "TILES VIVOS E LEVES: transições e animações de entrada/saída/combo fazem loop na foto (segura → transiciona → segura), e os efeitos de movimento (tremor, glitch, VHS, raio, chuva, neve, varredura sci-fi) também animam — grades de cor ficam num frame fixo. Um ÚNICO requestAnimationFrame compartilhado anima todos os tiles visíveis a ~30fps; tile fora da tela não desenha nada, e prefers-reduced-motion recebe frame estático.",
+        "MINIATURAS MAIORES: a lista de Efeitos mostra fotos de 58px, os grids de transição/animação 46px — finalmente dá pra julgar um efeito antes de aplicar. Se a foto não carregar, o tile volta pro quadradinho animado antigo (offline-first, nada quebra)."
+      ],
+      "items_es": [
+        "DEMOSTRACIÓN CON FOTOS REALES EN TODOS LOS CATÁLOGOS: las miniaturas de efectos, transiciones y animaciones ya no son cuadraditos de color — cada una ahora renderiza una FOTO REAL con el propio motor (el mismo drawFrame de la vista previa y la exportación). Lo que ves en el mosaico es exactamente lo que el efecto le hace a tu vídeo.",
+        "EL MODELO CORRECTO PARA CADA EFECTO: la línea Personas y Belleza se demuestra en el retrato a la medida — Hombre Cine en un hombre, Mujer Glow en una mujer, Niño Vibrante en un niño, y Piel Suave / Glow de Belleza / Retrato Nítido en un retrato de belleza. El resto (gradings de color, VHS, lluvia, nieve…) corre en una escena urbana cinematográfica a la golden hour.",
+        "MOSAICOS VIVOS Y LIGEROS: las transiciones y animaciones de entrada/salida/combo hacen loop sobre la foto (sostener → transicionar → sostener), y los efectos de movimiento (temblor, glitch, VHS, rayo, lluvia, nieve, barrido sci-fi) también animan — los gradings de color quedan en un frame fijo. UN solo requestAnimationFrame compartido anima todos los mosaicos visibles a ~30fps; los que están fuera de pantalla no dibujan nada, y prefers-reduced-motion recibe un frame estático.",
+        "MINIATURAS MÁS GRANDES: la lista de Efectos muestra fotos de 58px, las grillas de transición/animación 46px — por fin se puede juzgar un efecto antes de aplicarlo. Si una foto no carga, el mosaico vuelve al cuadradito animado de antes (offline-first, nada se rompe)."
+      ]
+    },
     {
       "version": "9.2.0",
       "date": "2026-11-01",
@@ -254,5 +276,5 @@
       ]
     }
   ],
-  "date": "2026-11-01T03:24:58.487Z"
+  "date": "2026-11-01T04:41:28.019Z"
 }
