@@ -31,6 +31,14 @@ class PlaybackEngine {
   private claims = new Map<string, string>(); // elKey -> clipId
   private lastAttach = new Map<string, MediaEl>();
   private startingPlays = new Set<HTMLMediaElement>();
+  // v9.4.2 DISCIPLINA DE SEEK: nunca mais de 1 seek por elemento por janela de
+  // cooldown — o v9.4.1 buscava TODO frame quando o drift passava de 0,4s e
+  // cada seek de arquivo grande custa centenas de ms (storm = travar tudo)
+  private lastSeekAt = new WeakMap<HTMLMediaElement, number>();
+  /** v9.4.2 PRIMING: último pré-posicionamento silencioso de cada elemento */
+  private lastPrimeAt = new WeakMap<HTMLMediaElement, number>();
+  /** v9.4.2: quando o play() de ativação foi dado (carência de ativação do relógio) */
+  private activatedAt = new WeakMap<HTMLMediaElement, number>();
   private raf = 0;
   private dirty = true;
   private disposed = false;
@@ -52,19 +60,55 @@ class PlaybackEngine {
     this.clockStart = t;
   }
 
+  /** v9.4.2: UM seek por elemento por janela de cooldown (padrão 700ms).
+   *  Retorna false se acabou de buscar ou está seeking — quem chama segue
+   *  em frente (o próximo frame tenta de novo; nunca vira storm). */
+  private seekEl(el: HTMLMediaElement, t: number, cooldownMs = 700): boolean {
+    if (el.seeking) return false;
+    const last = this.lastSeekAt.get(el) ?? -1e9;
+    if (performance.now() - last < cooldownMs) return false;
+    this.lastSeekAt.set(el, performance.now());
+    try {
+      el.currentTime = t;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** v9.4.2 PRIMING: pré-posiciona (seek silencioso) o elemento PAUSADO de um
+   *  clipe que está pra começar — quando ele ativa, é só dar play (o seek caro
+   *  já foi feito fora do caminho quente; sem isso TODA ativação de clipe
+   *  congelava a seta e pulava conteúdo). Throttle de 800ms por elemento. */
+  private primeEl(el: HTMLMediaElement, t: number): void {
+    if (!el.paused || el.seeking) return;
+    if (Math.abs(el.currentTime - t) < 0.12) return;
+    const last = this.lastPrimeAt.get(el) ?? -1e9;
+    if (performance.now() - last < 800) return;
+    this.lastPrimeAt.set(el, performance.now());
+    try {
+      el.currentTime = t;
+    } catch {
+      /* noop */
+    }
+  }
+
   /** v9.4: tem um play esperando a mídia terminar de carregar? (indicador UI) */
   isPrepending(): boolean {
     return this.pendingPlay;
   }
 
   /** v9.4: progresso agregado de preparação da mídia (0..1) — a média do
-   *  carregamento dos arquivos que ainda não estão prontos. null = tudo pronto. */
+   *  carregamento dos arquivos que ainda não estão prontos. null = tudo pronto.
+   *  v9.4.2: conta só a mídia PERTO da seta (mesma janela do gate do play). */
   prepareProgress(): number | null {
     const { clips } = useProject.getState();
+    const t = usePlayback.getState().playhead;
     let sum = 0;
     let n = 0;
     for (const c of clips) {
       if (c.kind === "text" || c.kind === "image" || !c.mediaId) continue;
+      if (c.start > t + 3 || clipEnd(c) <= t) continue; // mesma janela do allMediaReady
       const key = this.bindings.get(c.id) ?? elKeyOf(c.kind, c.mediaId);
       const el = this.elements.get(key);
       if (!el) continue;
@@ -161,14 +205,25 @@ class PlaybackEngine {
         }
 
         let nextT = wallT;
-        if (leaderEl && leaderT - wallT <= 0.5 && leaderT - wallT >= -0.2) {
+        if (leaderEl && leaderT - wallT <= 0.5 && leaderT - wallT >= -0.2 && leaderT >= pb.playhead - 0.03) {
           // sincronia atômica suave: re-anchor no hardware de som (janela
           // assimétrica — até 0,2s pra trás e 0,5s pra frente: passos
-          // inaudíveis, e nunca mais os saltos do "trava no líder")
+          // inaudíveis, e nunca mais os saltos do "trava no líder").
+          // v9.4.2 GUARDA MONOTÔNICA: só re-ancora se o líder não estiver
+          // mais de 30ms ATRÁS da seta — o relógio NUNCA anda pra trás; o
+          // elemento que ficou pra trás (ativação custou) alcança pela taxa
           this.anchorClock(leaderT, now);
           this.stallSince = 0;
           this.stallReleased = false;
           nextT = leaderT;
+        } else if (leaderEl && leaderT >= pb.playhead - 1.2 && leaderT < pb.playhead - 0.03 && leaderEl.readyState >= 3 && !leaderEl.seeking) {
+          // v9.4.2 LÍDER ALCANÇANDO (atrasou até 1,2s — seek de ativação,
+          // decoder pesado): o relógio SEGUE EM 1,0x (nunca câmera lenta!) e
+          // o elemento alcança pela taxa (+9% quando a deriva passa de 0,3s).
+          // Deriva acima de 1,2s vira UM seek com cooldown no syncMedia.
+          this.stallSince = 0;
+          this.stallReleased = false;
+          nextT = wallT;
         } else if (leaderEl && leaderT < wallT - 0.2) {
           // líder ATRASADO em relação ao relógio: se ainda tem dados na frente
           // (readyState≥3) o relógio segue e o syncMedia puxa o elemento; se
@@ -195,22 +250,40 @@ class PlaybackEngine {
             nextT = wallT; // segue o relógio até a mídia se recuperar
           }
         } else if (!leaderEl && anyMediaActive) {
-          // tem mídia ativa mas nenhum elemento tocando (carregando): congela
-          // o relógio até 2,5s — depois a válvula abre e segue (mídia
-          // problemática não trava o projeto inteiro)
-          if (!this.stallSince) {
-            this.stallSince = now;
+          // tem mídia ativa mas nenhum elemento tocando. v9.4.2 CARÊNCIA DE
+          // ATIVAÇÃO: se algum elemento está em ativação (play() dado há menos
+          // de 800ms, ainda pausado/seeking), o relógio SEGUE — o priming já
+          // posicionar o elemento e o seek da ativação termina sozinho; sem
+          // essa carência TODA entrada de clipe dava um congelamento visível
+          // (e às vezes pulo de conteúdo pela válvula)
+          const inActivation = active.some((clip) => {
+            const k = this.bindings.get(clip.id);
+            const e = k ? this.elements.get(k) : undefined;
+            if (!(e instanceof HTMLMediaElement)) return false;
+            const at = this.activatedAt.get(e);
+            return at !== undefined && now - at < 800;
+          });
+          if (inActivation) {
+            this.stallSince = 0;
             this.stallReleased = false;
-            this.anchorClock(pb.playhead, now);
-          }
-          if (!this.stallReleased && now - this.stallSince < 2500) {
-            nextT = pb.playhead;
-          } else if (!this.stallReleased) {
-            this.stallReleased = true;
-            this.anchorClock(pb.playhead, now);
-            nextT = pb.playhead;
+            nextT = wallT; // segue o relógio (o elemento alcança sozinho)
           } else {
-            nextT = wallT;
+            // buffering de verdade: congela o relógio até 2,5s — depois a
+            // válvula abre e segue (mídia problemática não trava o projeto)
+            if (!this.stallSince) {
+              this.stallSince = now;
+              this.stallReleased = false;
+              this.anchorClock(pb.playhead, now);
+            }
+            if (!this.stallReleased && now - this.stallSince < 2500) {
+              nextT = pb.playhead;
+            } else if (!this.stallReleased) {
+              this.stallReleased = true;
+              this.anchorClock(pb.playhead, now);
+              nextT = pb.playhead;
+            } else {
+              nextT = wallT;
+            }
           }
         } else {
           this.stallSince = 0;
@@ -312,7 +385,7 @@ class PlaybackEngine {
         (el.readyState >= 4 && dur > 0 && buffered >= dur * 0.985) ||
         (dur > 0 && buffered >= dur - 0.15) ||
         el.error !== null;
-      const timedOut = performance.now() - startedAt > 12_000;
+      const timedOut = performance.now() - startedAt > 6_000; // v9.4.2: 6s (era 12) — não segura o play quase nunca
       if (!done && !timedOut && el.error === null) {
         this.dirty = true; // repinta a prévia (a % do placeholder anda)
         setTimeout(poll, 220);
@@ -324,17 +397,21 @@ class PlaybackEngine {
     setTimeout(poll, 240);
   }
 
-  /** v7.2: TODA a mídia do projeto (vídeo/áudio/imagem dos clipes) tá pronta
-   *  pra ASSISTIR? v9.4.1: o gate ficou leve — o play começa assim que a
-   *  mídia tem o PRIMEIRO trecho decodificado (readyState≥2 + ~1,5s na
-   *  frente). Antes exigia ~100% do arquivo: vídeo grande = play travado
-   *  "carregando" por quase um minuto. O buffering do meio da reprodução é
-   *  tratado pelo freeze do relógio (sem câmera lenta, sem ticks). */
+  /** TODA a mídia que toca AGORA ou nos próximos 3s tá com o primeiro trecho
+   *  decodificado (readyState≥2)? v9.4.2: o gate ficou de PERTO — o que está
+   *  longe na timeline carrega em segundo plano e o priming posiciona antes
+   *  de precisar. Antes o gate esperava TODA a mídia do projeto: UM arquivo
+   *  remoto lento no fim da edição travava o play inteiro "carregando".
+   *  O buffering do meio da reprodução segue com o freeze do relógio. */
   allMediaReady(): boolean {
     const { clips, media } = useProject.getState();
+    const t = usePlayback.getState().playhead;
     for (const c of clips) {
       if (c.kind === "text" || c.videoHidden) continue;
       if (!c.mediaId) continue;
+      // v9.4.2: só o que toca agora ou nos próximos 3s segura o play
+      if (c.start > t + 3) continue;
+      if (clipEnd(c) <= t) continue; // já passou da seta
       if (this.prewarmTimeouts.has(c.mediaId)) continue; // teto estourado: não espera mais
       const m = media.find((x) => x.id === c.mediaId);
       if (!m || m.missing || m.decodeError || !registry.hasBlob(c.mediaId)) continue; // desses a gente não espera
@@ -530,14 +607,23 @@ class PlaybackEngine {
     }
     this.claims = newClaims;
 
-    let leaderKey: string | null = null;
-    for (const clip of active) {
-      if (clip.kind === "video" || clip.kind === "audio") {
-        const k = this.bindings.get(clip.id);
-        if (k) {
-          leaderKey = k;
-          break;
-        }
+    // v9.4.2 PRIMING: clipes que começam nos próximos ~1,6s têm seu elemento
+    // PRÉ-POSICIONADO com um seek silencioso (elemento pausado, fora do caminho
+    // quente). Quando o clipe ativa, é só dar play() — o seek caro (centenas de
+    // ms num arquivo grande) já aconteceu ANTES de precisar dele. Sem isso,
+    // TODA entrada de clipe congelava a seta e a válvula pulava conteúdo.
+    if (playing) {
+      for (const clip of clips) {
+        if (clip.kind !== "video" && clip.kind !== "audio") continue;
+        if (!clip.mediaId || !registry.hasBlob(clip.mediaId)) continue;
+        const dtStart = clip.start - t;
+        if (dtStart <= 0.05 || dtStart > 1.6) continue; // só o que vem logo aí
+        const key = this.bindings.get(clip.id);
+        if (!key || this.claims.get(key) === clip.id) continue; // dono atual: sync normal
+        const el = this.elements.get(key);
+        if (!(el instanceof HTMLMediaElement)) continue;
+        const expected = clip.inPoint + dtStart * (clip.speed || 1);
+        this.primeEl(el, expected);
       }
     }
 
@@ -553,22 +639,17 @@ class PlaybackEngine {
       if (!clip) continue;
       const expected = clip.inPoint + (t - clip.start) * (clip.speed || 1);
       const targetSpeed = Math.max(0.0625, Math.min(16, clip.speed || 1));
-      const isLeader = key === leaderKey;
 
       if (playing) {
         if (el.paused) {
-          if (Math.abs(el.currentTime - expected) > 0.03) {
-            try {
-              el.currentTime = expected;
-            } catch {
-              /* noop */
-            }
-          }
+          // ATIVAÇÃO: posiciona UMA vez (com cooldown — nunca em storm) e toca
+          this.seekEl(el, expected);
           if (el.playbackRate !== targetSpeed) {
             el.playbackRate = targetSpeed;
           }
           if (!this.startingPlays.has(el)) {
             this.startingPlays.add(el);
+            this.activatedAt.set(el, performance.now());
             el.play()
               .catch(() => undefined)
               .finally(() => {
@@ -576,42 +657,29 @@ class PlaybackEngine {
               });
           }
         } else {
-          // Elemento já está tocando:
-          if (isLeader) {
-            // O líder do áudio NÃO pode ter sua playbackRate oscilando!
-            if (el.playbackRate !== targetSpeed) {
+          // Elemento já tocando — v9.4.2 DISCIPLINA UNIFICADA (líder e
+          // secundário): deriva pequena se corrige pela TAXA (±4,5%, inaudível
+          // — o navegador mantém o tom); dessincronização GRANDE (>1,2s, ex.:
+          // corte de mesma mídia ou válvula) merece UM seek com cooldown de
+          // 1s. O v9.4.1 buscava TODO frame com drift > 0,4s — cada seek de
+          // arquivo grande custa centenas de ms e o storm travava tudo.
+          const drift = el.currentTime - expected;
+          if (Math.abs(drift) > 1.2) {
+            if (this.seekEl(el, expected, 1000) && el.playbackRate !== targetSpeed) {
               el.playbackRate = targetSpeed;
             }
-            // v9.4.1: só corrige o atraso com dados na mão (readyState≥2) —
-            // buscar posição num elemento sem buffer virava o loop infinito
-            // de seek/trava que empurrava o vídeo pra frente sozinho
-            const drift = Math.abs(el.currentTime - expected);
-            if (drift > 0.4 && !el.seeking && el.readyState >= 2) {
-              try {
-                el.currentTime = expected;
-              } catch {
-                /* noop */
-              }
+          } else if (Math.abs(drift) > 0.06) {
+            // v9.4.2: taxa progressiva — deriva grande (>0,3s) acelera 9%,
+            // pequena 4,5% (inaudível; o navegador mantém o tom). Converge
+            // rápido sem seek (seek em arquivo grande custa centenas de ms)
+            const mag = Math.abs(drift);
+            const rateAdjust = drift > 0 ? (mag > 0.3 ? 0.91 : 0.955) : mag > 0.3 ? 1.09 : 1.045;
+            const newRate = Math.max(0.0625, Math.min(16, targetSpeed * rateAdjust));
+            if (Math.abs(el.playbackRate - newRate) > 0.004) {
+              el.playbackRate = newRate;
             }
-          } else {
-            // Faixas secundárias:
-            const drift = el.currentTime - expected;
-            if (Math.abs(drift) > 0.4 && !el.seeking && el.readyState >= 2) {
-              try {
-                el.currentTime = expected;
-              } catch {
-                /* noop */
-              }
-              if (el.playbackRate !== targetSpeed) el.playbackRate = targetSpeed;
-            } else if (Math.abs(drift) > 0.06) {
-              const rateAdjust = drift > 0 ? 0.985 : 1.015;
-              const newRate = Math.max(0.0625, Math.min(16, targetSpeed * rateAdjust));
-              if (Math.abs(el.playbackRate - newRate) > 0.005) {
-                el.playbackRate = newRate;
-              }
-            } else if (el.playbackRate !== targetSpeed) {
-              el.playbackRate = targetSpeed;
-            }
+          } else if (el.playbackRate !== targetSpeed) {
+            el.playbackRate = targetSpeed;
           }
         }
       } else {
@@ -640,7 +708,11 @@ class PlaybackEngine {
       if (!el || !(el instanceof HTMLMediaElement)) continue;
 
       const track = tracks.find((tr) => tr.id === c.trackId);
-      const isActive = c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001;
+      // v9.4.2: MESMA janela do syncMedia (±0,05s) — antes o isActive usava
+      // ±0,0001: nos ~50ms antes do clipe começar, o syncMedia já dava PLAY no
+      // elemento mas o updateAudio via "inativo" e PAUSAVA — play/pause/play
+      // em toda ativação de clipe (micro-estalo no boundary)
+      const isActive = c.start <= t + 0.05 && c.start + c.duration > t - 0.05;
       const fade = isActive ? fadeEnvelope(c, t) : 0;
       // v9.2: masterVolume (player de link compartilhado) multiplica tudo
       const master = this.masterMuted ? 0 : this.masterVol;

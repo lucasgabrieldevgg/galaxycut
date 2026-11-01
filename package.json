@@ -1,6 +1,6 @@
 {
   "name": "galaxycut",
-  "version": "9.4.1",
+  "version": "9.4.2",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",

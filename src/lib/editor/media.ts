@@ -260,6 +260,17 @@ class MediaRegistry {
         } catch {}
       }
 
+      // v9.4.2: arquivo de ÁUDIO PURO num container de vídeo (.webm/.mp4 sem
+      // trilha de vídeo — nota de voz exportada, gravação etc.) tinha
+      // videoWidth === 0 e era classificado como "vídeo": ia pra track de
+      // vídeo, virava clipe de "vídeo" sem imagem e complicava a edição.
+      // Agora o probe recusa e o importFile reclassifica como ÁUDIO.
+      if (v.videoWidth === 0 || v.videoHeight === 0) {
+        if (isFinite(v.duration) && v.duration > 0) {
+          throw new Error("audio-only");
+        }
+      }
+
       if (v.videoWidth > 0 && v.videoHeight > 0) {
         width = v.videoWidth;
         height = v.videoHeight;
@@ -289,6 +300,9 @@ class MediaRegistry {
         thumbnail = "";
       }
     } catch (e) {
+      // v9.4.2: sinal de "arquivo só de áudio em container de vídeo" PROPAGA
+      // pro importFile reclassificar como áudio (não é warning — é rota)
+      if (e instanceof Error && e.message === "audio-only") throw e;
       console.warn("probeVideo warning:", e);
     }
 
