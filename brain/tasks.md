@@ -16,7 +16,7 @@
 - [x] Tiles maiores: lista de Efeitos 58px (size=lg), grids de transição/animação 46px (size=md), inspetores compactos seguem 34px (sm); nenhuma string nova de i18n (tiles são aria-hidden)
 - [x] Verificado no navegador (build local servido): 37/37 efeitos pintam conforme o scroll (lazy OK), assinaturas de cor comprovam o motor de verdade (noir saturação 0, matrix verde dominante, thermal quente, womanGrade rosado), Dissolver anima 9 estados no ciclo, zoomOut 4 estados, transições do Inspector idem, ZERO erros de console
 - [x] 83/83 testes (5 novos: fxDemo cobre o mapa foto↔efeito p/ o catálogo todo), tsc ok, lint 0 erros, build verde, bump 9.3.0 + changelog trilingue (4 itens x3) + README (linha de features nova)
-- [ ] Push + deploy v9.3.0 (main + tag) — CI, Deploy Web e Release Desktop
+- [x] Push + deploy v9.3.0 concluídos: main fb91ec6 + tag v9.3.0 — CI #58 ✓, Deploy Web #57 ✓, Vercel READY servindo 9.3.0 (version.json + 4 fotos fx-demo HTTP 200), Release Desktop #23 ✓ (AppImage 103 MB + Setup-9.3.0.exe 79 MB + feeds). Verificado COMPORTAMENTALMENTE no live: 37 tiles de foto na aba Efeitos, lazy pintando os visíveis, zero console errors
 
 ## Lote 0 — fixes de análise (TUDO FEITO)
 - [x] Rede de segurança: tsc strict + build sem ignore + ESLint religado (commit 20a4717)
