@@ -297,6 +297,67 @@ function drawVisualClip(
       }
       break;
     }
+    // ================= v9.4: transições novas (clipe visual) =================
+    case "crosszoom": {
+      old({ alpha: 1 - p * 0.9, scaleMul: 1 + 0.28 * p });
+      cur({ alpha: Math.min(1, p * 1.6), scaleMul: 1.32 - 0.32 * p });
+      break;
+    }
+    case "fadeWhite": {
+      if (p < 0.5) {
+        old({ alpha: 1 - p * 2 });
+      } else {
+        cur({ alpha: (p - 0.5) * 2 });
+      }
+      ctx.save();
+      ctx.globalAlpha = Math.sin(p * Math.PI);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      break;
+    }
+    case "spinblur": {
+      old({ alpha: 1 - p, rotDeg: -22 * p, scaleMul: 1 + 0.25 * p, blurPx: 14 * p });
+      cur({ alpha: p, rotDeg: 22 * (1 - p), scaleMul: 1.25 - 0.25 * p, blurPx: 14 * (1 - p) });
+      break;
+    }
+    case "split": {
+      const half = W / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, half, H);
+      ctx.clip();
+      old({ dx: -p * W * 0.5, alpha: 1 - p * 0.4 });
+      cur({ dx: (1 - p) * W * 0.5 });
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(half, 0, half, H);
+      ctx.clip();
+      old({ dx: p * W * 0.5, alpha: 1 - p * 0.4 });
+      cur({ dx: -(1 - p) * W * 0.5 });
+      ctx.restore();
+      break;
+    }
+    case "filmBurnT": {
+      old({ alpha: Math.max(0, 1 - p * 1.35) });
+      cur({ alpha: Math.max(0, p * 1.35 - 0.35) });
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.hypot(W, H) / 2);
+      g.addColorStop(0, `rgba(255, 140, 30, ${Math.sin(p * Math.PI) * 0.85})`);
+      g.addColorStop(0.7, `rgba(255, 70, 0, ${Math.sin(p * Math.PI) * 0.55})`);
+      g.addColorStop(1, `rgba(120, 20, 0, ${Math.sin(p * Math.PI) * 0.4})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      break;
+    }
+    case "zoomRota": {
+      old({ alpha: 1 - p, scaleMul: 1 + 0.35 * p, rotDeg: 12 * p });
+      cur({ alpha: Math.min(1, p * 1.5), scaleMul: 0.6 + 0.4 * p, rotDeg: 90 * (1 - p) });
+      break;
+    }
     default:
       cur({});
   }
@@ -783,6 +844,205 @@ function applyPostEffects(
         break;
       }
 
+      // ================= v9.4: AMBIENTE & CELEBRAÇÃO =================
+      case "fog": {
+        // bancos de névoa: gradientes radiais suaves derivando na horizontal
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        const blobs = Math.round(4 * Math.min(1.4, intensity));
+        for (let i = 0; i < blobs; i++) {
+          const rx = (Math.sin(i * 311.7) * 43758.5453) % 1;
+          const rxa = rx >= 0 ? rx : -rx;
+          const drift = Math.sin(tRel * spd * (0.05 + i * 0.02) + i * 2.1);
+          const cx = -dw / 2 + rxa * dw + drift * dw * 0.22;
+          const cy = -dh / 2 + (0.25 + 0.5 * ((i * 0.37) % 1)) * dh;
+          const r = dw * (0.35 + 0.2 * ((i * 0.53) % 1));
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+          g.addColorStop(0, `rgba(203, 213, 225, ${0.16 * intensity})`);
+          g.addColorStop(0.6, `rgba(148, 163, 184, ${0.07 * intensity})`);
+          g.addColorStop(1, "rgba(148, 163, 184, 0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        }
+        ctx.restore();
+        break;
+      }
+      case "sparks": {
+        // fagulhas: pontos quentes subindo com brilho e tremor
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        const n = Math.round(70 * intensity);
+        for (let i = 0; i < n; i++) {
+          const rx = (Math.sin(i * 197.3) * 43758.5453) % 1;
+          const rxa = rx >= 0 ? rx : -rx;
+          const life = ((tRel * spd * (0.35 + (i % 5) * 0.08) + i * 0.618) % 1);
+          const x = -dw / 2 + rxa * dw + Math.sin(tRel * 3 + i) * dw * 0.012;
+          const y = dh / 2 - life * (dh * 1.05);
+          const r = Math.max(1, H * 0.0016) * (1 + (i % 4) * 0.5) * (1 - life * 0.5);
+          const alpha = (1 - life) * 0.9 * intensity;
+          const g = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
+          g.addColorStop(0, `rgba(255, 200, 120, ${alpha})`);
+          g.addColorStop(0.4, `rgba(255, 138, 61, ${alpha * 0.5})`);
+          g.addColorStop(1, "rgba(255, 90, 0, 0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(x - r * 4, y - r * 4, r * 8, r * 8);
+          ctx.fillStyle = `rgba(255, 235, 190, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+      case "confetti": {
+        // confete: retângulos coloridos caindo e girando
+        ctx.save();
+        const colors = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"];
+        const n = Math.round(90 * intensity);
+        for (let i = 0; i < n; i++) {
+          const rx = (Math.sin(i * 271.9) * 43758.5453) % 1;
+          const rxa = rx >= 0 ? rx : -rx;
+          const speed = 130 + (i % 5) * 70;
+          const y = ((tRel * spd * speed + i * 811) % (dh + 40)) - 20;
+          const x = -dw / 2 + rxa * dw + Math.sin(tRel * 1.4 + i) * dw * 0.03;
+          const w = Math.max(3, H * 0.007) * (0.7 + (i % 3) * 0.3);
+          const h = w * 0.55;
+          const rot = tRel * spd * (2 + (i % 4)) + i;
+          ctx.save();
+          ctx.translate(x, -dh / 2 + y);
+          ctx.rotate(rot);
+          // "flip" de papel: a altura colapsa periodicamente
+          const squash = Math.abs(Math.sin(rot * 1.7));
+          ctx.globalAlpha = (0.55 + 0.45 * squash) * intensity;
+          ctx.fillStyle = colors[i % colors.length];
+          ctx.fillRect(-w / 2, -h / 2 * squash, w, h * squash);
+          ctx.restore();
+        }
+        ctx.restore();
+        break;
+      }
+      case "bubbles": {
+        // bolhas: círculos translúcidos subindo com reflexo
+        ctx.save();
+        const n = Math.round(34 * intensity);
+        for (let i = 0; i < n; i++) {
+          const rx = (Math.sin(i * 167.7) * 43758.5453) % 1;
+          const rxa = rx >= 0 ? rx : -rx;
+          const speed = 90 + (i % 4) * 60;
+          const life = (tRel * spd * speed + i * 977) % (dh + 80);
+          const x = -dw / 2 + rxa * dw + Math.sin(tRel * 1.1 + i * 1.7) * dw * 0.02;
+          const y = dh / 2 + 40 - life;
+          const r = (H * 0.006) * (0.5 + ((i * 0.61) % 1) * 1.6);
+          ctx.globalAlpha = 0.5 * intensity;
+          ctx.strokeStyle = "rgba(186, 230, 253, 0.8)";
+          ctx.lineWidth = Math.max(1, r * 0.08);
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = "rgba(186, 230, 253, 0.08)";
+          ctx.fill();
+          // reflexo
+          ctx.globalAlpha = 0.7 * intensity;
+          ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+          ctx.beginPath();
+          ctx.arc(x - r * 0.35, y - r * 0.35, r * 0.18, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+      case "neonGrid": {
+        // grid synthwave: linhas em perspectiva + sol neon no horizonte
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        const horizon = -dh / 2 + dh * 0.62;
+        // sol
+        const sunR = dh * 0.16;
+        const sun = ctx.createLinearGradient(0, horizon - sunR, 0, horizon + sunR * 0.4);
+        sun.addColorStop(0, `rgba(255, 120, 180, ${0.55 * intensity})`);
+        sun.addColorStop(1, `rgba(255, 60, 90, ${0.25 * intensity})`);
+        ctx.fillStyle = sun;
+        ctx.beginPath();
+        ctx.arc(0, horizon - sunR * 0.1, sunR, Math.PI, 0);
+        ctx.fill();
+        // linhas verticais convergindo pro ponto de fuga
+        ctx.strokeStyle = `rgba(34, 211, 238, ${0.5 * intensity})`;
+        ctx.lineWidth = Math.max(1, H * 0.0012);
+        const lanes = 16;
+        for (let i = 0; i <= lanes; i++) {
+          const fx = -dw + (i / lanes) * 2 * dw;
+          ctx.beginPath();
+          ctx.moveTo(0, horizon);
+          ctx.lineTo(fx, dh / 2);
+          ctx.stroke();
+        }
+        // linhas horizontais correndo pra frente (loop)
+        const rows = 9;
+        for (let i = 0; i < rows; i++) {
+          const prog = ((tRel * spd * 0.5 + i / rows) % 1);
+          const y = horizon + Math.pow(prog, 2.4) * (dh / 2 - horizon) * 1.05;
+          ctx.globalAlpha = (0.25 + 0.75 * prog) * intensity;
+          ctx.beginPath();
+          ctx.moveTo(-dw / 2, y);
+          ctx.lineTo(dw / 2, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+      case "mirrorV": {
+        // espelho vertical: metade de baixo vira reflexo da de cima
+        if (!d) break;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-dw / 2, 0, dw, dh / 2);
+        ctx.clip();
+        ctx.translate(0, 0);
+        ctx.scale(1, -1);
+        try {
+          ctx.drawImage(d.el, -dw / 2, -dh / 2, dw, dh);
+        } catch {}
+        ctx.restore();
+        // véu sutil no reflexo (água/vidro)
+        ctx.save();
+        ctx.globalAlpha = 0.22 * intensity;
+        ctx.fillStyle = "#0a1220";
+        ctx.fillRect(-dw / 2, 0, dw, dh / 2);
+        ctx.restore();
+        break;
+      }
+      case "filmBurn": {
+        // queimadura de película: vinheta quente pulsando + pontos de queima
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        const pulse = 0.5 + 0.5 * Math.sin(tRel * spd * 2.2);
+        const g = ctx.createRadialGradient(0, 0, Math.min(dw, dh) * 0.25, 0, 0, Math.hypot(dw, dh) / 2);
+        g.addColorStop(0, "rgba(255, 120, 0, 0)");
+        g.addColorStop(0.75, `rgba(255, 90, 0, ${0.12 * intensity * (0.6 + pulse * 0.4)})`);
+        g.addColorStop(1, `rgba(180, 40, 0, ${0.4 * intensity})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+        // manchas de queima aleatórias determinísticas
+        const seed = Math.floor(tRel * spd * 3);
+        for (let i = 0; i < 3; i++) {
+          const r1 = Math.abs((Math.sin(seed * 91.7 + i * 13.1) * 43758.5453) % 1);
+          const r2 = Math.abs((Math.sin(seed * 47.3 + i * 7.7) * 24634.6345) % 1);
+          const gate = Math.abs((Math.sin(seed * 13.3 + i * 3.1) * 43758.5453) % 1);
+          if (gate < 0.55) continue;
+          const bx = -dw / 2 + r1 * dw;
+          const by = -dh / 2 + r2 * dh;
+          const br = dh * 0.06 * (0.5 + gate * 0.5);
+          const bg = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+          bg.addColorStop(0, `rgba(255, 170, 60, ${0.5 * intensity})`);
+          bg.addColorStop(0.5, `rgba(255, 100, 20, ${0.22 * intensity})`);
+          bg.addColorStop(1, "rgba(255, 60, 0, 0)");
+          ctx.fillStyle = bg;
+          ctx.fillRect(bx - br, by - br, br * 2, br * 2);
+        }
+        ctx.restore();
+        break;
+      }
+
       // ================= v9.2: CLIMA & IMPACTO =================
       case "lightning": {
         // descargas periódicas: clarão + raios em zigue-zague (PRNG determinística)
@@ -1189,6 +1449,79 @@ function drawTextTransition(
       ctx.restore();
       break;
     case "dissolve":
+      // (era o corpo compartilhado com o default — mantido explícito)
+      old({ alpha: 1 - p });
+      cur({ alpha: p });
+      break;
+    // ================= v9.4: transições novas (texto) =================
+    case "crosszoom": {
+      // cruzamento com zoom: o antigo afasta, o novo entra crescendo por cima
+      old({ alpha: 1 - p * 0.9, scaleMul: 1 + 0.28 * p });
+      cur({ alpha: Math.min(1, p * 1.6), scaleMul: 1.32 - 0.32 * p });
+      break;
+    }
+    case "fadeWhite": {
+      // passando pelo BRANCO (fade clássico de abertura de cena)
+      if (p < 0.5) {
+        old({ alpha: 1 - p * 2 });
+      } else {
+        cur({ alpha: (p - 0.5) * 2 });
+      }
+      ctx.save();
+      ctx.globalAlpha = Math.sin(p * Math.PI);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      break;
+    }
+    case "spinblur": {
+      // giro com desfoque na virada (estilo transição musical)
+      old({ alpha: 1 - p, rotDeg: -22 * p, scaleMul: 1 + 0.25 * p, blurPx: 14 * p });
+      cur({ alpha: p, rotDeg: 22 * (1 - p), scaleMul: 1.25 - 0.25 * p, blurPx: 14 * (1 - p) });
+      break;
+    }
+    case "split": {
+      // cortina dividida: metades deslizam em direções opostas revelando o novo
+      const half = W / 2;
+      // metade esquerda: antigo sai pra esquerda, novo entra da direita
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, half, H);
+      ctx.clip();
+      old({ dx: -p * W * 0.5, alpha: 1 - p * 0.4 });
+      cur({ dx: (1 - p) * W * 0.5 });
+      ctx.restore();
+      // metade direita: espelhado
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(half, 0, half, H);
+      ctx.clip();
+      old({ dx: p * W * 0.5, alpha: 1 - p * 0.4 });
+      cur({ dx: -(1 - p) * W * 0.5 });
+      ctx.restore();
+      break;
+    }
+    case "filmBurnT": {
+      // queimadura de película: laranja quente crescendo, revela o novo no pico
+      old({ alpha: Math.max(0, 1 - p * 1.35) });
+      cur({ alpha: Math.max(0, p * 1.35 - 0.35) });
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.hypot(W, H) / 2);
+      g.addColorStop(0, `rgba(255, 140, 30, ${Math.sin(p * Math.PI) * 0.85})`);
+      g.addColorStop(0.7, `rgba(255, 70, 0, ${Math.sin(p * Math.PI) * 0.55})`);
+      g.addColorStop(1, `rgba(120, 20, 0, ${Math.sin(p * Math.PI) * 0.4})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      break;
+    }
+    case "zoomRota": {
+      // zoom giratório: entra rodando e crescendo até encaixar
+      old({ alpha: 1 - p, scaleMul: 1 + 0.35 * p, rotDeg: 12 * p });
+      cur({ alpha: Math.min(1, p * 1.5), scaleMul: 0.6 + 0.4 * p, rotDeg: 90 * (1 - p) });
+      break;
+    }
     default:
       old({ alpha: 1 - p });
       cur({ alpha: p });

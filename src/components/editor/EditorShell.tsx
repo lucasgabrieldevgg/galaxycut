@@ -20,11 +20,14 @@ import { PreviewStage } from "./PreviewStage";
 import { Inspector } from "./Inspector";
 import { Timeline } from "./Timeline";
 import { ExportDialog } from "./ExportDialog";
+import { TransformVoiceDialog } from "./TransformVoiceDialog";
+import { TrimDialog } from "./TrimDialog";
 
 export function EditorShell({ onExit }: { onExit: () => void }) {
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [transformOpen, setTransformOpen] = useState(false);
   const isMobile = useIsMobile();
   // o projeto (e as mídias do IndexedDB) já foi carregado pela home antes de chegar aqui
 
@@ -241,6 +244,8 @@ export function EditorShell({ onExit }: { onExit: () => void }) {
       <TopBar onExport={() => setExportOpen(true)} onExit={onExit} />
       <main className="min-h-0 flex-1">{editor}</main>
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
+      <TransformVoiceDialog open={transformOpen} onOpenChange={setTransformOpen} />
+      <TrimDialog />
       <SubtitleMiniBar />
     </div>
   );

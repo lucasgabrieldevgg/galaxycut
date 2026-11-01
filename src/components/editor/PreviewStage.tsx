@@ -25,7 +25,7 @@ import { useComboLabel } from "@/lib/editor/shortcuts";
 import { engine } from "@/lib/editor/playback";
 import { Clip, fmtTime } from "@/lib/editor/types";
 import { useT } from "@/lib/editor/i18n";
-import { Play, Pause, SkipBack, ChevronLeft, ChevronRight, Move, RotateCw, Magnet, Diamond } from "lucide-react";
+import { Play, Pause, SkipBack, ChevronLeft, ChevronRight, Move, RotateCw, Magnet, Diamond, Loader2 } from "lucide-react";
 import { DbMeter } from "./DbMeter";
 import { toast } from "sonner";
 
@@ -565,6 +565,10 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
             aria-label={t("pv.preview")}
             title={editMode ? t("pv.editOn") : draggable ? t("pv.clickToEdit") : t("pv.play", { key: "▶" })}
           />
+          {/* v9.4: indicador de preparação de mídia — enquanto o play espera o
+              carregamento terminar, mostra o progresso e avisa quando tá pronto */}
+          <PrepBadge />
+
           {/* guias magnéticas (linhas de centralização) — acendem quando o
               clipe encosta no centro/borda durante o arraste */}
           {guides.v && (
@@ -731,6 +735,60 @@ export function PreviewStage({ canvasRef }: { canvasRef: React.RefObject<HTMLCan
             </span>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- v9.4: selo de "preparando mídia" (play esperando o buffer) ----------
+function PrepBadge() {
+  const t = useT();
+  const hostRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const txtRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    let readyShownAt = 0;
+    const loop = () => {
+      const el = hostRef.current;
+      if (el) {
+        const pending = engine.isPrepending() && !usePlayback.getState().playing;
+        const p = engine.prepareProgress();
+        if (pending) {
+          el.style.opacity = "1";
+          if (txtRef.current) {
+            txtRef.current.textContent =
+              p !== null ? t("pv.preparing", { n: Math.round(p * 100) }) : t("pv.preparingNoPct");
+          }
+          if (barRef.current) barRef.current.style.width = `${Math.round((p ?? 0.05) * 100)}%`;
+          readyShownAt = 0;
+        } else if (readyShownAt === 0) {
+          // flash rápido de "pronto" quando a espera acaba
+          readyShownAt = performance.now();
+          el.style.opacity = "1";
+          if (txtRef.current) txtRef.current.textContent = t("pv.ready");
+          if (barRef.current) barRef.current.style.width = "100%";
+        } else if (performance.now() - readyShownAt > 1100) {
+          el.style.opacity = "0";
+        }
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [t]);
+  return (
+    <div
+      ref={hostRef}
+      className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 transition-opacity duration-300"
+      style={{ opacity: 0 }}
+    >
+      <div className="flex items-center gap-2 rounded-full border border-[var(--gc-accent-40)] bg-[#0c1017]/95 px-3 py-1.5 shadow-lg backdrop-blur">
+        <Loader2 className="h-3 w-3 animate-spin text-[var(--gc-accent)]" />
+        <span ref={txtRef} className="text-[10px] font-medium text-zinc-200" />
+        <span className="h-1 w-16 overflow-hidden rounded-full bg-[#1c2430]">
+          <span ref={barRef} className="block h-full rounded-full bg-[var(--gc-accent)] transition-all" style={{ width: "0%" }} />
+        </span>
       </div>
     </div>
   );

@@ -37,6 +37,36 @@ class PlaybackEngine {
   private disposed = false;
   /** deu play com mídia ainda carregando? segura e toca sozinho quando 100% chegar */
   private pendingPlay = false;
+
+  /** v9.4: tem um play esperando a mídia terminar de carregar? (indicador UI) */
+  isPrepending(): boolean {
+    return this.pendingPlay;
+  }
+
+  /** v9.4: progresso agregado de preparação da mídia (0..1) — a média do
+   *  carregamento dos arquivos que ainda não estão prontos. null = tudo pronto. */
+  prepareProgress(): number | null {
+    const { clips } = useProject.getState();
+    let sum = 0;
+    let n = 0;
+    for (const c of clips) {
+      if (c.kind === "text" || c.kind === "image" || !c.mediaId) continue;
+      const key = this.bindings.get(c.id) ?? elKeyOf(c.kind, c.mediaId);
+      const el = this.elements.get(key);
+      if (!el) continue;
+      if (el instanceof HTMLMediaElement) {
+        if (el.readyState >= 3 && !el.buffered.length) continue;
+        const dur = isFinite(el.duration) ? el.duration : 0;
+        if (dur > 0 && el.readyState >= 4) continue;
+        const p = this.loadProgress(c.id);
+        if (p !== null) {
+          sum += p;
+          n++;
+        }
+      }
+    }
+    return n > 0 ? sum / n : null;
+  }
   /** v7.3: mídias cujo pré-carregamento estourou o teto de tempo — o gate do
    *  play NÃO segura mais por elas (senão o play ficava travado pra sempre
    *  num arquivo remoto enorme; o vídeo carrega o resto durante a reprodução) */
@@ -547,15 +577,26 @@ class PlaybackEngine {
       const master = this.masterMuted ? 0 : this.masterVol;
       const eff = c.muted || track?.muted ? 0 : c.volume * fade * master;
 
-      const needsDsp = !!c.enhance || !!(c.audioFilters && c.audioFilters.enabled);
+      // v9.4 CORREÇÃO CRÍTICA: voiceFx também exige a cadeia DSP — antes só
+      // enhance/filtros ligavam o WebAudio, e um clipe com efeito de voz
+      // (sem "melhorar áudio") ficava MUDO na prévia. Agora qualquer um dos
+      // três liga o processamento.
+      const needsDsp = !!c.enhance || !!(c.audioFilters && c.audioFilters.enabled) || !!c.voiceFx;
       if (needsDsp) {
         if (this.lastAttach.get(key) !== el) {
           audioEngine.attach(key, el);
           this.lastAttach.set(key, el);
         }
-        audioEngine.update(key, { gain: eff, enhance: !!c.enhance, filters: c.audioFilters, voiceFx: c.voiceFx ?? null });
+        audioEngine.update(key, {
+          gain: eff,
+          enhance: !!c.enhance,
+          filters: c.audioFilters,
+          voiceFx: c.voiceFx ?? null,
+          voiceFxParams: c.voiceFx ? c.voiceFxParams ?? { intensity: 1, pitch: 0 } : null,
+        });
       } else if (this.lastAttach.has(key)) {
-        audioEngine.update(key, { gain: eff, enhance: false });
+        // desliga o efeito também (antes o último efeito continuava tocando)
+        audioEngine.update(key, { gain: eff, enhance: false, voiceFx: null, voiceFxParams: null });
       } else {
         const targetVol = Math.max(0, Math.min(1, eff));
         if (Math.abs(el.volume - targetVol) > 0.01) {

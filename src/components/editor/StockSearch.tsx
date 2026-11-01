@@ -28,7 +28,7 @@ import { useProject } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
 import { registry } from "@/lib/editor/media";
 import { licenseLevel, LICENSE_STYLE } from "@/lib/editor/types";
-import { StockItem, downloadStockFile, searchStock, searchStickers } from "@/lib/editor/stockClient";
+import { StockItem, downloadStockFile, searchStock, resolveStockPlayable, type StockSourceStatus } from "@/lib/editor/stockClient";
 import { useFavorites } from "@/lib/editor/favorites";
 import { useT } from "@/lib/editor/i18n";
 import {
@@ -57,19 +57,6 @@ const STICKER_SETS: { key: string; emojis: string[] }[] = [
 ];
 
 /** Categorias de figurinhas PNG (busca online com termo pronto) */
-const STICKER_CATEGORIES: { q: string; label: string; icon: string }[] = [
-  { q: "love heart", label: "Corações", icon: "❤️" },
-  { q: "anime", label: "Anime", icon: "🌸" },
-  { q: "meme", label: "Memes", icon: "😹" },
-  { q: "cute animal", label: "Fofinhos", icon: "🐾" },
-  { q: "party celebration", label: "Festas", icon: "🎉" },
-  { q: "arrow", label: "Setas", icon: "➡️" },
-  { q: "explosion burst", label: "Impactos", icon: "💥" },
-  { q: "star sparkles", label: "Brilhos", icon: "✨" },
-  { q: "comic speech bubble", label: "Balões", icon: "💬" },
-  { q: "fire flame", label: "Fogo", icon: "🔥" },
-];
-
 /** Gêneros musicais */
 const GENRES = [
   { id: "all", label: "Todas" },
@@ -153,9 +140,10 @@ export function StockSearch() {
   const [genre, setGenre] = useState("all");
   const [shortsVibe, setShortsVibe] = useState<ShortsVibe>("all");
   const [onlyFavorites, setOnlyFavorites] = useState(false);
-  const [cmin, ] = useState(10);
-  const [cmax, ] = useState(60);
-  const [stickTab, setStickTab] = useState<"stickers" | "emojis">("stickers");
+  const [cmin, setCmin] = useState(10);
+  const [cmax, setCmax] = useState(60);
+  // v9.4: saúde das fontes da última busca (quem caiu fica visível)
+  const [sources, setSources] = useState<StockSourceStatus[] | null>(null);
   const [emojiCat, setEmojiCat] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
   // v9.2 — busca avançada: licença, orientação e paginação (carregar mais)
@@ -183,7 +171,7 @@ export function StockSearch() {
     { id: "music", label: t("ss.music"), icon: Music4, ph: "Ex: curiosidades, lofi, tech, mistério..." },
     { id: "sfx", label: t("ss.sfx"), icon: AudioLines, ph: t("ss.phSfx") },
     { id: "image", label: t("ss.photo"), icon: ImageIcon, ph: t("ss.phPhoto") },
-    { id: "sticker", label: t("ss.sticker"), icon: Sticker, ph: t("ss.phSticker") },
+    { id: "sticker", label: t("ss.emojis"), icon: Sticker, ph: t("ss.phEmoji") },
   ];
 
   const showDur = type !== "image" && type !== "sticker";
@@ -194,27 +182,11 @@ export function StockSearch() {
   async function search(e?: FormEvent) {
     e?.preventDefault();
     if (!query.trim()) return;
-    if (isSticker) {
-      setLoading(true);
-      setTranslated(null);
-      try {
-        const results = await searchStickers(query.trim());
-        setItems(results);
-        if (!results.length) {
-          toast.info(t("ss.nothing"), { description: t("ss.stickerNone", { q: query.trim() }) });
-        }
-      } catch {
-        toast.error(t("ss.fail"), { description: t("ss.failDesc") });
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
     setLoading(true);
     setTranslated(null);
     try {
       const keys = useSettings.getState().keys;
-      const { results, translated: tr } = await searchStock({
+      const { results, translated: tr, sources: st } = await searchStock({
         q: query,
         type: type as "video" | "image" | "music" | "sfx",
         dur,
@@ -224,8 +196,10 @@ export function StockSearch() {
         ...(dur === "custom" ? { dmin: Math.max(0, Math.min(cmin, cmax)), dmax: Math.max(1, Math.max(cmin, cmax)) } : {}),
         pexelsKey: keys.pexels || undefined,
         pixabayKey: keys.pixabay || undefined,
+        openverseKey: keys.openverse || undefined,
       });
       setItems(results);
+      setSources(st ?? null);
       setPage(1);
       setHasMore(results.length >= 20);
       if (tr && tr !== query) setTranslated(tr);
@@ -279,7 +253,7 @@ export function StockSearch() {
     try {
       const keys = useSettings.getState().keys;
       const nextPage = page + 1;
-      const { results } = await searchStock({
+      const { results, sources: st } = await searchStock({
         q: query,
         type: type as "video" | "image" | "music" | "sfx",
         page: nextPage,
@@ -290,7 +264,9 @@ export function StockSearch() {
         ...(dur === "custom" ? { dmin: Math.max(0, Math.min(cmin, cmax)), dmax: Math.max(1, Math.max(cmin, cmax)) } : {}),
         pexelsKey: keys.pexels || undefined,
         pixabayKey: keys.pixabay || undefined,
+        openverseKey: keys.openverse || undefined,
       });
+      setSources(st ?? null);
       setItems((prev) => {
         const base = prev ?? [];
         const seen = new Set(base.map((p) => p.id));
@@ -532,101 +508,38 @@ export function StockSearch() {
 
       {/* ==================== ÁREA DE CONTEÚDO ROLÁVEL (100% VISÍVEL) ==================== */}
       <div className="min-h-0 flex-1 overflow-y-auto p-2 timeline-scroll space-y-2">
-        {/* sub-aba de STICKERS: Figurinhas PNG / Emojis — cada uma com categorias */}
+        {/* v9.4: a sub-aba "Figurinhas (PNG)" foi REMOVIDA (duplicava a aba
+            Foto — a busca de imagens cobre os mesmos PNGs); fica só Emojis */}
         {isSticker && !onlyFavorites && (
-          <>
-            <div className="flex rounded-lg border border-[#2a3546] bg-[#0e1320] p-0.5 shrink-0">
+          <div className="space-y-1 shrink-0">
+            <div className="flex gap-1 overflow-x-auto pb-1 timeline-scroll">
               <button
                 type="button"
-                onClick={() => setStickTab("stickers")}
-                className={`flex-1 rounded-md py-1 text-[11px] font-semibold transition ${
-                  stickTab === "stickers"
-                    ? "bg-[var(--gc-accent)] text-black shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
+                onClick={() => setEmojiCat("all")}
+                className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] transition ${
+                  emojiCat === "all"
+                    ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                    : "border-[#2a3546] bg-[#121722] text-zinc-300 hover:border-[var(--gc-accent-60)]"
                 }`}
               >
-                🎨 Figurinhas (PNG)
+                ⭐ Todas
               </button>
-              <button
-                type="button"
-                onClick={() => setStickTab("emojis")}
-                className={`flex-1 rounded-md py-1 text-[11px] font-semibold transition ${
-                  stickTab === "emojis"
-                    ? "bg-[var(--gc-accent)] text-black shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                😀 Emojis Prontos
-              </button>
+              {STICKER_SETS.map((set) => (
+                <button
+                  key={set.key}
+                  type="button"
+                  onClick={() => setEmojiCat(set.key)}
+                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] transition ${
+                    emojiCat === set.key
+                      ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                      : "border-[#2a3546] bg-[#121722] text-zinc-300 hover:border-[var(--gc-accent-60)]"
+                  }`}
+                >
+                  {set.emojis[0]} {t(`ss.cat.${set.key}`)}
+                </button>
+              ))}
             </div>
-
-            {stickTab === "stickers" ? (
-              <div className="space-y-1 shrink-0">
-                <div className="text-[9px] font-semibold uppercase tracking-wide text-zinc-500">Categorias</div>
-                <div className="flex flex-wrap gap-1">
-                  {STICKER_CATEGORIES.map((cat) => (
-                    <button
-                      key={cat.q}
-                      type="button"
-                      onClick={() => {
-                        setQuery(cat.q);
-                        searchedRef.current = true;
-                        setLoading(true);
-                        setTranslated(null);
-                        searchStickers(cat.q)
-                          .then((results) => {
-                            setItems(results);
-                            if (!results.length) {
-                              toast.info(t("ss.nothing"), { description: t("ss.stickerNone", { q: cat.q }) });
-                            }
-                          })
-                          .catch(() => toast.error(t("ss.fail"), { description: t("ss.failDesc") }))
-                          .finally(() => setLoading(false));
-                      }}
-                      className={`rounded-full border px-2 py-0.5 text-[10px] transition ${
-                        query === cat.q
-                          ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
-                          : "border-[#2a3546] bg-[#121722] text-zinc-300 hover:border-[var(--gc-accent-60)] hover:text-white"
-                      }`}
-                    >
-                      <span className="mr-0.5">{cat.icon}</span>
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-1 shrink-0">
-                <div className="flex gap-1 overflow-x-auto pb-1 timeline-scroll">
-                  <button
-                    type="button"
-                    onClick={() => setEmojiCat("all")}
-                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] transition ${
-                      emojiCat === "all"
-                        ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
-                        : "border-[#2a3546] bg-[#121722] text-zinc-300 hover:border-[var(--gc-accent-60)]"
-                    }`}
-                  >
-                    ⭐ Todas
-                  </button>
-                  {STICKER_SETS.map((set) => (
-                    <button
-                      key={set.key}
-                      type="button"
-                      onClick={() => setEmojiCat(set.key)}
-                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] transition ${
-                        emojiCat === set.key
-                          ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
-                          : "border-[#2a3546] bg-[#121722] text-zinc-300 hover:border-[var(--gc-accent-60)]"
-                      }`}
-                    >
-                      {set.emojis[0]} {t(`ss.cat.${set.key}`)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
+          </div>
         )}
 
         {/* EFEITOS SONOROS: chips rápidos */}
@@ -756,6 +669,59 @@ export function StockSearch() {
                 </button>
               ))}
             </div>
+            {dur === "custom" && (
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-[9px] text-zinc-500">De</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={3600}
+                  value={cmin}
+                  onChange={(e) => setCmin(Math.max(0, Math.min(3600, Number(e.target.value) || 0)))}
+                  className="h-6 w-16 rounded border border-[#2a3546] bg-[#121722] px-1.5 text-center text-[10px] text-zinc-200"
+                />
+                <span className="text-[9px] text-zinc-500">a</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={3600}
+                  value={cmax}
+                  onChange={(e) => setCmax(Math.max(1, Math.min(3600, Number(e.target.value) || 1)))}
+                  className="h-6 w-16 rounded border border-[#2a3546] bg-[#121722] px-1.5 text-center text-[10px] text-zinc-200"
+                />
+                <span className="text-[9px] text-zinc-500">segundos</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    searchedRef.current = true;
+                    void searchDirect(query, type, dur, genre);
+                  }}
+                  className="ml-auto rounded-md border border-[var(--gc-accent-40)] bg-[var(--gc-accent-10)] px-2 py-0.5 text-[10px] font-medium text-[var(--gc-accent)]"
+                >
+                  Aplicar
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* v9.4 — SAÚDE DAS FONTES da última busca: quem respondeu, quem caiu */}
+        {!isSticker && sources && sources.length > 0 && !loading && !onlyFavorites && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {sources.map((src) => (
+              <span
+                key={src.name}
+                title={src.ok ? `${src.name}: ${src.n} resultado(s)` : `${src.name}: sem resposta (fora do ar ou limite de taxa)`}
+                className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] ${
+                  src.ok
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                    : "border-red-500/30 bg-red-500/10 text-red-400"
+                }`}
+              >
+                {src.ok ? "✓" : "✕"} {src.name}
+                {src.ok && src.n > 0 && <b className="font-mono">{src.n}</b>}
+              </span>
+            ))}
           </div>
         )}
 
@@ -816,7 +782,7 @@ export function StockSearch() {
         )}
 
         {/* Emojis Prontos (filtrados pela categoria escolhida) */}
-        {isSticker && stickTab === "emojis" && !onlyFavorites && (
+        {isSticker && !onlyFavorites && (
           <div className="space-y-3">
             {STICKER_SETS.filter((set) => emojiCat === "all" || set.key === emojiCat).map((set) => (
               <div key={set.key}>
@@ -1032,28 +998,6 @@ export function StockSearch() {
                   ))}
               </div>
             )}
-            {!onlyFavorites && isSticker && (
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {STICKER_CATEGORIES.slice(0, 6).map((cat) => (
-                  <button
-                    key={cat.q}
-                    type="button"
-                    onClick={() => {
-                      setQuery(cat.q);
-                      searchedRef.current = true;
-                      setLoading(true);
-                      searchStickers(cat.q)
-                        .then((results) => setItems(results))
-                        .catch(() => toast.error(t("ss.fail"), { description: t("ss.failDesc") }))
-                        .finally(() => setLoading(false));
-                    }}
-                    className="rounded-full border border-[#2a3546] bg-[#121722] px-2.5 py-1 text-[10px] text-zinc-300 transition hover:border-[var(--gc-accent-60)] hover:text-white"
-                  >
-                    {cat.icon} {cat.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -1086,20 +1030,28 @@ function VideoPreviewLayer({ item, active }: { item: StockItem; active: boolean 
     let cancelled = false;
     const t = setTimeout(() => {
       if (cancelled || !hostRef.current) return;
-      const v = document.createElement("video");
-      v.muted = true;
-      v.loop = true;
-      v.playsInline = true;
-      v.preload = "auto";
-      v.className = "absolute inset-0 h-full w-full bg-black object-cover";
-      v.src = item.url;
-      void v.play().catch(() => undefined);
-      hostRef.current.replaceChildren(v);
+      // v9.4: resolve a URL JOGÁVEL antes de alimentar o player — itens do
+      // Internet Archive chegam como PÁGINA HTML (details/…), e o vídeo antigo
+      // ficava PRETO tentando decodificar uma página. Falha → mantém o thumb.
+      void resolveStockPlayable(item).then((url) => {
+        if (cancelled || !url || !hostRef.current) return;
+        const v = document.createElement("video");
+        v.muted = true;
+        v.loop = true;
+        v.playsInline = true;
+        v.preload = "auto";
+        // contain em vez de cover: vídeo vertical aparece INTEIRO (com barra),
+        // não cortado/achatado na moldura 16:9 do card
+        v.className = "absolute inset-0 h-full w-full bg-black object-contain";
+        v.src = url;
+        void v.play().catch(() => undefined);
+        hostRef.current.replaceChildren(v);
+      });
     }, 350);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [active, item.url]);
+  }, [active, item]);
   return <div ref={hostRef} className="absolute inset-0" aria-hidden />;
 }

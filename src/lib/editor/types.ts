@@ -1,5 +1,5 @@
 // GalaxyCut — tipos do projeto de edição
-import type { VoiceFxId } from "./voiceFx";
+import type { VoiceFxId, VoiceFxParams } from "./voiceFx";
 
 export type ClipKind = "video" | "image" | "audio" | "text";
 export type TrackKind = "video" | "audio" | "text";
@@ -65,7 +65,14 @@ export type TransitionType =
   | "blinds" // v9.2: persianas verticais
   | "iris" // v9.2: círculo crescendo do centro
   | "flash" // clarão branco
-  | "blurIn"; // do borrado pro nítido
+  | "blurIn" // do borrado pro nítido
+  // ---- v9.4 ----
+  | "crosszoom" // zoom cruzado: um entra crescendo enquanto o outro sai
+  | "fadeWhite" // passando pelo branco
+  | "spinblur" // giro com desfoque na virada
+  | "split" // cortina dividida: metades abrem em direções opostas
+  | "filmBurnT" // queimadura de película na virada
+  | "zoomRota"; // zoom giratório
 
 export interface Transition {
   type: TransitionType;
@@ -93,6 +100,12 @@ export const TRANSITIONS: { type: TransitionType; label: string; icon: string }[
   { type: "iris", label: "Íris (Círculo)", icon: "◯" },
   { type: "flash", label: "Clarão", icon: "✦" },
   { type: "blurIn", label: "Desfoque", icon: "≈" },
+  { type: "crosszoom", label: "Cruzamento Zoom", icon: "⤢" },
+  { type: "fadeWhite", label: "Fade Branco", icon: "◑" },
+  { type: "spinblur", label: "Giro Desfocado", icon: "⟳" },
+  { type: "split", label: "Cortina Dividida", icon: "⇥⇤" },
+  { type: "filmBurnT", label: "Queimadura de Filme", icon: "🔥" },
+  { type: "zoomRota", label: "Zoom Giratório", icon: "◎" },
 ];
 
 // ---------- KEYFRAMES (CapCut Quadros-chave ◆) ----------
@@ -133,7 +146,12 @@ export type AnimationInType =
   | "blurIn"
   | "shakeIn"
   | "flipInX"
-  | "flipInY";
+  | "flipInY"
+  // ---- v9.4 ----
+  | "elasticIn"
+  | "sideBounce"
+  | "swingIn"
+  | "zoomBlurIn";
 
 export type AnimationOutType =
   | "none"
@@ -146,7 +164,11 @@ export type AnimationOutType =
   | "fadeOut"
   | "sinkDown"
   | "blurOut"
-  | "popOut";
+  | "popOut"
+  // ---- v9.4 ----
+  | "shrinkSpin"
+  | "fallOut"
+  | "flipOut";
 
 export type AnimationComboType =
   | "none"
@@ -159,7 +181,11 @@ export type AnimationComboType =
   | "glitchHop"
   | "wave"
   | "breathe"
-  | "pendulum";
+  | "pendulum"
+  // ---- v9.4 ----
+  | "spring"
+  | "wobbleX"
+  | "jelly";
 
 export interface ClipAnimation {
   inType?: AnimationInType;
@@ -189,6 +215,10 @@ export const ANIMATIONS_IN: { type: AnimationInType; label: string; icon: string
   { type: "shakeIn", label: "Entrada com Tremor", icon: "📳" },
   { type: "flipInX", label: "Giro 3D Vertical", icon: "🔁" },
   { type: "flipInY", label: "Giro 3D Horizontal", icon: "🔂" },
+  { type: "elasticIn", label: "Elástica", icon: "🪀" },
+  { type: "sideBounce", label: "Rebote Lateral", icon: "↩️" },
+  { type: "swingIn", label: "Balanço Entrada", icon: "🎐" },
+  { type: "zoomBlurIn", label: "Zoom Desfocado", icon: "🌀" },
 ];
 
 export const ANIMATIONS_OUT: { type: AnimationOutType; label: string; icon: string }[] = [
@@ -203,6 +233,9 @@ export const ANIMATIONS_OUT: { type: AnimationOutType; label: string; icon: stri
   { type: "sinkDown", label: "Afundar", icon: "⚓" },
   { type: "blurOut", label: "Desfoque Saída", icon: "🌫️" },
   { type: "popOut", label: "Encolher Rápido", icon: "💥" },
+  { type: "shrinkSpin", label: "Encolher Girando", icon: "🌪️" },
+  { type: "fallOut", label: "Queda com Giro", icon: "🪂" },
+  { type: "flipOut", label: "Giro 3D Saída", icon: "🔃" },
 ];
 
 export const ANIMATIONS_COMBO: { type: AnimationComboType; label: string; icon: string }[] = [
@@ -217,6 +250,9 @@ export const ANIMATIONS_COMBO: { type: AnimationComboType; label: string; icon: 
   { type: "wave", label: "Onda Senoidal", icon: "🌊" },
   { type: "breathe", label: "Respiração Zoom", icon: "🫁" },
   { type: "pendulum", label: "Pêndulo Lateral", icon: "🕰️" },
+  { type: "spring", label: "Mola Elástica", icon: "🧷" },
+  { type: "wobbleX", label: "Ondulação Lateral", icon: "〰️" },
+  { type: "jelly", label: "Gelatina", icon: "🍮" },
 ];
 
 // ---------- EFEITOS VISUAIS (Continuous Post-Processing Effects) ----------
@@ -259,7 +295,15 @@ export type EffectType =
   | "rain"
   | "snowfall"
   | "sciFiScan"
-  | "halftone";
+  | "halftone"
+  // ---- v9.4: ambiente & celebração & estilização ----
+  | "fog"
+  | "sparks"
+  | "confetti"
+  | "bubbles"
+  | "neonGrid"
+  | "mirrorV"
+  | "filmBurn";
 
 export interface ClipEffect {
   id: string;
@@ -330,6 +374,17 @@ export const EFFECT_CATALOG: EffectMeta[] = [
   { type: "snowfall", name: "Neve", category: "motion", icon: "❄️", description: "Flocos de neve flutuando com profundidade, estilo natal/winter", defaultIntensity: 1 },
   { type: "sciFiScan", name: "Varredura Sci-Fi", category: "retro", icon: "🛸", description: "Linha de varredura futurista com brilho ciano estilo interface alienígena", defaultIntensity: 1 },
   { type: "halftone", name: "Quadrinho (Halftone)", category: "retro", icon: "🖨️", description: "Retícula de pontos de impressão estilo graphic novel retrô", defaultIntensity: 1 },
+
+  // Clima & Celebração (v9.4)
+  { type: "fog", name: "Névoa", category: "motion", icon: "🌫️", description: "Bancos de névoa derivando devagar — clima de mistério/suspense", defaultIntensity: 1 },
+  { type: "sparks", name: "Faíscas / Fagulhas", category: "light", icon: "✨", description: "Fagulhas subindo com brilho quente — solda, fogueira, magia", defaultIntensity: 1 },
+  { type: "confetti", name: "Confete", category: "motion", icon: "🎉", description: "Confete caindo colorido — celebração, aniversário, conquista", defaultIntensity: 1 },
+  { type: "bubbles", name: "Bolhas", category: "motion", icon: "🫧", description: "Bolhas transparentes subindo — festa, sonho, infância", defaultIntensity: 1 },
+
+  // Estilização (v9.4)
+  { type: "neonGrid", name: "Grid Retrô (Synthwave)", category: "retro", icon: "🌇", description: "Grade em perspectiva com sol neon dos anos 80 (synthwave/vaporwave)", defaultIntensity: 1 },
+  { type: "mirrorV", name: "Espelho Vertical", category: "stylize", icon: "🪞", description: "Reflexo simétrico no meio — efeito de água/espelho do chão", defaultIntensity: 1 },
+  { type: "filmBurn", name: "Queimadura de Filme", category: "retro", icon: "🔥", description: "Vinheta quente pulsando com queimados de película antiga", defaultIntensity: 1 },
 ];
 
 export interface AudioFilterConfig {
@@ -413,6 +468,7 @@ export interface Clip {
   enhance: boolean; // melhoria de áudio (highpass + compressor)
   audioFilters?: AudioFilterConfig; // filtros de áudio estilo OBS Studio
   voiceFx?: VoiceFxId; // efeito de voz (robô, rádio, megafone, eco) — preview E exportação
+  voiceFxParams?: VoiceFxParams; // intensidade (0..1) e tonalidade (±semitons) do efeito de voz
   transitionIn?: Transition; // transição na entrada (na junção com o clipe anterior da faixa)
   text?: TextProps;
   keyframes?: Keyframe[]; // CapCut Keyframes (losangos ◆)
@@ -459,6 +515,9 @@ export interface MediaMeta {
   height: number;
   thumbnail?: string; // dataURL
   peaks?: number[]; // picos de áudio 0..1
+  /** v9.4: últimos trechos escolhidos no diálogo de corte (por mídia — volta
+   *  prontinho quando reabrir, sem reimportar o arquivo) */
+  parts?: { inPoint: number; outPoint: number }[];
   missing?: boolean; // blob não disponível (após recarregar)
   decodeError?: boolean; // o navegador não consegue decodificar este arquivo (formato/exceção)
   source?: "local" | "stock" | "sticker";
@@ -1164,6 +1223,29 @@ export function evaluateClipState(c: Clip, t: number): EvaluatedTransform {
           extraDx -= (1 - easeOutCubic(p)) * 1.5;
           extraAlpha *= p;
           break;
+        // ---- v9.4 ----
+        case "elasticIn": {
+          // elástica: overshoot decaindo (padrão easeOutElastic)
+          const c4 = (2 * Math.PI) / 3;
+          const e = p === 0 ? 0 : p === 1 ? 1 : Math.pow(2, -10 * p) * Math.sin((p * 10 - 0.75) * c4) + 1;
+          extraScale *= e;
+          extraAlpha *= Math.min(1, p * 2.2);
+          break;
+        }
+        case "sideBounce":
+          extraDx -= (1 - easeOutCubic(p)) * 1.6;
+          extraScaleX *= 1 + 0.25 * Math.sin((1 - p) * Math.PI) * (1 - p);
+          extraAlpha *= Math.min(1, p * 1.8);
+          break;
+        case "swingIn":
+          extraRot += (1 - easeOutCubic(p)) * -28 + Math.sin(p * Math.PI * 2.5) * (1 - p) * 14;
+          extraAlpha *= Math.min(1, p * 1.6);
+          break;
+        case "zoomBlurIn":
+          extraScale *= 1.55 - 0.55 * easeOutCubic(p);
+          extraBlur += (1 - easeOutCubic(p)) * 18;
+          extraAlpha *= Math.min(1, p * 1.5);
+          break;
       }
     }
   }
@@ -1208,6 +1290,22 @@ export function evaluateClipState(c: Clip, t: number): EvaluatedTransform {
           break;
         case "popOut":
           extraScale *= Math.max(0.01, 1 - p * 1.1);
+          break;
+        // ---- v9.4 ----
+        case "shrinkSpin":
+          extraScale *= Math.max(0.01, 1 - easeInCubic(p));
+          extraRot += easeInCubic(p) * 200;
+          extraAlpha *= Math.max(0, 1 - p);
+          break;
+        case "fallOut":
+          extraDy += easeInCubic(p) * 1.9;
+          extraRot += easeInCubic(p) * 30;
+          extraAlpha *= Math.max(0, 1 - p * 1.2);
+          break;
+        case "flipOut":
+          extraScaleX *= Math.max(0.001, Math.cos(p * Math.PI * 0.5));
+          extraRot += Math.sin(p * Math.PI * 0.5) * 18;
+          extraAlpha *= Math.max(0, 1 - p * 1.2);
           break;
       }
     }
@@ -1260,6 +1358,23 @@ export function evaluateClipState(c: Clip, t: number): EvaluatedTransform {
       case "pendulum":
         extraDx += Math.sin(phase) * 0.1;
         extraRot += Math.sin(phase) * 6;
+        break;
+      // ---- v9.4 ----
+      case "spring": {
+        // mola: a cada ciclo, overshoot que assenta (pulsos elásticos)
+        const cyc = (tRel * spd * 0.9) % 1;
+        const decay = 1 - cyc;
+        extraScale *= 1 + 0.2 * decay * Math.cos(cyc * Math.PI * 4.5);
+        break;
+      }
+      case "wobbleX":
+        extraDx += Math.sin(phase * 2.2) * 0.06;
+        extraScaleX *= 1 + 0.06 * Math.sin(phase * 2.2 + Math.PI / 2);
+        extraScaleY *= 1 - 0.04 * Math.sin(phase * 2.2 + Math.PI / 2);
+        break;
+      case "jelly":
+        extraScaleX *= 1 + 0.1 * Math.sin(phase * 3.2);
+        extraScaleY *= 1 - 0.1 * Math.sin(phase * 3.2);
         break;
     }
   }

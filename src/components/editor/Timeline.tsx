@@ -21,6 +21,7 @@ import { registry } from "@/lib/editor/media";
 import { gcDrag } from "@/lib/editor/dnd";
 import { SilenceDialog } from "./SilenceDialog";
 import { BatchAudioDialog } from "./BatchAudioDialog";
+import { openTrimDialog } from "./TrimDialog";
 import { useT, t as tr, useLang } from "@/lib/editor/i18n";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -1423,6 +1424,17 @@ const ClipBlock = memo(function ClipBlock({ clip, zoom, selected, missing, showW
     });
   }
   if (clip.kind === "video" || clip.kind === "audio") {
+    if (clip.mediaId) {
+      items.push({
+        label: tr("cm.trimParts"),
+        icon: <Scissors className="h-3.5 w-3.5 text-[var(--gc-accent)]" />,
+        title: tr("cm.trimPartsHint"),
+        onClick: () => {
+          // abre o TrimDialog ancorado NESTE clipe (1ª subparte = in/out dele)
+          openTrimDialog({ mediaId: clip.mediaId!, clipId: clip.id });
+        },
+      });
+    }
     items.push({
       label: tr("cm.silence"),
       icon: <AudioWaveform className="h-3.5 w-3.5 text-[var(--gc-accent)]" />,

@@ -69,6 +69,14 @@ export function effectAnimates(type: EffectType): boolean {
     case "rain":
     case "snowfall":
     case "sciFiScan":
+    // v9.4 (abaixo): partículas e animações novas — sem break, são lista de cases
+    // eslint-disable-next-line no-fallthrough
+    case "fog":
+    case "sparks":
+    case "confetti":
+    case "bubbles":
+    case "neonGrid":
+    case "filmBurn":
       return true;
     default:
       return false;

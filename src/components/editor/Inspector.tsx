@@ -14,7 +14,7 @@ import { useProject, usePlayback } from "@/lib/editor/store";
 import { useSettings } from "@/lib/editor/settings";
 import { Clip, FONTS, TextProps, TRANSITIONS, TransitionType, clipEnd } from "@/lib/editor/types";
 import { FxTile } from "./FxTile";
-import { AlignLeft, AlignCenter, AlignRight, Bold, Italic, RotateCcw, Wand2, ArrowRightFromLine, Paintbrush, Pin, Sliders } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Bold, Italic, RotateCcw, Wand2, ArrowRightFromLine, Paintbrush, Pin, Sliders, Play, Ear, VenetianMask } from "lucide-react";
 import { engine } from "@/lib/editor/playback";
 import { toast } from "sonner";
 import { useT } from "@/lib/editor/i18n";
@@ -22,7 +22,7 @@ import { KeyframeInspector } from "./KeyframeInspector";
 import { AnimationInspector } from "./AnimationInspector";
 import { EffectsInspector } from "./EffectsInspector";
 import { AudioFiltersDialog } from "./AudioFiltersDialog";
-import { VOICE_FX, type VoiceFxId } from "@/lib/editor/voiceFx";
+import { VOICE_FX, PITCH_FX, type VoiceFxId, type VoiceFxParams } from "@/lib/editor/voiceFx";
 
 export function Inspector() {
   const t = useT();
@@ -630,49 +630,33 @@ function ClipInspector({ clip }: { clip: Clip }) {
               />
             </div>
 
-            {/* v9.1: efeitos de voz à vista aqui também — antes só existiam
-                escondidos dentro de "Configurar Filtros" */}
-            <div>
-              <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-zinc-500">{t("vfx.title")}</p>
-              <div className="flex flex-wrap gap-1">
-                <button
-                  type="button"
-                  onClick={() => update({ voiceFx: undefined })}
-                  className={`rounded-full border px-2 py-0.5 text-[10px] transition ${
-                    !clip.voiceFx
-                      ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
-                      : "border-[#2c364c] bg-[#121824] text-zinc-400 hover:text-zinc-200"
-                  }`}
-                >
-                  {t("vfx.none")}
-                </button>
-                {VOICE_FX.map((fx) => (
-                  <button
-                    key={fx.id}
-                    type="button"
-                    title={t(fx.descKey)}
-                    onClick={() => update({ voiceFx: fx.id as VoiceFxId })}
-                    className={`rounded-full border px-2 py-0.5 text-[10px] transition ${
-                      clip.voiceFx === fx.id
-                        ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
-                        : "border-[#2c364c] bg-[#121824] text-zinc-400 hover:text-zinc-200"
-                    }`}
-                  >
-                    {t(fx.nameKey)}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* v9.4: efeitos de voz organizados por categoria (30 efeitos),
+                com intensidade, tonalidade, comparação A/B e escuta */}
+            <VoiceFxSection clip={clip} update={update} />
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setFiltersOpen(true)}
-              className="w-full h-7 text-[11px] font-medium border-[#2c364c] bg-[#121824] hover:bg-[#1a2233] text-zinc-200 flex items-center justify-center gap-1.5"
-            >
-              <Sliders className="h-3 w-3 text-sky-400" /> Configurar Filtros OBS (Compressor, High-pass...)
-            </Button>
+            <div className="flex gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setFiltersOpen(true)}
+                className="h-7 flex-1 text-[11px] font-medium border-[#2c364c] bg-[#121824] hover:bg-[#1a2233] text-zinc-200 flex items-center justify-center gap-1.5"
+              >
+                <Sliders className="h-3 w-3 text-sky-400" /> Configurar Filtros OBS
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                title={t("vt.openTitle")}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("galaxycut:opentransformvoice", { detail: { clipId: clip.id } }));
+                }}
+                className="h-7 flex-1 text-[11px] font-medium border-fuchsia-500/40 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-300 flex items-center justify-center gap-1.5"
+              >
+                <VenetianMask className="h-3 w-3" /> {t("vt.openBtn")}
+              </Button>
+            </div>
           </div>
 
           <p className="text-[9px] leading-relaxed text-zinc-500">
@@ -690,6 +674,8 @@ function ClipInspector({ clip }: { clip: Clip }) {
             }}
             voiceFx={clip.voiceFx ?? null}
             onVoiceFx={(id) => update({ voiceFx: id ?? undefined })}
+            voiceFxParams={clip.voiceFxParams ?? null}
+            onVoiceFxParams={(p) => update({ voiceFxParams: p ?? undefined })}
             title="Filtros de Áudio do Clipe (Estilo OBS)"
             description="Personalize o processamento de áudio com as ferramentas clássicas do OBS Studio."
           />
@@ -728,6 +714,150 @@ function ClipInspector({ clip }: { clip: Clip }) {
           />
         </div>
       </Section>
+    </div>
+  );
+}
+
+// ---------- v9.4: seção de efeitos de voz (30 efeitos, categorias, parâmetros) ----------
+
+const VOICE_FX_GROUPS: { key: string; ids: VoiceFxId[] }[] = [
+  {
+    key: "vfx.groupClassic",
+    ids: ["robot", "radio", "megaphone", "echo", "studio", "underwater", "alien", "telephone", "bass"],
+  },
+  { key: "vfx.groupPitch", ids: ["aguda", "graveProf", "desenho", "esquilo", "monstro", "crianca", "fantasma", "narrador", "locutor"] },
+  { key: "vfx.groupMod", ids: ["vibrato", "chorus", "flanger", "tremolo"] },
+  { key: "vfx.groupAmb", ids: ["reverbAmb", "delayFx", "sussurro"] },
+  { key: "vfx.groupChar", ids: ["telAntigo", "radioInterf", "gravAntiga", "distorcida"] },
+];
+
+function VoiceFxSection({ clip, update }: { clip: Clip; update: (patch: Partial<Clip>, history?: boolean) => void }) {
+  const t = useT();
+  const [ab, setAb] = useState(false);
+  const lastIntensity = useRef(1);
+  const params: VoiceFxParams = clip.voiceFxParams ?? { intensity: 1, pitch: 0 };
+  const hasPitch = clip.voiceFx ? PITCH_FX.has(clip.voiceFx) : false;
+  const fxMeta = VOICE_FX.find((f) => f.id === clip.voiceFx);
+
+  const setParams = (p: Partial<VoiceFxParams>) => update({ voiceFxParams: { ...params, ...p } }, false);
+
+  const toggleAb = (on: boolean) => {
+    if (on) {
+      lastIntensity.current = params.intensity ?? 1;
+      setParams({ intensity: 0 });
+    } else {
+      setParams({ intensity: lastIntensity.current });
+    }
+    setAb(on);
+  };
+
+  const listen = () => {
+    engine.seek(Math.max(0, clip.start));
+    engine.play();
+  };
+
+  const chip = (active: boolean) =>
+    `rounded-full border px-2 py-0.5 text-[10px] transition ${
+      active
+        ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+        : "border-[#2c364c] bg-[#121824] text-zinc-400 hover:text-zinc-200"
+    }`;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">{t("vfx.title")}</p>
+        {clip.voiceFx && (
+          <button type="button" onClick={() => update({ voiceFx: undefined, voiceFxParams: undefined })} className="text-[9px] text-zinc-500 underline hover:text-zinc-300">
+            {t("vfx.remove")}
+          </button>
+        )}
+      </div>
+      <div className="max-h-44 space-y-2 overflow-y-auto rounded-md border border-[#1c2430] bg-[#0a0f18] p-2 timeline-scroll">
+        <div className="flex flex-wrap gap-1">
+          <button type="button" onClick={() => update({ voiceFx: undefined, voiceFxParams: undefined })} className={chip(!clip.voiceFx)}>
+            {t("vfx.none")}
+          </button>
+        </div>
+        {VOICE_FX_GROUPS.map((g) => (
+          <div key={g.key}>
+            <p className="mb-1 text-[8px] font-semibold uppercase tracking-wider text-zinc-600">{t(g.key)}</p>
+            <div className="flex flex-wrap gap-1">
+              {g.ids.map((id) => {
+                const fx = VOICE_FX.find((f) => f.id === id);
+                if (!fx) return null;
+                return (
+                  <button key={id} type="button" title={t(fx.descKey)} onClick={() => update({ voiceFx: id, voiceFxParams: { intensity: params.intensity ?? 1, pitch: params.pitch ?? 0 } })} className={chip(clip.voiceFx === id)}>
+                    {t(fx.nameKey)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {clip.voiceFx && (
+        <div className="space-y-2 rounded-md border border-[#1c2430] bg-[#0e1320] p-2">
+          <div className="flex items-center justify-between text-[10px] text-zinc-400">
+            <span className="font-semibold text-zinc-200">{t(fxMeta?.nameKey ?? "vfx.title")}</span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => toggleAb(!ab)}
+                title={t("vfx.compareDesc")}
+                className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9px] transition ${
+                  ab ? "border-amber-500/60 bg-amber-500/15 text-amber-300" : "border-[#2c364c] bg-[#121824] text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <Ear className="h-3 w-3" /> A/B
+              </button>
+              <button
+                type="button"
+                onClick={listen}
+                title={t("vfx.listenDesc")}
+                className="flex items-center gap-1 rounded border border-[#2c364c] bg-[#121824] px-1.5 py-0.5 text-[9px] text-zinc-400 transition hover:text-zinc-200"
+              >
+                <Play className="h-3 w-3" /> {t("vfx.listen")}
+              </button>
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between text-[9px] text-zinc-400">
+              <span>{t("vfx.intensity")}</span>
+              <span className="font-mono text-[var(--gc-accent)]">{Math.round((params.intensity ?? 1) * 100)}%</span>
+            </div>
+            <Slider
+              value={[params.intensity ?? 1]}
+              min={0}
+              max={1}
+              step={0.05}
+              onValueChange={(v) => {
+                setParams({ intensity: v[0] });
+                if (v[0] > 0) setAb(false);
+              }}
+              className="mt-1"
+            />
+          </div>
+          {hasPitch && (
+            <div>
+              <div className="flex justify-between text-[9px] text-zinc-400">
+                <span>{t("vfx.tone")}</span>
+                <span className="font-mono text-[var(--gc-accent)]">{(params.pitch ?? 0) > 0 ? "+" : ""}{params.pitch ?? 0} st</span>
+              </div>
+              <Slider
+                value={[params.pitch ?? 0]}
+                min={-12}
+                max={12}
+                step={1}
+                onValueChange={(v) => setParams({ pitch: v[0] })}
+                className="mt-1"
+              />
+              <p className="mt-0.5 text-[8px] leading-tight text-zinc-600">{t("vfx.toneHint")}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

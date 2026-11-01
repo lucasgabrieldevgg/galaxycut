@@ -290,12 +290,10 @@ export function pickIaFile(files: IaFile[], kind: "video" | "audio"): IaFile | n
     const playable = files.filter(
       (f) => /\.(mp4|m4v|webm)$/i.test(f.name) && notSample(f) && size(f) > 0
     );
-    if (!playable.length) {
-      // último recurso: mkv direto (Chrome às vezes toca; melhor que nada)
-      const mkv = files.filter((f) => /\.mkv$/i.test(f.name) && notSample(f) && size(f) > 0);
-      if (mkv.length) return mkv.sort((a, b) => size(a) - size(b))[0];
-      return null;
-    }
+    // v9.4: o "último recurso" .mkv saiu — Chrome/Edge não decodificam mkv e o
+    // card virava uma PRÉVIA PRETA travada em 0:00. Sem arquivo jogável, o item
+    // mostra thumbnail + botão de abrir no site (honesto em vez de tela preta).
+    if (!playable.length) return null;
     // derivado leve (>= 1.5 MB pra não ser um sample)…
     const derived = playable.filter((f) => isDerived(f) && size(f) >= 1_500_000);
     if (derived.length) return derived.sort((a, b) => size(a) - size(b))[0];
@@ -330,6 +328,36 @@ export async function resolveIaFile(id: string): Promise<{ url: string; duration
   return { url: `https://archive.org/download/${id}/${encodeURIComponent(pick.name)}`, duration: parseIaLength(pick.length) };
 }
 
+/** cache de resolução IA (id → url|falha): cada item resolve UMA vez por sessão */
+const iaResolveCache = new Map<string, string>();
+
+/** Resolve a URL JOGÁVEL de um resultado de busca (v9.4).
+ *  - URL direta (mp4/webm/…) → ela mesma;
+ *  - item do Internet Archive → resolve via /metadata (com cache);
+ *  - falha → null (o chamador mostra thumbnail + “abrir no site” — NUNCA
+ *    alimenta o player com URL de página HTML, que virava tela preta 0:00). */
+export async function resolveStockPlayable(item: { id: string; url: string; provider?: string }): Promise<string | null> {
+  const isDirect =
+    item.url &&
+    (/\.(mp4|m4v|webm|mp3|ogg|oga|m4a|opus|wav|flac)(\?|$)/i.test(item.url) ||
+      item.url.includes("/download/") ||
+      item.url.startsWith("blob:") ||
+      item.url.startsWith("data:"));
+  if (isDirect) return item.url;
+  const isIa = item.id.startsWith("ia-") || (item.provider ?? "").includes("Internet Archive");
+  if (!isIa) return item.url;
+  const rawId = item.id.replace(/^ia-/, "");
+  const cached = iaResolveCache.get(rawId);
+  if (cached) return cached;
+  try {
+    const res = await resolveIaFile(rawId);
+    iaResolveCache.set(rawId, res.url);
+    return res.url;
+  } catch {
+    return null;
+  }
+}
+
 /** Baixa o arquivo direto da fonte (CORS). Se o host bloquear, abre em outra aba. */
 export async function downloadStockFile(url: string): Promise<Blob> {
   const r = await fetchT(url, { timeoutMs: 30000 });
@@ -339,9 +367,10 @@ export async function downloadStockFile(url: string): Promise<Blob> {
 
 // ---------- fontes ----------
 
-async function openverseImages(q: string, page: number): Promise<StockItem[]> {
-  const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=20&page=${page}&mature=false`;
-  const r = await fetchT(url);
+async function openverseImages(q: string, page: number, openverseKey?: string): Promise<StockItem[]> {
+  const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=${openverseKey ? 32 : 20}&page=${page}&mature=false`;
+  const headers: Record<string, string> = openverseKey ? { Authorization: `Bearer ${openverseKey}` } : {};
+  const r = await fetchT(url, { headers });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const data = await r.json();
   return (data.results ?? [])
@@ -460,16 +489,17 @@ export async function searchStickers(q: string, page = 1): Promise<StockItem[]> 
 async function openverseAudio(
   q: string,
   page: number,
-  opts: { category?: string; source?: string; noFilter?: boolean }
+  opts: { category?: string; source?: string; noFilter?: boolean; openverseKey?: string }
 ): Promise<StockItem[]> {
   let data: { results?: unknown[] } | null = null;
   let status = 500;
+  const headers: Record<string, string> = opts.openverseKey ? { Authorization: `Bearer ${opts.openverseKey}` } : {};
   const tries: { category?: string; source?: string }[] = opts.noFilter ? [{}] : [{ category: opts.category, source: opts.source }, {}];
   for (const f of tries) {
-    const params = new URLSearchParams({ q, page_size: "20", page: String(page), mature: "false" });
+    const params = new URLSearchParams({ q, page_size: opts.openverseKey ? "32" : "20", page: String(page), mature: "false" });
     if (f.category) params.set("category", f.category);
     if (f.source) params.set("source", f.source);
-    const r = await fetchT(`https://api.openverse.org/v1/audio/?${params.toString()}`);
+    const r = await fetchT(`https://api.openverse.org/v1/audio/?${params.toString()}`, { headers });
     status = r.status;
     if (!r.ok) continue;
     const d = await r.json();
@@ -651,6 +681,9 @@ export interface StockSearchParams {
   genre?: string;
   pexelsKey?: string;
   pixabayKey?: string;
+  /** v9.4: chave opcional do Openverse (aumenta o limite de taxa — sem chave
+   *  o anônimo vive batendo em 429/timeout; gratuita em openverse.org) */
+  openverseKey?: string;
   /** v9.2 busca avançada: só licenças livres (cc0/pdm/pexels/pixabay) ou com crédito */
   license?: "any" | "free" | "credit";
   /** v9.2 busca avançada: orientação (só faz sentido p/ imagem/vídeo) */
@@ -672,9 +705,107 @@ function inOrientation(item: StockItem, mode: "any" | "landscape" | "portrait"):
   return mode === "landscape" ? item.width >= item.height : item.height > item.width;
 }
 
-export async function searchStock(params: StockSearchParams): Promise<{ results: StockItem[]; translated: string | null }> {
+
+// ---------- v9.4: novas fontes de FOTOS (keyless, CC0) ----------
+// O Openverse anônimo vive limitando taxa — a aba Foto não podia mais depender
+// só dele. Met e Art Institute of Chicago são 100% sem chave, CC0, CORS aberto.
+
+/** The Met Museum (Nova York) — Open Access CC0, sem chave de API.
+ *  Search devolve objectIDs; cada objeto tem a imagem. Buscamos 14 por página
+ *  (o endpoint de objeto é por ID — em paralelo com limite). */
+async function metImages(q: string, page: number): Promise<StockItem[]> {
+  const r = await fetchT(
+    `https://collectionapi.metmuseum.org/public/collection/v1/search?q=${encodeURIComponent(q)}&hasImages=true`,
+    { timeoutMs: 10000 },
+  );
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = await r.json();
+  const ids: number[] = data?.objectIDs ?? [];
+  if (!ids.length) return [];
+  const perPage = 14;
+  const slice = ids.slice((page - 1) * perPage, (page - 1) * perPage + perPage);
+  if (!slice.length) return [];
+  const objs = await Promise.all(
+    slice.map((id) =>
+      fetchT(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`, { timeoutMs: 8000 })
+        .then((r2) => (r2.ok ? r2.json() : null))
+        .catch(() => null),
+    ),
+  );
+  const items: StockItem[] = [];
+  for (const o of objs) {
+    if (!o?.primaryImageSmall) continue; // nem todo objeto tem imagem pública
+    items.push({
+      id: `met-${o.objectID}`,
+      title: String(o.title ?? "Obra").slice(0, 80),
+      thumb: o.primaryImageSmall,
+      url: o.primaryImageSmall || o.primaryImage,
+      provider: "The Met (CC0)",
+      license: "cc0",
+      creator: o.artistDisplayName || undefined,
+    });
+  }
+  return items;
+}
+
+/** Art Institute of Chicago — domínio público, sem chave, IIIF.
+ *  A própria API já filtra is_public_domain e devolve image_id. */
+async function aicImages(q: string, page: number): Promise<StockItem[]> {
+  const url =
+    `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(q)}` +
+    `&query[term][is_public_domain]=true&fields=id,title,image_id,artist_title,width,height&page=${page}&limit=12`;
+  const r = await fetchT(url, { timeoutMs: 10000 });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = await r.json();
+  return (data?.data ?? [])
+    .filter((x: Record<string, unknown>) => !!x.image_id)
+    .map((x: Record<string, any>): StockItem => ({
+      id: `aic-${x.id}`,
+      title: String(x.title ?? "Obra").slice(0, 80),
+      thumb: `https://www.artic.edu/iiif/2/${x.image_id}/full/400,/0/default.jpg`,
+      url: `https://www.artic.edu/iiif/2/${x.image_id}/full/843,/0/default.jpg`,
+      provider: "Art Institute (CC0)",
+      license: "cc0",
+      width: x.width,
+      height: x.height,
+      creator: x.artist_title || undefined,
+    }));
+}
+
+/** Pexels FOTOS — reusa a MESMA chave dos vídeos (Configurações). */
+async function pexelsPhotos(q: string, page: number, key: string): Promise<StockItem[]> {
+  const r = await fetchT(
+    `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=20&page=${page}`,
+    { headers: { Authorization: key }, timeoutMs: 10000 },
+  );
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = await r.json();
+  return (data?.photos ?? [])
+    .map((x: Record<string, any>): StockItem => ({
+      id: `pxp-${x.id}`,
+      title: String(x.alt ?? "Foto").slice(0, 80),
+      thumb: x.src?.medium ?? x.src?.small ?? "",
+      url: x.src?.large ?? x.src?.original ?? "",
+      provider: "Pexels",
+      license: "pexels",
+      width: x.width,
+      height: x.height,
+      creator: x.photographer ?? undefined,
+    }))
+    .filter((x: StockItem) => !!x.url && !!x.thumb);
+}
+
+export interface StockSourceStatus {
+  name: string;
+  ok: boolean;
+  n: number;
+}
+
+export async function searchStock(
+  params: StockSearchParams,
+): Promise<{ results: StockItem[]; translated: string | null; sources: StockSourceStatus[] }> {
   const q = (params.q ?? "").trim();
-  if (!q) return { results: [], translated: null };
+  if (!q) return { results: [], translated: null, sources: [] };
   const type = params.type;
   const page = Math.max(1, Math.min(10, params.page ?? 1));
   const dur = params.dur ?? "any";
@@ -697,10 +828,16 @@ export async function searchStock(params: StockSearchParams): Promise<{ results:
   };
 
   const jobs: Promise<void>[] = [];
-  const run = async (fn: () => Promise<StockItem[]>) => {
+  // v9.4: saúde por fonte — quem caiu fica VISÍVEL na UI (antes o erro era
+  // engolido em silêncio e parecia que "não existiam resultados")
+  const sources: { name: string; ok: boolean; n: number }[] = [];
+  const run = async (name: string, fn: () => Promise<StockItem[]>) => {
     try {
-      push(await fn());
+      const items = await fn();
+      push(items);
+      sources.push({ name, ok: true, n: items.length });
     } catch {
+      sources.push({ name, ok: false, n: 0 });
       /* fonte caiu — as outras respondem */
     }
   };
@@ -711,27 +848,32 @@ export async function searchStock(params: StockSearchParams): Promise<{ results:
   const qMusicPt = withGenre(q);
 
   if (type === "image") {
-    jobs.push(run(() => openverseImages(en ?? q, page)));
-    jobs.push(run(() => commonsSearch(q, "bitmap", page)));
-    if (en) jobs.push(run(() => commonsSearch(en, "bitmap", page)));
-    if (params.pixabayKey) jobs.push(run(() => pixabayImages(en ?? q, page, params.pixabayKey!)));
+    // v9.4: a Foto não depende mais só do Openverse — Met, Art Institute e
+    // Pexels (fotos, com a chave dos vídeos) entram na dança.
+    jobs.push(run("Openverse", () => openverseImages(en ?? q, page, params.openverseKey)));
+    jobs.push(run("Wikimedia", () => commonsSearch(q, "bitmap", page)));
+    if (en) jobs.push(run("Wikimedia (EN)", () => commonsSearch(en, "bitmap", page)));
+    jobs.push(run("The Met", () => metImages(en ?? q, page)));
+    jobs.push(run("Art Institute", () => aicImages(en ?? q, page)));
+    if (params.pexelsKey) jobs.push(run("Pexels Fotos", () => pexelsPhotos(en ?? q, page, params.pexelsKey!)));
+    if (params.pixabayKey) jobs.push(run("Pixabay", () => pixabayImages(en ?? q, page, params.pixabayKey!)));
   } else if (type === "video") {
-    jobs.push(run(() => commonsSearch(en ?? q, "video", page)));
-    if (en) jobs.push(run(() => commonsSearch(q, "video", page)));
-    if (params.pexelsKey) jobs.push(run(() => pexelsVideos(en ?? q, page, params.pexelsKey!)));
-    if (params.pixabayKey) jobs.push(run(() => pixabayVideos(en ?? q, page, params.pixabayKey!)));
-    if (dur === "any") jobs.push(run(() => iaVideos(en ?? q, page))); // IA não tem duração na busca
+    jobs.push(run("Wikimedia", () => commonsSearch(en ?? q, "video", page)));
+    if (en) jobs.push(run("Wikimedia (PT)", () => commonsSearch(q, "video", page)));
+    if (params.pexelsKey) jobs.push(run("Pexels", () => pexelsVideos(en ?? q, page, params.pexelsKey!)));
+    if (params.pixabayKey) jobs.push(run("Pixabay", () => pixabayVideos(en ?? q, page, params.pixabayKey!)));
+    if (dur === "any") jobs.push(run("Internet Archive", () => iaVideos(en ?? q, page))); // IA não tem duração na busca
   } else if (type === "music") {
-    jobs.push(run(() => openverseAudio(qMusic, page, { category: "music" })));
-    if (en && qMusic !== qMusicPt) jobs.push(run(() => openverseAudio(qMusicPt, page, { category: "music" })));
-    jobs.push(run(() => iaAudio(qMusic, page, "music")));
+    jobs.push(run("Openverse", () => openverseAudio(qMusic, page, { category: "music", openverseKey: params.openverseKey })));
+    if (en && qMusic !== qMusicPt) jobs.push(run("Openverse (PT)", () => openverseAudio(qMusicPt, page, { category: "music", openverseKey: params.openverseKey })));
+    jobs.push(run("Internet Archive", () => iaAudio(qMusic, page, "music")));
   } else {
     // EFEITO: Freesound via Openverse + fallback Internet Archive (v9.1: sem
     // isso, a aba ficava vazia sempre que o Openverse caía/limitava a taxa)
-    jobs.push(run(() => openverseAudio(en ?? q, page, { source: "freesound" })));
-    jobs.push(run(() => openverseAudio(`${en ?? q} sound effect`, page, { noFilter: true })));
-    jobs.push(run(() => iaAudio(`${en ?? q} sound effect`, page, "sfx")));
-    if (en) jobs.push(run(() => openverseAudio(`${q} efeito sonoro`, page, { source: "freesound" })));
+    jobs.push(run("Freesound", () => openverseAudio(en ?? q, page, { source: "freesound", openverseKey: params.openverseKey })));
+    jobs.push(run("Openverse", () => openverseAudio(`${en ?? q} sound effect`, page, { noFilter: true, openverseKey: params.openverseKey })));
+    jobs.push(run("Internet Archive", () => iaAudio(`${en ?? q} sound effect`, page, "sfx")));
+    if (en) jobs.push(run("Freesound (PT)", () => openverseAudio(`${q} efeito sonoro`, page, { source: "freesound", openverseKey: params.openverseKey })));
   }
 
   await Promise.all(jobs);
@@ -755,5 +897,5 @@ export async function searchStock(params: StockSearchParams): Promise<{ results:
   const relevant = scored.filter((r) => (r.score ?? 0) > 0);
   const finalList = relevant.length >= 6 || tokens.length === 0 ? relevant : scored.slice(0, 12);
 
-  return { results: finalList.slice(0, 40), translated: en };
+  return { results: finalList.slice(0, 40), translated: en, sources };
 }

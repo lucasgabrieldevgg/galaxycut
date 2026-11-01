@@ -427,6 +427,25 @@ function StockKeysTab() {
           {t("st.getKey", { name: "Pixabay" })} <ExternalLink className="h-3 w-3" />
         </a>
       </div>
+      <div>
+        <Label className="mb-1 block text-[11px] text-zinc-400">{t("st.openverseKey")}</Label>
+        <Input
+          type="password"
+          value={keys.openverse}
+          onChange={(e) => set({ keys: { ...keys, openverse: e.target.value.trim() } })}
+          placeholder={t("st.optional")}
+          className="h-8 border-[#2a3546] bg-[#0e1320] text-xs text-zinc-200 placeholder:text-zinc-600"
+        />
+        <a
+          href="https://api.openverse.org/v1/"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 inline-flex items-center gap-1 text-[10px] text-[var(--gc-accent)] hover:underline"
+        >
+          {t("st.getKey", { name: "Openverse" })} <ExternalLink className="h-3 w-3" />
+        </a>
+        <p className="mt-1 text-[10px] leading-snug text-zinc-500">{t("st.openverseKeyHint")}</p>
+      </div>
       <div className="rounded-lg border border-[#2a3546] bg-[#0e1320] p-3">
         <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{t("st.licenses")}</p>
         <p className="text-[10px] leading-relaxed text-zinc-500">{t("st.licensesNote")}</p>

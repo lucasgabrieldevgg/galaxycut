@@ -233,11 +233,12 @@ export function RecordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         const at = usePlayback.getState().playhead;
         const out = st.dropMediaAt(meta.id, audioTrack.id, at);
         if (out?.clip) {
-          // Salva os filtros OBS no próprio clipe
-          st.updateClip(out.clip.id, {
-            enhance: filtersEnabled,
-            audioFilters: filtersEnabled ? filterConfig : undefined,
-          });
+          // v9.4: os filtros OBS já são gravados DENTRO do wav (a cadeia de
+          // gravação processa o microfone ao vivo) — regravar enhance/filtros
+          // no clipe aplicava o processamento UMA SEGUNDA vez na reprodução.
+          // O clipe nasce limpo; quem quiser mais, abre os filtros depois.
+          void filtersEnabled;
+          void filterConfig;
         }
         const dur = buf.duration.toFixed(1);
         if (out?.redirected) {

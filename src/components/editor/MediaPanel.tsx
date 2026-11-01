@@ -45,6 +45,7 @@ import {
 import { SubtitleDialog } from "./SubtitleDialog";
 import { StockSearch } from "./StockSearch";
 import { LibraryPlayerBar } from "./LibraryPlayerBar";
+import { openTrimDialog, trimAutoDismissed } from "./TrimDialog";
 import { RecordDialog } from "./RecordDialog";
 import { ConvertMediaDialog } from "./ConvertMediaDialog";
 import { useT } from "@/lib/editor/i18n";
@@ -298,24 +299,13 @@ export function MediaPanel() {
           : t("mp.importedN", { n: ok })
       );
 
-      // v9.2 — “cortar vídeo na mídia” na JANELA DE IMPORTAÇÃO: quando entra UM
-      // vídeo (arquivo único), abre o editor de PARTES direto pra escolher os
-      // trechos antes de jogar na timeline (com “não mostrar de novo” na dica).
-      // Vários arquivos de uma vez? Não interrompe — o ✂ fica no card.
-      if (importedVideos.length === 1 && mediaFiles.length === 1) {
+      // v9.4 — CORTE NA IMPORTAÇÃO, reformulado: modal centralizado (TrimDialog)
+      // com prévia grande, forma de onda, extremidades arrastáveis, medidor dB e
+      // subpartes sequenciais. "Não mostrar de novo" é respeitado; o ✂ do card
+      // e o menu do clipe na timeline continuam abrindo o corte depois.
+      if (importedVideos.length === 1 && mediaFiles.length === 1 && !trimAutoDismissed()) {
         const v = importedVideos[0];
-        const url = await registry.ensureUrl(v.id);
-        if (url) {
-          openLibPlayer({
-            id: v.id,
-            title: v.name,
-            url,
-            kind: "video",
-            thumb: v.thumbnail,
-            duration: v.duration,
-            parts: true,
-          });
-        }
+        openTrimDialog({ mediaId: v.id, fromImport: true });
       } else if (importedVideos.length > 1) {
         toast.info(t("mp.partsHintMany", { n: importedVideos.length }));
       }
@@ -442,7 +432,27 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
       }
     }
 
-    if (!scanned.length) return;
+    if (!scanned.length) {
+      // v9.4: nada de ARQUIVO no drop — mas pode ser uma IMAGEM ARRASTADA de
+      // outra página (Google Imagens etc.): o navegador entrega a URL.
+      const uri =
+        e.dataTransfer.getData("text/uri-list") ||
+        e.dataTransfer.getData("text/x-moz-url") ||
+        e.dataTransfer.getData("text/plain");
+      const url = uri.split("\n")[0].trim();
+      if (/^https?:\/\//i.test(url)) {
+        const tid = toast.loading(t("mp.importingUrl"));
+        const ok = await importImageFromUrl(url);
+        if (ok) {
+          toast.success(t("mp.urlImported"), { id: tid, description: t("mp.urlImportedDesc") });
+        } else {
+          toast.error(t("mp.urlFailed"), { id: tid, description: t("mp.urlFailedDesc") });
+        }
+      } else if (url) {
+        toast.info(t("mp.urlNotImage"));
+      }
+      return;
+    }
 
     const folderCache = new Map<string, string>();
     const getTargetFolderId = (pathArr: string[]): string | null => {
@@ -486,11 +496,54 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
     }
   }
 
+  /** v9.4: importa uma imagem de URL (drop do Google Imagens / outra aba).
+   *  Baixa direto; se o host bloquear CORS, tenta o proxy /api/img-proxy
+   *  (deploy web). Sem proxy (dev/desktop offline) falha com aviso honesto. */
+  async function importImageFromUrl(url: string): Promise<boolean> {
+    try {
+      let blob: Blob | null = null;
+      // 1) download direto (a maioria dos hosts de imagem permite)
+      try {
+        const r = await fetch(url, { mode: "cors" });
+        if (r.ok && (r.headers.get("content-type") ?? "").startsWith("image/")) {
+          blob = await r.blob();
+        }
+      } catch {
+        /* CORS bloqueado — cai pro proxy */
+      }
+      // 2) proxy do deploy (só existe no host público)
+      if (!blob) {
+        const origin = typeof location !== "undefined" ? location.origin : "";
+        const isLocalHost = /^(http:\/\/localhost|http:\/\/127\.0\.0\.1|file:)/i.test(origin);
+        if (origin && !isLocalHost) {
+          try {
+            const r2 = await fetch(`${origin}/api/img-proxy?u=${encodeURIComponent(url)}`);
+            if (r2.ok && (r2.headers.get("content-type") ?? "").startsWith("image/")) {
+              blob = await r2.blob();
+            }
+          } catch {
+            /* proxy também não deu */
+          }
+        }
+      }
+      if (!blob || !blob.type.startsWith("image/")) return false;
+      const rawName = decodeURIComponent(url.split("/").pop()?.split("?")[0] ?? "");
+      const hasExt = /\.(png|jpe?g|webp|gif|bmp|avif|svg)$/i.test(rawName);
+      const ext = hasExt ? "" : `.${(blob.type.split("/")[1] || "png").replace("jpeg", "jpg")}`;
+      const name = `${(rawName || "imagem").slice(0, 60)}${ext}`;
+      const meta = await registry.importFile(blob, name);
+      useProject.getState().addMedia({ ...meta, source: "stock", stockUrl: url, license: "unknown", licenseLabel: "unknown" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function handlePanelDragEnter(e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
     dragCounter.current++;
-    if (e.dataTransfer.types.includes("Files")) {
+    if (e.dataTransfer.types.includes("Files") || e.dataTransfer.types.includes("text/uri-list")) {
       setIsDraggingOver(true);
     }
   }
@@ -885,23 +938,13 @@ async function scanEntry(entry: ScanEntry, currentPath: string[]): Promise<{ fil
                         {m.name}
                       </span>
                       <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
-                        {/* v9.2: ✂ PARTES — escolher trechos (vários!) antes de
-                            jogar na timeline; fica do lado do converter/excluir */}
+                        {/* v9.4: ✂ — abre o diálogo de corte (TrimDialog), com
+                            as últimas subpartes salvas dessa mídia já prontas */}
                         {(m.kind === "video" || m.kind === "audio") && m.source !== "stock" && (
                           <button
-                            onClick={async (e) => {
+                            onClick={(e) => {
                               e.stopPropagation();
-                              const playUrl = await registry.ensureUrl(m.id);
-                              if (!playUrl) return;
-                              openLibPlayer({
-                                id: m.id,
-                                title: m.name,
-                                url: playUrl,
-                                kind: m.kind as "video" | "audio",
-                                thumb: m.thumbnail,
-                                duration: m.duration,
-                                parts: true,
-                              });
+                              openTrimDialog({ mediaId: m.id });
                             }}
                             className="text-zinc-500 transition hover:text-[var(--gc-accent)]"
                             title={t("mp.partsBtn")}

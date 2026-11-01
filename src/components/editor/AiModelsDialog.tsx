@@ -1,6 +1,6 @@
-// GalaxyCut — catálogo de modelos de IA: o que cada modelo faz, quanto baixa,
-// o que exige de máquina e o que roda 100% local. As tarefas são DECLARADAS
-// (não é tudo "transcrição") — o que ainda não roda no app vem "em breve".
+// GalaxyCut — catálogo de modelos de IA. REGRA v9.4: só modelo que RODA.
+// Nada de card "em breve" com cara de produto — categorias sem modelo
+// funcional aparecem com um estado vazio honesto.
 "use client";
 
 import { useState } from "react";
@@ -37,6 +37,22 @@ export function AiModelsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const shown = task === "all" ? AI_MODELS : AI_MODELS.filter((m) => m.task === task);
   const taskName = (id: AiTaskId) => t(AI_TASKS.find((x) => x.id === id)?.nameKey ?? "ai.taskTranscribe");
 
+  const activateModel = (m: AiModelInfo) => {
+    if (m.action === "whisper") {
+      // v9.4: guarda APENAS para ids válidos de Whisper — antes o clique em
+      // qualquer card gravava lixo em whisperModel e a transcrição caía no tiny
+      if (m.id === "tiny" || m.id === "base" || m.id === "small" || m.id === "medium") {
+        setSettings({ whisperModel: m.id });
+      }
+      return;
+    }
+    if (m.action === "transform") {
+      // abre o diálogo de transformação de voz com o modelo escolhido
+      window.dispatchEvent(new CustomEvent("galaxycut:opentransformvoice", { detail: { model: m.id } }));
+      onOpenChange(false);
+    }
+  };
+
   const chip = (active: boolean, available: boolean) =>
     `rounded-full border px-2.5 py-1 text-[11px] transition ${
       active
@@ -56,7 +72,7 @@ export function AiModelsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <DialogDescription className="text-zinc-400">{t("ai.intro")}</DialogDescription>
         </DialogHeader>
 
-        {/* tarefas declaradas: o que cada modelo FAZ (não é tudo transcrição) */}
+        {/* tarefas declaradas: o que cada modelo FAZ */}
         <div>
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{t("ai.tasks")}</p>
           <div className="flex flex-wrap gap-1.5">
@@ -66,23 +82,29 @@ export function AiModelsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             {AI_TASKS.map((x) => (
               <button key={x.id} type="button" onClick={() => setTask(x.id)} className={chip(task === x.id, x.available)}>
                 {t(x.nameKey)}
-                {!x.available && <span className="text-zinc-600"> · {t("ai.soon")}</span>}
+                {!x.available && <span className="text-zinc-600"> · {t("ai.none")}</span>}
               </button>
             ))}
           </div>
         </div>
 
-        {/* modelos */}
+        {/* modelos — todos listados aqui RODAM no app */}
         <div className="space-y-2">
           {shown.map((m) => (
             <ModelCard
               key={m.id}
               m={m}
               taskName={taskName(m.task)}
-              current={m.status === "built-in" && m.id === model}
-              onPick={() => setSettings({ whisperModel: m.id as "tiny" | "base" | "small" })}
+              current={m.action === "whisper" && m.id === model}
+              onPick={() => activateModel(m)}
             />
           ))}
+          {shown.length === 0 && (
+            <div className="rounded-lg border border-dashed border-[#232d3d] bg-transparent p-4 text-center">
+              <p className="text-xs font-medium text-zinc-400">{t("ai.emptyTitle")}</p>
+              <p className="mt-1 text-[11px] leading-snug text-zinc-600">{t("ai.emptyDesc")}</p>
+            </div>
+          )}
         </div>
 
         <p className="text-[11px] leading-snug text-zinc-500">{t("ai.footNote")}</p>
@@ -113,15 +135,10 @@ function ModelCard({
   onPick: () => void;
 }) {
   const t = useT();
-  const planned = m.status === "planned";
   return (
     <div
       className={`rounded-lg border p-3 text-left transition ${
-        current
-          ? "border-[var(--gc-accent)] bg-[var(--gc-accent-7)]"
-          : planned
-            ? "border-[#232d3d] bg-[#0e1320]"
-            : "border-[#232d3d] bg-[#10151d] hover:border-[#2a3546]"
+        current ? "border-[var(--gc-accent)] bg-[var(--gc-accent-7)]" : "border-[#232d3d] bg-[#10151d] hover:border-[#2a3546]"
       }`}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -134,9 +151,9 @@ function ModelCard({
             {t("ai.current")}
           </span>
         )}
-        {planned && (
-          <span className="rounded-full border border-[#2a3546] px-2 py-0.5 text-[10px] text-zinc-500">{t("ai.soon")}</span>
-        )}
+        <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400">
+          {t("ai.ready")}
+        </span>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-zinc-400">
@@ -164,7 +181,7 @@ function ModelCard({
         )}
       </div>
 
-      {m.status === "built-in" && !current && (
+      {!current && (
         <button
           type="button"
           onClick={onPick}
@@ -173,7 +190,6 @@ function ModelCard({
           {t("ai.use")} →
         </button>
       )}
-      {planned && <p className="mt-1.5 text-[10px] text-zinc-600">{t("ai.planned")}</p>}
     </div>
   );
 }

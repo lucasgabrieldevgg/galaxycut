@@ -18,8 +18,9 @@ import type { WebCodecsHost } from "./webcodecs";
 import { useProject, computeEffectiveDuration } from "./store";
 import { registry } from "./media";
 import { drawFrame } from "./render";
-import { Clip, clipEnd } from "./types";
-import { buildVoiceChain } from "./voiceFx";
+import { Clip, clipEnd, DEFAULT_AUDIO_FILTERS } from "./types";
+import type { AudioFilterConfig } from "./types";
+import { buildVoiceChain, ensureVoicePitch } from "./voiceFx";
 
 export interface OfflineProgressInfo {
   stage: "prepare" | "render" | "finish";
@@ -137,6 +138,11 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
   const probe = new AC();
   const OAC: typeof OfflineAudioContext = window.OfflineAudioContext;
   const off = new OAC(2, Math.max(1, Math.ceil(duration * 48000)), 48000);
+  // v9.4: carrega o worklet de pitch no contexto offline ANTES de montar as
+  // vias — sem isso os efeitos de altura (aguda/grave/personagens) exportariam
+  // em bypass (sem pitch) sem ninguém perceber.
+  const pitchOk = await ensureVoicePitch(off).catch(() => false);
+  void pitchOk;
   const decoded = new Map<string, AudioBuffer | null>();
 
   const uniqueIds = [...new Set(audible.map((c) => c.mediaId).filter(Boolean))] as string[];
@@ -188,14 +194,36 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
       gain.gain.setValueAtTime(g0, Math.max(start, end - c.fadeOut));
       gain.gain.linearRampToValueAtTime(0.0001, end);
     }
+
+    // v9.4: cadeia OBS também no mix offline — antes "Melhorar áudio" e os
+    // filtros de compressor/limitador só existiam na prévia (a exportação
+    // saía seca). Agora prévia = exportação de verdade.
+    const filters: AudioFilterConfig | undefined =
+      c.audioFilters && c.audioFilters.enabled
+        ? c.audioFilters
+        : c.enhance
+          ? { ...DEFAULT_AUDIO_FILTERS, enabled: true }
+          : undefined;
+
     if (c.voiceFx) {
       // efeito de voz: o MESMO grafo do preview, agora no mix offline
-      // (paridade preview=exportação por construção)
-      const lane = buildVoiceChain(off);
-      lane.setFx(c.voiceFx, 0);
+      // (paridade preview=exportação por construção). only= monta só a via
+      // necessária — 30 vias por clipe seria peso à toa.
+      const lane = buildVoiceChain(off, { only: c.voiceFx });
+      lane.setFx(c.voiceFx, 0, c.voiceFxParams ?? { intensity: 1, pitch: 0 });
       src.connect(gain);
+      let tail: AudioNode = lane.output;
+      if (filters) {
+        tail = buildObsChain(off, filters);
+        lane.output.connect(tail);
+      }
       gain.connect(lane.input);
-      lane.output.connect(off.destination);
+      tail.connect(off.destination);
+    } else if (filters) {
+      const obs = buildObsChain(off, filters);
+      src.connect(gain);
+      gain.connect(obs);
+      obs.connect(off.destination);
     } else {
       src.connect(gain).connect(off.destination);
     }
@@ -204,6 +232,41 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
     src.start(start, offsetInBuf, durInBuf);
   }
   return off.startRendering();
+}
+
+/** cadeia OBS offline (highpass → compressor → limitador → makeup), igual à
+ *  do preview em audio.ts — usada no mix de exportação */
+function buildObsChain(ctx: BaseAudioContext, f: AudioFilterConfig): AudioNode {
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = f.highpassEnabled ? Math.max(20, Math.min(1000, f.highpassFrequency || 85)) : 20;
+  const comp = ctx.createDynamicsCompressor();
+  if (f.compressorEnabled) {
+    comp.threshold.value = f.compressorThreshold ?? -24;
+    comp.ratio.value = f.compressorRatio ?? 3.5;
+    comp.attack.value = Math.max(0.001, (f.compressorAttack ?? 6) / 1000);
+    comp.release.value = Math.max(0.01, (f.compressorRelease ?? 250) / 1000);
+    comp.knee.value = 14;
+  } else {
+    comp.threshold.value = 0;
+    comp.ratio.value = 1;
+  }
+  const limiter = ctx.createDynamicsCompressor();
+  if (f.limiterEnabled) {
+    limiter.threshold.value = f.limiterThreshold ?? -1.5;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+    limiter.release.value = Math.max(0.01, (f.limiterRelease ?? 100) / 1000);
+  } else {
+    limiter.threshold.value = 0;
+    limiter.ratio.value = 1;
+  }
+  const makeup = ctx.createGain();
+  makeup.gain.value = f.compressorEnabled ? Math.pow(10, (f.compressorMakeupGain ?? 2) / 20) : 1;
+  const out = ctx.createGain();
+  if (f.gainDb) out.gain.value = Math.pow(10, f.gainDb / 20);
+  hp.connect(comp).connect(limiter).connect(makeup).connect(out);
+  return out;
 }
 
 // ---------- pool de elementos DEDICADOS à exportação ----------

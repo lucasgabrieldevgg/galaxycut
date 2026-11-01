@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Sliders, Volume2, ShieldAlert, Waves, Sparkles, RefreshCw } from "lucide-react";
 import { AudioFilterConfig, DEFAULT_AUDIO_FILTERS } from "@/lib/editor/types";
-import { VOICE_FX, VOICE_FX_PLANNED, type VoiceFxId } from "@/lib/editor/voiceFx";
+import { VOICE_FX, PITCH_FX, type VoiceFxId, type VoiceFxParams } from "@/lib/editor/voiceFx";
 import { useT } from "@/lib/editor/i18n";
 
 interface AudioFiltersDialogProps {
@@ -18,9 +18,12 @@ interface AudioFiltersDialogProps {
   onApply: (filters: AudioFilterConfig) => void;
   title?: string;
   description?: string;
-  /** efeito de voz do clipe (robô/rádio/megafone/eco) — vale no preview E na exportação */
+  /** efeito de voz do clipe — vale no preview E na exportação */
   voiceFx?: VoiceFxId | null;
   onVoiceFx?: (id: VoiceFxId | null) => void;
+  /** parâmetros do efeito de voz (intensidade/tonalidade) */
+  voiceFxParams?: VoiceFxParams | null;
+  onVoiceFxParams?: (p: VoiceFxParams | null) => void;
 }
 
 const PRESETS: { id: string; name: string; desc: string; config: AudioFilterConfig }[] = [
@@ -123,6 +126,8 @@ export function AudioFiltersDialog({
   description = "Ajuste os processadores de sinal (DSP) em tempo real para tratar ruídos e dar presença de estúdio.",
   voiceFx = null,
   onVoiceFx,
+  voiceFxParams = null,
+  onVoiceFxParams,
 }: AudioFiltersDialogProps) {
   const t = useT();
   const [config, setConfig] = useState<AudioFilterConfig>({ ...DEFAULT_AUDIO_FILTERS, ...filters });
@@ -171,7 +176,7 @@ export function AudioFiltersDialog({
         {onVoiceFx && (
           <div className="mb-3">
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{t("vfx.title")}</p>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid max-h-36 grid-cols-3 gap-1.5 overflow-y-auto rounded-md border border-[#1c2430] bg-[#0a0f18] p-1.5">
               <VoiceFxBtn active={voiceFx == null} onClick={() => onVoiceFx(null)} label={t("vfx.none")} title={t("vfx.note")} />
               {VOICE_FX.map((fx) => (
                 <VoiceFxBtn
@@ -182,10 +187,41 @@ export function AudioFiltersDialog({
                   title={t(fx.descKey)}
                 />
               ))}
-              {VOICE_FX_PLANNED.map((fx) => (
-                <VoiceFxBtn key={fx.nameKey} disabled label={`${t(fx.nameKey)} · ${t("ai.soon")}`} title={t(fx.descKey)} />
-              ))}
             </div>
+            {voiceFx && onVoiceFxParams && (
+              <div className="mt-2 space-y-2 rounded-md border border-[#1c2430] bg-[#0e1320] p-2">
+                <div>
+                  <div className="flex justify-between text-[10px] text-zinc-400">
+                    <span>{t("vfx.intensity")}</span>
+                    <span className="font-mono text-[var(--gc-accent)]">{Math.round((voiceFxParams?.intensity ?? 1) * 100)}%</span>
+                  </div>
+                  <Slider
+                    value={[voiceFxParams?.intensity ?? 1]}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    onValueChange={(v) => onVoiceFxParams({ ...(voiceFxParams ?? {}), intensity: v[0] })}
+                    className="mt-1"
+                  />
+                </div>
+                {PITCH_FX.has(voiceFx) && (
+                  <div>
+                    <div className="flex justify-between text-[10px] text-zinc-400">
+                      <span>{t("vfx.tone")}</span>
+                      <span className="font-mono text-[var(--gc-accent)]">{(voiceFxParams?.pitch ?? 0) > 0 ? "+" : ""}{voiceFxParams?.pitch ?? 0} st</span>
+                    </div>
+                    <Slider
+                      value={[voiceFxParams?.pitch ?? 0]}
+                      min={-12}
+                      max={12}
+                      step={1}
+                      onValueChange={(v) => onVoiceFxParams({ intensity: voiceFxParams?.intensity ?? 1, pitch: v[0] })}
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

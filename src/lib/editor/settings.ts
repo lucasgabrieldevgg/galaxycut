@@ -24,7 +24,7 @@ export interface AppSettings {
   captionMaxWords: 1 | 2 | 3 | 4; // palavras por caixa de legenda (anti-inundação)
   captionPos: { x: number; y: number }; // posição global das legendas (-1..1)
   whisperModel: "tiny" | "base" | "small" | "medium";
-  keys: { pexels: string; pixabay: string };
+  keys: { pexels: string; pixabay: string; openverse: string };
   /** verificador de atualização automático (mostra changelog quando sai versão nova) */
   autoUpdateCheck: boolean;
   /** autosave em DISCO (app de desktop): intervalo em minutos (0 = desligado) */
@@ -58,7 +58,7 @@ function load(): Partial<AppSettings> {
       ...parsed,
       captionMaxWords: parsed.captionMaxWords ?? 4,
       captionPos: parsed.captionPos ?? { x: 0, y: 0.62 },
-      keys: { pexels: "", pixabay: "", ...(parsed.keys ?? {}) },
+      keys: { pexels: "", pixabay: "", openverse: "", ...(parsed.keys ?? {}) },
       autoUpdateCheck: parsed.autoUpdateCheck ?? true,
       autosaveMin: parsed.autosaveMin ?? 2,
       accent: parsed.accent ?? "galaxy",
@@ -107,7 +107,7 @@ export const useSettings = create<AppSettings>((set, get) => ({
   captionMaxWords: 4,
   captionPos: { x: 0, y: 0.62 },
   whisperModel: "base",
-  keys: { pexels: "", pixabay: "" },
+  keys: { pexels: "", pixabay: "", openverse: "" },
   autoUpdateCheck: true,
   autosaveMin: 2,
   accent: "galaxy",

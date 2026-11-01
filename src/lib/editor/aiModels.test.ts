@@ -12,9 +12,15 @@ describe("catálogo de modelos de IA", () => {
     }
   });
 
-  it("os modelos embutidos são os 4 Whisper (tiny/base/small/medium) + efeitos de voz", () => {
+  it("v9.4: embutidos = 4 Whisper + 4 motores de transformação de voz (todos funcionais)", () => {
     const builtIn = AI_MODELS.filter((m) => m.status === "built-in").map((m) => m.id).sort();
-    expect(builtIn).toEqual(["base", "medium", "small", "tiny", "voicefx"]);
+    expect(builtIn).toEqual(["base", "medium", "small", "tiny", "vt-f2m", "vt-idosa", "vt-jovem", "vt-m2f"]);
+  });
+
+  it("v9.4: nenhum modelo fictício — todo card tem ação real (whisper/transform)", () => {
+    for (const m of AI_MODELS) {
+      expect(["whisper", "transform"]).toContain(m.action);
+    }
   });
 
   it("toda chave de i18n citada existe no dicionário PT", () => {

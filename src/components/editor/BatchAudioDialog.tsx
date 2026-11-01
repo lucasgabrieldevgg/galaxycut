@@ -4,10 +4,12 @@
 import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Wand2, Sliders, Volume2, Film, Music, Sparkles } from "lucide-react";
+import { Wand2, Sliders, Volume2, Film, Music, Sparkles, Mic } from "lucide-react";
 import { useProject } from "@/lib/editor/store";
 import { AudioFilterConfig, DEFAULT_AUDIO_FILTERS } from "@/lib/editor/types";
 import { AudioFiltersDialog } from "./AudioFiltersDialog";
+import { VOICE_FX, type VoiceFxId } from "@/lib/editor/voiceFx";
+import { useT } from "@/lib/editor/i18n";
 import { toast } from "sonner";
 import { engine } from "@/lib/editor/playback";
 
@@ -28,9 +30,11 @@ export function BatchAudioDialog({ open, onOpenChange }: { open: boolean; onOpen
   // Conjunto de IDs selecionados (por padrão, TODOS selecionados como pedido pelo usuário!)
   const [selectedClipIds, setSelectedClipIds] = useState<Set<string>>(new Set());
   const [prevOpen, setPrevOpen] = useState(false);
-  const [actionType, setActionType] = useState<"obs_enhance" | "custom_filters" | "remove">("obs_enhance");
+  const [actionType, setActionType] = useState<"obs_enhance" | "custom_filters" | "voice_fx" | "remove">("obs_enhance");
   const [customFilters, setCustomFilters] = useState<AudioFilterConfig>(DEFAULT_AUDIO_FILTERS);
   const [customFiltersOpen, setCustomFiltersOpen] = useState(false);
+  const [batchVoiceFx, setBatchVoiceFx] = useState<VoiceFxId | null>(null);
+  const t = useT();
 
   // Inicializa com todos selecionados ao abrir o diálogo
   if (open !== prevOpen) {
@@ -86,6 +90,16 @@ export function BatchAudioDialog({ open, onOpenChange }: { open: boolean; onOpen
         audioFilters: DEFAULT_AUDIO_FILTERS,
       });
       toast.success(`Melhoria de áudio aplicada em ${targetIds.length} clipe(s)!`);
+    } else if (actionType === "voice_fx") {
+      if (!batchVoiceFx) {
+        toast.warning("Escolha um efeito de voz para aplicar.");
+        return;
+      }
+      st.updateClips(targetIds, {
+        voiceFx: batchVoiceFx,
+        voiceFxParams: { intensity: 1, pitch: 0 },
+      });
+      toast.success(`${t(VOICE_FX.find((f) => f.id === batchVoiceFx)?.nameKey ?? "vfx.title")} aplicado em ${targetIds.length} clipe(s)!`);
     } else if (actionType === "custom_filters") {
       st.updateClips(targetIds, {
         enhance: true,
@@ -96,8 +110,10 @@ export function BatchAudioDialog({ open, onOpenChange }: { open: boolean; onOpen
       st.updateClips(targetIds, {
         enhance: false,
         audioFilters: undefined,
+        voiceFx: undefined,
+        voiceFxParams: undefined,
       });
-      toast.info(`Filtros removidos de ${targetIds.length} clipe(s).`);
+      toast.info(`Processamento removido de ${targetIds.length} clipe(s).`);
     }
 
     engine.markDirty();
@@ -119,7 +135,7 @@ export function BatchAudioDialog({ open, onOpenChange }: { open: boolean; onOpen
           </DialogHeader>
 
           {/* Opções de Ação */}
-          <div className="grid grid-cols-3 gap-2 py-2">
+          <div className="grid grid-cols-4 gap-2 py-2">
             <button
               type="button"
               onClick={() => setActionType("obs_enhance")}
@@ -153,6 +169,20 @@ export function BatchAudioDialog({ open, onOpenChange }: { open: boolean; onOpen
 
             <button
               type="button"
+              onClick={() => setActionType("voice_fx")}
+              className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-center transition-colors ${
+                actionType === "voice_fx"
+                  ? "border-[var(--gc-accent)] bg-[var(--gc-accent)]/15 text-white"
+                  : "border-[#1e2638] bg-[#141a26] text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <Mic className="h-4 w-4 mb-1 text-fuchsia-400" />
+              <span className="text-xs font-semibold">Efeito de Voz</span>
+              <span className="text-[10px] text-zinc-400 mt-0.5">30 efeitos</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActionType("remove")}
               className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-center transition-colors ${
                 actionType === "remove"
@@ -165,6 +195,30 @@ export function BatchAudioDialog({ open, onOpenChange }: { open: boolean; onOpen
               <span className="text-[10px] text-zinc-400 mt-0.5">Áudio original limpo</span>
             </button>
           </div>
+
+          {/* Seletor de efeito de voz (ação em lote) */}
+          {actionType === "voice_fx" && (
+            <div className="rounded-lg border border-[#1e2638] bg-[#0c1017] p-2">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{t("vfx.pickBatch")}</p>
+              <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">
+                {VOICE_FX.map((fx) => (
+                  <button
+                    key={fx.id}
+                    type="button"
+                    title={t(fx.descKey)}
+                    onClick={() => setBatchVoiceFx(fx.id)}
+                    className={`rounded-full border px-2 py-0.5 text-[10px] transition ${
+                      batchVoiceFx === fx.id
+                        ? "border-[var(--gc-accent)] bg-[var(--gc-accent-10)] text-[var(--gc-accent)] font-semibold"
+                        : "border-[#2c364c] bg-[#121824] text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    {t(fx.nameKey)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Barra de Selecionar Todos */}
           <div className="flex items-center justify-between border-y border-[#1e2638] bg-[#0c1017] px-3 py-2">
@@ -259,6 +313,11 @@ export function BatchAudioDialog({ open, onOpenChange }: { open: boolean; onOpen
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
+                              {clip.voiceFx && (
+                                <span className="flex items-center gap-1 rounded bg-fuchsia-500/20 px-1.5 py-0.5 text-[9px] font-bold text-fuchsia-300">
+                                  <Mic className="h-2.5 w-2.5" /> {t(VOICE_FX.find((f) => f.id === clip.voiceFx)?.nameKey ?? "vfx.title")}
+                                </span>
+                              )}
                               {clip.enhance && (
                                 <span className="flex items-center gap-1 rounded bg-[var(--gc-accent)]/20 px-1.5 py-0.5 text-[9px] font-bold text-[var(--gc-accent)]">
                                   <Sparkles className="h-2.5 w-2.5" /> Melhorado

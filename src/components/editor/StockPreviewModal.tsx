@@ -22,8 +22,10 @@ import {
   Maximize,
   Minimize,
   Repeat,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
-import { StockItem, resolveIaFile } from "@/lib/editor/stockClient";
+import { StockItem, resolveStockPlayable } from "@/lib/editor/stockClient";
 import { useFavorites } from "@/lib/editor/favorites";
 import { licenseLevel, LICENSE_STYLE } from "@/lib/editor/types";
 
@@ -44,6 +46,7 @@ function fmt(t: number): string {
 export function StockPreviewModal({ item, open, onOpenChange, onAddStock }: StockPreviewModalProps) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [dur, setDur] = useState(0);
@@ -67,50 +70,35 @@ export function StockPreviewModal({ item, open, onOpenChange, onAddStock }: Stoc
       setPlaying(false);
       setTime(0);
       setDur(0);
+      setFailed(false);
       return;
     }
 
     let active = true;
+    setFailed(false);
 
-    const isDirect =
-      item.url &&
-      (item.url.startsWith("blob:") ||
-        item.url.startsWith("data:") ||
-        item.url.includes("/download/") ||
-        /\.(mp3|wav|ogg|m4a|aac|flac|opus|weba|mp4|webm|mov)(\?.*)?$/i.test(item.url));
-
-    if (isDirect) {
-      setResolvedUrl(item.url);
-      setLoading(false);
-      return () => {
-        active = false;
-      };
-    }
-
-    if (
-      (item.provider.includes("Internet Archive") || item.id.startsWith("ia-")) &&
-      (item.url?.includes("archive.org/details/") || item.id.startsWith("ia-"))
-    ) {
-      setLoading(true);
-      const rawId = item.id.replace(/^ia-/, "");
-      void resolveIaFile(rawId)
-        .then((res) => {
-          if (active) {
-            setResolvedUrl(res.url);
-            if (res.duration) setDur(res.duration);
-            setLoading(false);
-          }
-        })
-        .catch(() => {
-          if (active) {
-            setResolvedUrl(item.url);
-            setLoading(false);
-          }
-        });
-    } else {
-      setResolvedUrl(item.url);
-      setLoading(false);
-    }
+    // v9.4: usa o resolvedor central (com cache) — e na FALHA não alimenta o
+    // player com a URL da página HTML (era isso que deixava a prévia PRETA
+    // travada em 0:00). Agora o modal mostra um erro honesto com o botão de
+    // abrir no site original.
+    setLoading(true);
+    void resolveStockPlayable(item)
+      .then((url) => {
+        if (!active) return;
+        if (url) {
+          setResolvedUrl(url);
+        } else {
+          setResolvedUrl(null);
+          setFailed(true);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setResolvedUrl(null);
+        setFailed(true);
+        setLoading(false);
+      });
 
     return () => {
       active = false;
@@ -249,6 +237,27 @@ export function StockPreviewModal({ item, open, onOpenChange, onAddStock }: Stoc
             </div>
           )}
 
+          {/* v9.4: erro de reprodução visível — antes era tela preta muda em 0:00 */}
+          {failed && !loading && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-[#0a0e15] p-6 text-center">
+              {item.thumb && <img src={item.thumb} alt="" className="max-h-40 rounded-md border border-[#232d3d] object-contain" />}
+              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                <AlertTriangle className="h-4 w-4 text-amber-400" /> Não foi possível reproduzir aqui
+              </div>
+              <p className="max-w-sm text-[11px] leading-relaxed text-zinc-500">
+                Este item não tem um arquivo de vídeo/áudio que o navegador consiga tocar (só a página original). Abra no site da fonte para assistir lá.
+              </p>
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 rounded-md border border-[#2c364c] bg-[#121824] px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-[var(--gc-accent)] hover:text-[var(--gc-accent)]"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Abrir no site da fonte
+              </a>
+            </div>
+          )}
+
           {isAudio ? (
             <div className="flex flex-col items-center justify-center gap-3 w-full h-full bg-gradient-to-br from-[#1c1608] via-[#0d111a] to-[#090c14] p-6 text-center">
               <div className="relative h-28 w-28 sm:h-32 sm:w-32 rounded-2xl overflow-hidden border border-amber-500/30 shadow-2xl bg-black/60 flex items-center justify-center group">
@@ -283,6 +292,8 @@ export function StockPreviewModal({ item, open, onOpenChange, onAddStock }: Stoc
               <video
                 ref={videoRef}
                 playsInline
+                preload="metadata"
+                poster={item.thumb}
                 muted={muted}
                 onLoadedMetadata={(e) => {
                   setDur(videoRef.current?.duration || item.duration || 0);
@@ -297,12 +308,18 @@ export function StockPreviewModal({ item, open, onOpenChange, onAddStock }: Stoc
                     e.currentTarget.style.maxWidth = "100%";
                   }
                 }}
-                className="max-h-[74vh] max-w-full cursor-pointer object-contain"
+                onError={() => setFailed(true)}
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
                 onTimeUpdate={() => setTime(videoRef.current?.currentTime ?? 0)}
                 onEnded={() => setPlaying(false)}
                 onClick={togglePlay}
+                style={
+                  item.width && item.height
+                    ? { aspectRatio: `${item.width} / ${item.height}` }
+                    : undefined
+                }
+                className="max-h-[74vh] min-h-[240px] max-w-full cursor-pointer object-contain"
               />
               {/* Botão de Tela Cheia no Viewport */}
               <button

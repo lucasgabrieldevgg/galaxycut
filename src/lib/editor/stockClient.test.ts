@@ -33,12 +33,12 @@ describe("pickIaFile (vídeo)", () => {
     expect(pickIaFile(files, "video")?.name).toBe("video.mp4");
   });
 
-  it("só tem mkv? usa o MENOR mkv (último recurso — antes o browser nem tocava)", () => {
+  it("v9.4: só tem mkv? → null (antes alimentava o player com arquivo que o browser não decodifica → prévia preta em 0:00)", () => {
     const files: IaFile[] = [
       { name: "a.mkv", size: "9000000000" },
       { name: "b.mkv", size: "2000000000" },
     ];
-    expect(pickIaFile(files, "video")?.name).toBe("b.mkv");
+    expect(pickIaFile(files, "video")).toBeNull();
   });
 
   it("sem nenhum arquivo utilizável → null (sem crash)", () => {

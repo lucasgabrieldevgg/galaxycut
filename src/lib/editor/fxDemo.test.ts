@@ -46,6 +46,13 @@ describe("fxDemo (demonstrações com fotos reais)", () => {
       "rain",
       "snowfall",
       "sciFiScan",
+      // v9.4
+      "fog",
+      "sparks",
+      "confetti",
+      "bubbles",
+      "neonGrid",
+      "filmBurn",
     ]);
     for (const e of EFFECT_CATALOG) {
       if (effectAnimates(e.type)) expect(allow.has(e.type)).toBe(true);
