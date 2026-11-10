@@ -468,6 +468,45 @@ export function AudioFiltersDialog({
                 onValueChange={(val) => setConfig((c) => ({ ...c, gainDb: val[0] }))}
               />
             </div>
+
+            {/* 5. Portão de Ruído (Noise Gate) — v9.4.3: antes a opção existia
+                mas não tinha DSP nenhum (o botão não fazia nada). */}
+            <div className="rounded-lg border border-[#1e2638] bg-[#141a26] p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4 text-violet-400" />
+                  <div>
+                    <h4 className="text-xs font-semibold text-zinc-200">Portão de Ruído (Noise Gate)</h4>
+                    <p className="text-[10px] text-zinc-400">Silencia o chiado de fundo entre as falas (ar-condicionado, ventilador, ruído de rua)</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={config.noiseGateEnabled}
+                  onCheckedChange={(v) => setConfig((c) => ({ ...c, noiseGateEnabled: v }))}
+                />
+              </div>
+
+              {config.noiseGateEnabled && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex justify-between text-[11px] text-zinc-300">
+                    <span>Limiar (abaixo disso o portão fecha)</span>
+                    <span className="font-mono text-[var(--gc-accent)]">{config.noiseGateThreshold} dB</span>
+                  </div>
+                  <Slider
+                    value={[config.noiseGateThreshold]}
+                    min={-60}
+                    max={-10}
+                    step={1}
+                    onValueChange={(val) => setConfig((c) => ({ ...c, noiseGateThreshold: val[0] }))}
+                  />
+                  <div className="flex justify-between text-[9px] text-zinc-500">
+                    <span>-60 dB (só silencia o silêncio)</span>
+                    <span>-40 dB (padrão)</span>
+                    <span>-10 dB (agressivo)</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

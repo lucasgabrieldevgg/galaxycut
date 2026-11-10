@@ -5,9 +5,13 @@
 
 import type { AudioFilterConfig } from "./types";
 import { buildVoiceChain, ensureVoicePitch, type VoiceLane, type VoiceFxId, type VoiceFxParams } from "./voiceFx";
+import { createGateNode, ensureGateModule, gateModuleReady } from "./gateWorklet";
 
 interface Chain {
   source: MediaElementAudioSourceNode;
+  gateIn: GainNode;
+  gateOut: GainNode;
+  gateNode: AudioWorkletNode | null;
   hp: BiquadFilterNode;
   comp: DynamicsCompressorNode;
   limiter: DynamicsCompressorNode;
@@ -43,6 +47,11 @@ export class AudioEngine {
       // religava — os efeitos de tonalidade ficavam em bypass pra sempre)
       void ensureVoicePitch(this.ctx).then((ok) => {
         if (ok) for (const c of this.allChains) c.voice.enablePitch();
+      });
+      // v9.4.3: o portão de ruído é um worklet também — carrega junto e
+      // religa as cadeias existentes quando o módulo ficar pronto
+      void ensureGateModule(this.ctx).then((ok) => {
+        if (ok) for (const c of this.allChains) this.enableGateOn(c);
       });
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
@@ -89,14 +98,29 @@ export class AudioEngine {
       // efeitos de voz: via bypassável ANTES da cadeia OBS (o mesmo grafo
       // roda na exportação — buildVoiceChain é a fonte única)
       const voice = buildVoiceChain(ctx);
+      // v9.4.3: portão de ruído ANTES do passa-alta (tira o chiado de fundo
+      // antes de qualquer processamento). Sem o worklet pronto, fica em
+      // bypass honesto — o resto da cadeia continua funcionando.
+      const gateIn = ctx.createGain();
+      const gateOut = ctx.createGain();
+      const gateNode = createGateNode(ctx);
+      if (gateNode) {
+        gateIn.connect(gateNode);
+        gateNode.connect(gateOut);
+      } else {
+        gateIn.connect(gateOut);
+      }
       source.connect(voice.input);
-      voice.output.connect(hp).connect(comp).connect(limiter).connect(makeup).connect(gain).connect(this.master!);
-      const chain: Chain = { source, hp, comp, limiter, makeup, gain, voice, lastGain: 1, lastEnhance: false };
+      voice.output.connect(gateIn);
+      gateOut.connect(hp).connect(comp).connect(limiter).connect(makeup).connect(gain).connect(this.master!);
+      const chain: Chain = { source, gateIn, gateOut, gateNode, hp, comp, limiter, makeup, gain, voice, lastGain: 1, lastEnhance: false };
       this.linked.set(el, chain);
       this.allChains.add(chain);
       this.chains.set(key, chain);
       // worklet de pitch pode ter ficado pronto depois do build — religa agora
       chain.voice.enablePitch();
+      // idem pro portão de ruído
+      this.enableGateOn(chain);
       // v9.4.1: elemento capturado nasce LIMPO (volume nativo 1 / sem mudo —
       // o ganho real da prévia é sempre o nó de ganho da cadeia)
       el.muted = false;
@@ -110,6 +134,37 @@ export class AudioEngine {
 
   getChain(key: string): Chain | null {
     return this.chains.get(key) ?? null;
+  }
+
+  /** v9.4.3: insere o worklet do portão quando ele carrega DEPOIS da cadeia
+   *  (mesmo padrão do enablePitch do voiceFx) — reconexão de 3 nós, sem
+   *  risco de estalo porque o portão começa desligado. */
+  private enableGateOn(chain: Chain) {
+    if (!this.ctx || chain.gateNode || !gateModuleReady(this.ctx)) return;
+    const node = createGateNode(this.ctx);
+    if (!node) return;
+    try {
+      chain.gateIn.disconnect();
+    } catch {
+      /* noop */
+    }
+    chain.gateIn.connect(node);
+    node.connect(chain.gateOut);
+    chain.gateNode = node;
+  }
+
+  /** v9.4.3: aplica os parâmetros do portão (limiar em dB + liga/desliga). */
+  private applyGateParams(chain: Chain, f?: AudioFilterConfig) {
+    const node = chain.gateNode;
+    if (!node) return;
+    const on = !!(f && f.enabled && f.noiseGateEnabled);
+    const thr = Math.max(-90, Math.min(0, f?.noiseGateThreshold ?? -40));
+    try {
+      node.parameters.get("enabled")!.value = on ? 1 : 0;
+      node.parameters.get("threshold")!.value = thr;
+    } catch {
+      /* noop */
+    }
   }
 
   dropClip(key: string) {
@@ -202,6 +257,9 @@ export class AudioEngine {
         } else {
           c.limiter.threshold.setValueAtTime(0, t);
         }
+
+        // 5. Portão de Ruído (Noise Gate) — o chiado de fundo some de verdade
+        this.applyGateParams(c, f);
       } else if (opts.enhance) {
         // Padrão OBS Voz Clara
         c.hp.frequency.cancelScheduledValues(t);
@@ -224,6 +282,7 @@ export class AudioEngine {
         c.limiter.release.setValueAtTime(0.1, t);
       } else {
         // Bypass neutro
+        this.applyGateParams(c, undefined);
         c.hp.frequency.cancelScheduledValues(t);
         c.hp.frequency.setValueAtTime(20, t);
         c.comp.threshold.cancelScheduledValues(t);

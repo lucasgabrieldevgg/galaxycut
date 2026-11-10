@@ -33,8 +33,11 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-/** Níveis de transparência usados pelo app (5 a 50). */
-const LEVELS = [5, 7, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60];
+/** Níveis de transparência usados pelo app (5 a 60).
+ *  v9.4.3: 6 e 8 faltavam — a tela inicial e o onboarding usavam
+ *  --gc-accent-6 e a timeline --gc-accent-8, que nunca existiram (o
+ *  gradiente caía no transparent e a sombra da setinha sumia). */
+const LEVELS = [5, 6, 7, 8, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60];
 
 /** Aplica a cor escolhida como variáveis CSS no <html> — o app inteiro segue. */
 export function applyAccent(id: string) {

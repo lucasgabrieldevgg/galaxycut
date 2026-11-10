@@ -541,19 +541,19 @@ function ClipInspector({ clip }: { clip: Clip }) {
       {clip.kind !== "audio" && (
       <Section title={t("ins.transition")}>
         <div className="grid grid-cols-5 gap-1">
-          {TRANSITIONS.map((t) => (
+          {TRANSITIONS.map((tt) => (
             <button
-              key={t.type}
-              onClick={() => update({ transitionIn: t.type === "none" ? undefined : { type: t.type as TransitionType, duration: trans?.duration ?? 0.5 } })}
-              title={t.label}
+              key={tt.type}
+              onClick={() => update({ transitionIn: tt.type === "none" ? undefined : { type: tt.type as TransitionType, duration: trans?.duration ?? 0.5 } })}
+              title={t(`trans.${tt.type}`)}
               className={`flex flex-col items-center gap-0.5 rounded-md border px-0.5 py-1 text-[9px] transition ${
-                (trans?.type ?? "none") === t.type
+                (trans?.type ?? "none") === tt.type
                   ? "border-fuchsia-400 bg-fuchsia-500/10 text-fuchsia-300"
                   : "border-[#2a3546] text-zinc-400 hover:border-[#3a4759]"
               }`}
             >
-              <FxTile kind="transition" type={t.type} size="md" />
-              <span className="w-full truncate text-center leading-tight">{t.label}</span>
+              <FxTile kind="transition" type={tt.type} size="md" />
+              <span className="w-full truncate text-center leading-tight">{t(`trans.${tt.type}`)}</span>
             </button>
           ))}
         </div>

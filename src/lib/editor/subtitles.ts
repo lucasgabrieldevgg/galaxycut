@@ -5,6 +5,7 @@ import { create } from "zustand";
 import { registry } from "./media";
 import { KaraokeWord, Clip } from "./types";
 import { decodeAudioOf } from "./wav";
+import { planWindows, windowWordsToAbsolute, transcriptionCoverageWarning } from "./subtitleWindows";
 
 export interface SubSegment {
   start: number;
@@ -175,6 +176,11 @@ function makeEstimatingProgress(onProgress: (p: WhisperProgress) => void, cached
 const WORKER_SRC = `
 import { pipeline, env } from "${TRANSFORMERS_URL}";
 
+// v9.4.3: as funções de janela/junção vêm do módulo do app (fonte única — o
+// teste unitário cobre exatamente estas linhas, não uma cópia do worker).
+${planWindows.toString()}
+${windowWordsToAbsolute.toString()}
+
 // configurações seguras pro Web Worker (evita travamento com multi-threading)
 env.allowLocalModels = false;
 env.useBrowserCache = true;
@@ -240,13 +246,15 @@ self.onmessage = async (ev) => {
     const OVERLAP = 0.8;
     const sr = 16000;
     const total = msg.pcm.length / sr;
-    const n = Math.max(1, Math.ceil((total - OVERLAP) / (WIN - OVERLAP)));
+    // v9.4.3: o plano de janelas e a junção das palavras vêm de
+    // subtitleWindows.ts (injetados aqui) — uma fonte só, coberta por teste.
+    const plan = planWindows(total, WIN, OVERLAP);
+    const n = plan.length;
     const allWords = [];
     let lastEnd = 0;
     for (let w = 0; w < n; w++) {
-      const off = w * (WIN - OVERLAP);
-      const len = Math.min(WIN, total - off);
-      if (len <= 0.05) break;
+      const off = plan[w].off;
+      const len = plan[w].len;
       const slice = msg.pcm.subarray(Math.round(off * sr), Math.round((off + len) * sr));
       const basePct = 0.1 + 0.85 * (w / n);
       const rangePct = 0.85 / n;
@@ -256,24 +264,22 @@ self.onmessage = async (ev) => {
         language: msg.lang === "auto" ? null : msg.lang,
         task: "transcribe",
         chunk_length_s: 30,
-        stride_chunk_s: 5,
+        stride_length_s: 5,
         return_timestamps: "word",
       });
       const secs = (performance.now() - t0) / 1000;
       reply({ type: "windowDone", pct: basePct + rangePct, window: w + 1, windows: n, secs });
       const chunks = out?.chunks ?? [];
       const winEnd = off + len;
-      for (const c of chunks) {
-        const text = (c.text ?? "").replace(/\\s+/g, "");
-        if (!text) continue;
-        const s = (c.timestamp?.[0] ?? lastEnd - off) + off;
-        let e = c.timestamp?.[1];
-        e = (e == null ? s - off + 0.4 : e) + off;
-        if (w < n - 1 && e > winEnd - 0.35) continue;
-        if (s < lastEnd - 0.06) continue;
-        lastEnd = Math.max(lastEnd, e);
-        allWords.push({ w: text, s, e: Math.max(s + 0.12, e) });
-      }
+      const joined = windowWordsToAbsolute(
+        chunks.map((c) => ({ text: c.text ?? "", start: c.timestamp?.[0] ?? null, end: c.timestamp?.[1] ?? null })),
+        off,
+        winEnd,
+        w === n - 1,
+        lastEnd
+      );
+      lastEnd = joined.lastEnd;
+      for (const x of joined.words) allWords.push(x);
     }
     reply({ type: "stage", stage: "transcribe", pct: 0.97, window: n, windows: n });
     reply({ type: "done", words: allWords });
@@ -322,38 +328,77 @@ async function transcribeLegacy(
   }
   if (!asr) throw lastErr instanceof Error ? lastErr : new Error("Não consegui carregar o modelo de IA");
   onProgress({ stage: "transcribe", pct: 0.2 });
-  const out = (await asr(pcm, { language: lang, task: "transcribe", chunk_length_s: 30, stride_chunk_s: 5, return_timestamps: "word" })) as AsrResult;
+  const out = (await asr(pcm, { language: lang, task: "transcribe", chunk_length_s: 30, stride_length_s: 5, return_timestamps: "word" })) as AsrResult;
   const words = parseWords(out);
   onProgress({ stage: "transcribe", pct: 0.98 });
   if (words.length) return groupWords(words, Math.max(2, Math.min(6, maxWords)));
-  const out2 = (await asr(pcm, { language: lang, task: "transcribe", chunk_length_s: 30, stride_chunk_s: 5, return_timestamps: true })) as AsrResult;
+  const out2 = (await asr(pcm, { language: lang, task: "transcribe", chunk_length_s: 30, stride_length_s: 5, return_timestamps: true })) as AsrResult;
   const chunks: AsrChunk[] =
     out2?.chunks && out2.chunks.length ? out2.chunks : out2?.text ? [{ text: out2.text, timestamp: [0, null] }] : [];
   return polish(chunkToSegments(chunks));
+}
+
+/** Resultado da extração do áudio da timeline — o `incomplete` é o sinal de
+ *  que o áudio NÃO cobriu tudo (o Whisper então só transcreve a frente e as
+ *  legendas saem truncadas — o bug reportado pelo dono do app). */
+export interface TimelinePcm {
+  pcm: Float32Array;
+  /** true quando algum clipe entrou com áudio faltando ou em silêncio */
+  incomplete: boolean;
+  /** motivo legível (qual clipe/what happened) */
+  reason?: string;
 }
 
 /** Renderiza o áudio composto da timeline (todos os clipes em seus devidos pontos e velocidades) a 16 kHz mono */
 export async function extractTimelinePcm16k(
   targetClips: Clip[],
   totalDuration: number
-): Promise<Float32Array> {
+): Promise<TimelinePcm> {
   const dur = Math.max(0.5, totalDuration);
   const OAC: typeof OfflineAudioContext =
     window.OfflineAudioContext ||
     (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext;
   const off = new OAC(1, Math.max(1, Math.ceil(dur * 16000)), 16000);
 
+  // v9.4.3: quanto de cada mídia o clipe USA — é esse o tamanho esperado do
+  // áudio decodificado. Antes o decodificador recebia "5" e, quando o
+  // fallback devolvia silêncio, o clipe inteiro entrava com 5 segundos de
+  // nada (era esse o corte das legendas).
+  const needByMedia = new Map<string, number>();
+  for (const c of targetClips) {
+    if (!c.mediaId || c.muted || c.videoHidden) continue;
+    const speed = c.speed || 1;
+    const need = Math.max(1, c.inPoint + c.duration * speed);
+    needByMedia.set(c.mediaId, Math.max(needByMedia.get(c.mediaId) ?? 0, need));
+  }
+
   // Decodifica áudios únicos para não decodificar o mesmo blob 2 vezes
   const audioBufferCache = new Map<string, AudioBuffer>();
+  let incomplete = false;
+  let reason: string | undefined;
   for (const c of targetClips) {
     if (!c.mediaId || c.muted || c.videoHidden) continue;
     if (!audioBufferCache.has(c.mediaId)) {
       const blob = registry.getBlob(c.mediaId);
       if (blob) {
         try {
-          const ab = await decodeAudioOf(blob, 5);
-          if (ab) audioBufferCache.set(c.mediaId, ab);
-        } catch {}
+          const need = needByMedia.get(c.mediaId) ?? 5;
+          const ab = await decodeAudioOf(blob, need);
+          if (ab) {
+            audioBufferCache.set(c.mediaId, ab);
+            // buffer curto ou totalmente mudo = áudio faltando
+            if (ab.duration < need - 0.5) {
+              incomplete = true;
+              reason = `o áudio de um clipe durou ${ab.duration.toFixed(1)}s de ${need.toFixed(1)}s`;
+            } else if (isSilentBuffer(ab)) {
+              incomplete = true;
+              reason = "o áudio de um clipe saiu em silêncio (não consegui extrair o som)";
+            }
+          }
+        } catch {
+          incomplete = true;
+          reason = "não consegui decodificar o áudio de um clipe";
+        }
       }
     }
   }
@@ -361,7 +406,11 @@ export async function extractTimelinePcm16k(
   for (const c of targetClips) {
     if (!c.mediaId || c.muted || c.videoHidden) continue;
     const buf = audioBufferCache.get(c.mediaId);
-    if (!buf) continue;
+    if (!buf) {
+      incomplete = true;
+      reason = reason ?? "um clipe não tinha áudio disponível";
+      continue;
+    }
 
     const src = off.createBufferSource();
     src.buffer = buf;
@@ -377,10 +426,24 @@ export async function extractTimelinePcm16k(
     if (playDuration > 0.05) {
       src.start(c.start, Math.max(0, c.inPoint), playDuration * speed);
     }
+    if (playDuration < c.duration - 0.2) {
+      incomplete = true;
+      reason = reason ?? "um clipe entrou só pela metade (o resto ficou sem áudio)";
+    }
   }
 
   const resampled = await off.startRendering();
-  return new Float32Array(resampled.getChannelData(0));
+  return { pcm: new Float32Array(resampled.getChannelData(0)), incomplete, reason };
+}
+
+/** O buffer tem energia alguma? (fallback de decodificação devolve silêncio) */
+function isSilentBuffer(buf: AudioBuffer): boolean {
+  const data = buf.getChannelData(0);
+  const step = Math.max(1, Math.floor(data.length / 4000));
+  for (let i = 0; i < data.length; i += step) {
+    if (Math.abs(data[i]) > 0.0005) return false;
+  }
+  return true;
 }
 
 /** Extrai PCM mono 16 kHz de qualquer arquivo de áudio ou vídeo */
@@ -526,20 +589,29 @@ export async function transcribeTimeline(
   onProgress: (p: WhisperProgress) => void,
   model: WhisperModelId = "base",
   maxWords: number = 4
-): Promise<SubSegment[]> {
+): Promise<{ segments: SubSegment[]; warning?: string }> {
   onProgress({ stage: "prepare", pct: 0.02 });
-  const pcm = await extractTimelinePcm16k(targetClips, totalDuration);
+  const { pcm, incomplete, reason } = await extractTimelinePcm16k(targetClips, totalDuration);
   onProgress({ stage: "prepare", pct: 0.08 });
 
+  let segs: SubSegment[];
   try {
-    const segs = await transcribeInWorkerWithFallback(pcm, lang, model, onProgress, maxWords);
-    if (segs.length) return segs;
-    throw new Error("sem fala detectada");
+    segs = await transcribeInWorkerWithFallback(pcm, lang, model, onProgress, maxWords);
+    if (!segs.length) throw new Error("sem fala detectada");
   } catch (err) {
     const msg = String((err as Error)?.message ?? err);
     if (msg.includes("cancel")) throw err;
-    return transcribeLegacy(pcm.slice(), lang, model, onProgress, maxWords);
+    segs = await transcribeLegacy(pcm.slice(), lang, model, onProgress, maxWords);
   }
+
+  // v9.4.3: o dono reportou "as legendas saem só na frente". A causa era o
+  // áudio truncado na entrada (decodificação); mas mesmo com o áudio bom a
+  // transcrição pode parar antes do fim — então medimos e AVISAMOS (não
+  // falhar: o trabalho que já saiu é aproveitável).
+  let warning = incomplete ? reason : undefined;
+  const coverage = transcriptionCoverageWarning(segs, totalDuration);
+  if (coverage) warning = warning ?? coverage;
+  return { segments: segs, warning };
 }
 
 /**

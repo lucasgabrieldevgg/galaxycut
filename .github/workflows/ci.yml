@@ -28,6 +28,13 @@ jobs:
       - name: Testes (vitest)
         run: npm test --if-present
 
+      # v9.4.3: as serverless functions são JS PURO — o tsc não cobre api/ e o
+      # parser TS do ESLint aceita TS em .js, então TypeScript escapava e a
+      # função quebrava em produção (HTTP 500) com o CI verde.
+      - name: API (node --check)
+        run: |
+          for f in api/*.js; do node --check "$f"; done
+
       - name: Build estático
         run: npm run build
       - name: higiene
