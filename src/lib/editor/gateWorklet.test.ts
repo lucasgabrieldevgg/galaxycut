@@ -100,4 +100,20 @@ describe("worklet do portão", () => {
     expect(state.open).toBe(false);
     expect(gains[23999]).toBeLessThan(0.01);
   });
+
+  it("o worklet declara os nomes que o processador usa (minificação)", () => {
+    // o build de produção minifica a função injetada e ela vira uma
+    // EXPRESSÃO anônima: sem o const com o nome, o processador chamaria um
+    // identificador inexistente e o portão quebraria na primeira faixa.
+    expect(GATE_WORKLET_SRC).toContain("const createGateState =");
+    expect(GATE_WORKLET_SRC).toContain("const gateGainCurve =");
+    // a fonte realmente injetada precisa declarar os dois nomes
+    const src = GATE_WORKLET_SRC
+      .replace(/registerProcessor\([^)]*\);?/, "")
+      .replace(/class GCGateProcessor[\s\S]*$/, "");
+    const fn = new Function(`${src}; return { createGateState, gateGainCurve };`);
+    const injected = fn() as { createGateState: typeof createGateState; gateGainCurve: typeof gateGainCurve };
+    const state = injected.createGateState();
+    expect(state).toEqual(createGateState());
+  });
 });

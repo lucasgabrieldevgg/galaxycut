@@ -178,8 +178,11 @@ import { pipeline, env } from "${TRANSFORMERS_URL}";
 
 // v9.4.3: as funções de janela/junção vêm do módulo do app (fonte única — o
 // teste unitário cobre exatamente estas linhas, não uma cópia do worker).
-${planWindows.toString()}
-${windowWordsToAbsolute.toString()}
+// ATENÇÃO: precisam ser atribuídas a um const com o MESMO nome — no build de
+// produção o minificador vira a função numa expressão anônima e o worker
+// chamaria um nome inexistente (ReferenceError).
+const planWindows = ${planWindows.toString()};
+const windowWordsToAbsolute = ${windowWordsToAbsolute.toString()};
 
 // configurações seguras pro Web Worker (evita travamento com multi-threading)
 env.allowLocalModels = false;

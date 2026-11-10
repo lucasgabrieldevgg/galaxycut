@@ -85,8 +85,11 @@ export function gateGainCurve(
 
 /** Código-fonte do processador (string) — injetado via Blob URL. */
 export const GATE_WORKLET_SRC = `
-${createGateState.toString()}
-${gateGainCurve.toString()}
+// ATENÇÃO: atribuídas a const com o MESMO nome — no build de produção o
+// minificador vira a função numa expressão anônima e o worklet chamaria um
+// nome inexistente (ReferenceError).
+const createGateState = ${createGateState.toString()};
+const gateGainCurve = ${gateGainCurve.toString()};
 
 class GCGateProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {

@@ -118,4 +118,20 @@ describe("injeção no worker", () => {
       injected.windowWordsToAbsolute([{ text: "x", start: 1, end: 2 }], 10, 40, true, 0).words[0].s
     ).toBeCloseTo(11, 5);
   });
+
+  it("sobrevive à minificação: função anônima atribuída a const com o nome", () => {
+    // no build de produção o minificador renomeia/mina a função — a injeção
+    // tem que atribuir a fonte a um const com o nome certo, senão o worker
+    // chama um identificador que não existe (ReferenceError) e a transcrição
+    // morre no primeiro plano de janelas.
+    const anon = `(function(e,t=30,a=.8){if(!isFinite(e)||e<=0)return[{off:0,len:Math.max(0,t)}];let o=Math.max(1,Math.ceil((e-a)/(t-a))),i=[];for(let r=0;r<o;r++){let o=r*(t-a),n=Math.min(t,e-o);if(n<=.05)break;i.push({off:o,len:n})}return i.length?i:[{off:0,len:Math.max(.05,Math.min(t,e))}]})`;
+    const src = `const planWindows = ${anon};`;
+    const fn = new Function(`${src}; return planWindows;`);
+    const minified = fn() as typeof planWindows;
+    expect(minified(60)).toEqual(planWindows(60));
+    // a forma usada no fonte injetado tem que produzir o MESMO plano
+    const srcReal = `const planWindows = ${planWindows.toString()};`;
+    const real = new Function(`${srcReal}; return planWindows;`)() as typeof planWindows;
+    expect(real(60)).toEqual(planWindows(60));
+  });
 });
