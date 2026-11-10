@@ -84,6 +84,11 @@ export function decodeCtx(): AudioContext {
  * Decodifica o áudio de QUALQUER mídia (vídeo ou áudio) num AudioBuffer.
  * Possui fallback em cascata para containers complexos (MKV, MOV, AVI, etc.)
  * e garante que nunca lance exceções fatais.
+ *
+ * v9.4.3: o `durationHint` deixou de ser um "palpite" e virou o EXPECTADO:
+ * quando o fallback precisa devolver silêncio, ele devolve o silêncio do
+ * tamanho que a mídia deveria ter — antes ele devolvia 5s e a legenda de IA
+ * saía truncada (o transcritor só ouvia os primeiros 5 segundos do clipe).
  */
 export async function decodeAudioOf(blob: Blob, durationHint = 5): Promise<AudioBuffer> {
   if (typeof window === "undefined" || !(window.AudioContext || (window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext)) {
@@ -120,18 +125,23 @@ function decodeAudioViaElement(blob: Blob, ctx: AudioContext, durationHint: numb
     v.preload = "auto";
 
     let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const cleanup = () => {
       if (settled) return;
       settled = true;
+      if (timer) clearTimeout(timer);
       URL.revokeObjectURL(url);
       v.remove();
     };
+    /** silêncio do tamanho ESPERADO (nunca 5s fixos — cortava a mídia) */
+    const silence = (sec: number) =>
+      ctx.createBuffer(2, Math.max(1, Math.round(Math.max(0.5, sec) * 48000)), 48000);
 
-    const timer = setTimeout(() => {
+    // timeout de CARREGAMENTO (metadados): 10s — sem metadado não há captura
+    timer = setTimeout(() => {
       cleanup();
-      // Em caso de timeout ao carregar áudio, retorna buffer silencioso
-      resolve(ctx.createBuffer(2, Math.max(1, Math.round((durationHint || 5) * 48000)), 48000));
-    }, 8000);
+      resolve(silence(durationHint || 5));
+    }, 10_000);
 
     v.onloadedmetadata = async () => {
       try {
@@ -144,17 +154,16 @@ function decodeAudioViaElement(blob: Blob, ctx: AudioContext, durationHint: numb
           const audioTracks = stream.getAudioTracks();
 
           if (!audioTracks.length) {
-            clearTimeout(timer);
             cleanup();
-            resolve(ctx.createBuffer(2, Math.max(1, Math.round(dur * 48000)), 48000));
+            resolve(silence(dur));
             return;
           }
 
           const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
             ? "audio/webm;codecs=opus"
             : MediaRecorder.isTypeSupported("audio/webm")
-            ? "audio/webm"
-            : "";
+              ? "audio/webm"
+              : "";
 
           const rec = new MediaRecorder(new MediaStream(audioTracks), {
             mimeType: mimeType || undefined,
@@ -165,7 +174,6 @@ function decodeAudioViaElement(blob: Blob, ctx: AudioContext, durationHint: numb
           };
 
           rec.onstop = async () => {
-            clearTimeout(timer);
             cleanup();
             try {
               const audioBlob = new Blob(chunks, { type: mimeType || "audio/webm" });
@@ -173,38 +181,43 @@ function decodeAudioViaElement(blob: Blob, ctx: AudioContext, durationHint: numb
               const decoded = await ctx.decodeAudioData(arr);
               resolve(decoded);
             } catch {
-              resolve(ctx.createBuffer(2, Math.max(1, Math.round(dur * 48000)), 48000));
+              resolve(silence(dur));
             }
           };
 
           rec.start(100);
-          v.playbackRate = 4.0;
+          // v9.4.3: velocidade NORMAL. O 4.0× (v9.1) acelerava E afinava o
+          // áudio capturado (1/4 da duração, voz irreconhecível) e o timeout
+          // fixo de 8s cortava a captura em mídias > 32s — o resultado eram
+          // legendas de IA truncadas (só a frente da timeline).
+          v.playbackRate = 1.0;
           await v.play().catch(() => {});
 
           v.onended = () => {
             if (rec.state === "recording") rec.stop();
           };
 
-          setTimeout(() => {
+          // timeout da CAPTURA: a captura é em tempo real, então o prazo
+          // acompanha a duração real da mídia (+ folga). Se estourar, entrega
+          // o que já foi capturado em vez de devolver silêncio.
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => {
             if (rec.state === "recording") rec.stop();
-          }, Math.min(25000, (dur / 4) * 1000 + 1500));
+          }, Math.min(15 * 60_000, dur * 1000 + 8000));
         } else {
-          clearTimeout(timer);
           cleanup();
-          resolve(ctx.createBuffer(2, Math.max(1, Math.round(dur * 48000)), 48000));
+          resolve(silence(dur));
         }
       } catch (err) {
-        clearTimeout(timer);
         cleanup();
         reject(err);
       }
     };
 
     v.onerror = () => {
-      clearTimeout(timer);
       cleanup();
       // Não trava: retorna silêncio se o vídeo não tiver faixa de áudio
-      resolve(ctx.createBuffer(2, Math.max(1, Math.round((durationHint || 5) * 48000)), 48000));
+      resolve(silence(durationHint || 5));
     };
   });
 }

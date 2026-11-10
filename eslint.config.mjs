@@ -50,6 +50,14 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "error",
   },
 }, {
+  // v9.4.3: as serverless functions em api/ são CommonJS DE PROPÓSITO — a
+  // Vercel não roda ESM em .js sem "type": "module" no package.json, então
+  // require() é o jeito certo lá (e o module.exports também).
+  files: ["api/**/*.js"],
+  rules: {
+    "@typescript-eslint/no-require-imports": "off",
+  },
+}, {
   ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills/**", "desktop/**", "scripts/**", "tests/**", "tool-results/**", "download/**", "upload/**", "mini-services/**", ".zscripts/**"]
 }];
 

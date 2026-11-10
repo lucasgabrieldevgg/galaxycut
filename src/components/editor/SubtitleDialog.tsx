@@ -129,7 +129,7 @@ export function SubtitleDialog() {
     }
     job.start();
     try {
-      const segs = await transcribeTimeline(
+      const { segments: segs, warning } = await transcribeTimeline(
         targetClips,
         totalDuration,
         lang,
@@ -143,6 +143,12 @@ export function SubtitleDialog() {
         applySegments(segs);
         toast.success(t("sub.created", { n: segs.length }), { description: t("sub.createdDesc") });
         job.setOpen(false);
+      }
+      // v9.4.3: áudio faltando ou legenda que parou antes do fim — avisa e
+      // segue (o que já saiu é aproveitável), em vez de fingir que está tudo
+      // certo e deixar o dono com as legendas pela metade sem explicação.
+      if (warning) {
+        toast.warning(t("sub.incomplete"), { description: warning });
       }
     } catch (e) {
       const msg = String((e as Error).message ?? e);

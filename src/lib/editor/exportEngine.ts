@@ -21,6 +21,7 @@ import { drawFrame } from "./render";
 import { Clip, clipEnd, DEFAULT_AUDIO_FILTERS } from "./types";
 import type { AudioFilterConfig } from "./types";
 import { buildVoiceChain, ensureVoicePitch } from "./voiceFx";
+import { createGateNode, ensureGateModule } from "./gateWorklet";
 
 export interface OfflineProgressInfo {
   stage: "prepare" | "render" | "finish";
@@ -143,6 +144,10 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
   // em bypass (sem pitch) sem ninguém perceber.
   const pitchOk = await ensureVoicePitch(off).catch(() => false);
   void pitchOk;
+  // v9.4.3: o portão de ruído também é worklet — carrega no contexto offline
+  // ANTES de montar as vias, senão a exportação sai sem portão (bypass).
+  const gateOk = await ensureGateModule(off).catch(() => false);
+  void gateOk;
   const decoded = new Map<string, AudioBuffer | null>();
 
   const uniqueIds = [...new Set(audible.map((c) => c.mediaId).filter(Boolean))] as string[];
@@ -234,9 +239,23 @@ export async function renderAudioMix(duration: number, onProgress?: (p: number) 
   return off.startRendering();
 }
 
-/** cadeia OBS offline (highpass → compressor → limitador → makeup), igual à
- *  do preview em audio.ts — usada no mix de exportação */
+/** cadeia OBS offline (gate → highpass → compressor → limitador → makeup),
+ *  igual à do preview em audio.ts — usada no mix de exportação */
 function buildObsChain(ctx: BaseAudioContext, f: AudioFilterConfig): AudioNode {
+  // v9.4.3: portão de ruído ANTES do passa-alta (mesma ordem do preview)
+  const gateIn = ctx.createGain();
+  const gateOut = ctx.createGain();
+  const gateNode = createGateNode(ctx);
+  if (gateNode) {
+    if (f.enabled && f.noiseGateEnabled) {
+      gateNode.parameters.get("enabled")!.value = 1;
+      gateNode.parameters.get("threshold")!.value = Math.max(-90, Math.min(0, f.noiseGateThreshold ?? -40));
+    }
+    gateIn.connect(gateNode);
+    gateNode.connect(gateOut);
+  } else {
+    gateIn.connect(gateOut);
+  }
   const hp = ctx.createBiquadFilter();
   hp.type = "highpass";
   hp.frequency.value = f.highpassEnabled ? Math.max(20, Math.min(1000, f.highpassFrequency || 85)) : 20;
@@ -265,6 +284,7 @@ function buildObsChain(ctx: BaseAudioContext, f: AudioFilterConfig): AudioNode {
   makeup.gain.value = f.compressorEnabled ? Math.pow(10, (f.compressorMakeupGain ?? 2) / 20) : 1;
   const out = ctx.createGain();
   if (f.gainDb) out.gain.value = Math.pow(10, f.gainDb / 20);
+  gateOut.connect(hp);
   hp.connect(comp).connect(limiter).connect(makeup).connect(out);
   return out;
 }

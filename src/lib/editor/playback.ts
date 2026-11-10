@@ -8,7 +8,7 @@ import { computeEffectiveDuration, usePlayback, useProject } from "./store";
 import { registry } from "./media";
 import { audioEngine } from "./audio";
 import { drawFrame, MediaStatus } from "./render";
-import { Clip, clipEnd, fadeEnvelope } from "./types";
+import { Clip, clipEnd, fadeEnvelope, type Track } from "./types";
 import type { PlayheadMode } from "./settings";
 import { toast } from "sonner";
 import { t } from "./i18n";
@@ -29,6 +29,13 @@ class PlaybackEngine {
   private bindings = new Map<string, string>();
   /** clipes ativos no último sync (quem "possui" cada elemento) */
   private claims = new Map<string, string>(); // elKey -> clipId
+  // v9.4.3 perf: estruturas REUSADAS — antes o motor alocava array/Map novos
+  // a cada frame (filter/find por clipe = O(n²) com timeline grande).
+  private activeScratch: Clip[] = [];
+  private syncActiveScratch: Clip[] = [];
+  private claimsScratch = new Map<string, string>();
+  private clipByIdScratch = new Map<string, Clip>();
+  private trackByIdScratch = new Map<string, Track>();
   private lastAttach = new Map<string, MediaEl>();
   private startingPlays = new Set<HTMLMediaElement>();
   // v9.4.2 DISCIPLINA DE SEEK: nunca mais de 1 seek por elemento por janela de
@@ -205,28 +212,23 @@ class PlaybackEngine {
         }
 
         let nextT = wallT;
-        if (leaderEl && leaderT - wallT <= 0.5 && leaderT - wallT >= -0.2 && leaderT >= pb.playhead - 0.03) {
-          // sincronia atômica suave: re-anchor no hardware de som (janela
-          // assimétrica — até 0,2s pra trás e 0,5s pra frente: passos
-          // inaudíveis, e nunca mais os saltos do "trava no líder").
-          // v9.4.2 GUARDA MONOTÔNICA: só re-ancora se o líder não estiver
-          // mais de 30ms ATRÁS da seta — o relógio NUNCA anda pra trás; o
-          // elemento que ficou pra trás (ativação custou) alcança pela taxa
-          this.anchorClock(leaderT, now);
+        const dev = leaderEl ? leaderT - wallT : 0; // desvio do líder vs relógio
+        if (leaderEl && dev <= 0.5 && dev >= -0.2) {
+          // v9.4.3: o RELÓGIO É O TEMPO REAL (monotônico). O líder não é mais
+          // o dono do relógio a cada quadro — antes ele re-ancorava TODO frame
+          // e a seta herdava a quantização do currentTime (degraus de ~33ms) e
+          // ainda podia VOLTAR até 30ms (os "ticks pra trás" que o dono
+          // reclamou). Agora o líder só: (a) denuncia buffering e (b) re-ancora
+          // UMA vez, e só PRA FRENTE, quando está realmente adiantado.
           this.stallSince = 0;
           this.stallReleased = false;
-          nextT = leaderT;
-        } else if (leaderEl && leaderT >= pb.playhead - 1.2 && leaderT < pb.playhead - 0.03 && leaderEl.readyState >= 3 && !leaderEl.seeking) {
-          // v9.4.2 LÍDER ALCANÇANDO (atrasou até 1,2s — seek de ativação,
-          // decoder pesado): o relógio SEGUE EM 1,0x (nunca câmera lenta!) e
-          // o elemento alcança pela taxa (+9% quando a deriva passa de 0,3s).
-          // Deriva acima de 1,2s vira UM seek com cooldown no syncMedia.
-          this.stallSince = 0;
-          this.stallReleased = false;
-          nextT = wallT;
-        } else if (leaderEl && leaderT < wallT - 0.2) {
+          if (dev > 0.25) {
+            this.anchorClock(leaderT, now);
+            nextT = leaderT;
+          }
+        } else if (leaderEl && dev < -0.2) {
           // líder ATRASADO em relação ao relógio: se ainda tem dados na frente
-          // (readyState≥3) o relógio segue e o syncMedia puxa o elemento; se
+          // (readyState≥3) o relógio SEGUE e o servo (taxa) puxa o elemento; se
           // não tem (buffering), o relógio CONGELA esperando a mídia — até
           // 2,5s; depois abre a válvula UMA vez e segue pelo relógio até a
           // mídia se recuperar (sem isso o playhead andava 1 frame a cada
@@ -243,7 +245,7 @@ class PlaybackEngine {
           } else if (!this.stallReleased && now - this.stallSince < 2500) {
             nextT = pb.playhead; // congelado (buffering) — a UI mostra o estado
           } else if (!this.stallReleased) {
-            this.stallReleased = true; // abre a válvula UMA vez por trava
+            this.stallReleased = true;
             this.anchorClock(pb.playhead, now); // recomeça a contar daqui
             nextT = pb.playhead;
           } else {
@@ -299,6 +301,10 @@ class PlaybackEngine {
           usePlayback.getState().setPlayhead(dur);
           this.pause();
         } else {
+          // v9.4.3: durante o play a seta NUNCA anda pra trás. O clamp fica
+          // AQUI (e não no store) porque o store também é usado pelo SCRUB do
+          // usuário — lá o dono precisa poder voltar para trás.
+          if (nextT < pb.playhead) nextT = pb.playhead;
           usePlayback.getState().setPlayhead(nextT);
         }
       }
@@ -564,8 +570,15 @@ class PlaybackEngine {
   }
 
   activeClips(t: number): Clip[] {
+    // v9.4.3 perf: array REUSADO (o filter() alocava uma lista nova a cada
+    // frame — 60x por segundo na fila de render).
     const { clips } = useProject.getState();
-    return clips.filter((c) => c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001);
+    const out = this.activeScratch;
+    out.length = 0;
+    for (const c of clips) {
+      if (c.start <= t + 0.0001 && c.start + c.duration > t - 0.0001) out.push(c);
+    }
+    return out;
   }
 
   /** Elemento de mídia de um clipe (para desenhar no canvas de exportação). */
@@ -581,18 +594,22 @@ class PlaybackEngine {
   /** Sincroniza os elementos com o playhead (a "setinha" da timeline). */
   private syncMedia(t: number, playing: boolean) {
     const { clips } = useProject.getState();
-    const active = clips.filter(
-      (c) =>
-        c.kind !== "text" &&
-        c.kind !== "image" &&
-        c.mediaId &&
-        registry.hasBlob(c.mediaId) &&
-        c.start <= t + 0.05 &&
-        c.start + c.duration > t - 0.05
-    );
+    // v9.4.3 perf: lista de ativos REUSADA (sem filter() alocado por frame)
+    const active = this.syncActiveScratch;
+    active.length = 0;
+    // mapa de clipes por id — evita o find() O(n) dentro do loop de elementos
+    const byId = this.clipByIdScratch;
+    byId.clear();
+    for (const c of clips) {
+      byId.set(c.id, c);
+      if (c.kind === "text" || c.kind === "image") continue;
+      if (!c.mediaId || !registry.hasBlob(c.mediaId)) continue;
+      if (c.start <= t + 0.05 && c.start + c.duration > t - 0.05) active.push(c);
+    }
 
     // redistribui os elementos: quem tá ativo ganha um (cria "#2", "#3"… se o mesmo arquivo tocar 2× ao mesmo tempo)
-    const newClaims = new Map<string, string>();
+    const newClaims = this.claimsScratch;
+    newClaims.clear();
     for (const clip of active) {
       if (clip.kind === "image") continue; // imagens nunca brigam (sem tempo)
       const base = elKeyOf(clip.kind, clip.mediaId!);
@@ -635,7 +652,7 @@ class PlaybackEngine {
         if (!el.paused) el.pause();
         continue;
       }
-      const clip = clips.find((c) => c.id === ownerId);
+      const clip = byId.get(ownerId);
       if (!clip) continue;
       const expected = clip.inPoint + (t - clip.start) * (clip.speed || 1);
       const targetSpeed = Math.max(0.0625, Math.min(16, clip.speed || 1));
@@ -696,18 +713,21 @@ class PlaybackEngine {
   }
 
   private updateAudio(t: number) {
-    const { clips, tracks } = useProject.getState();
-    for (const c of clips) {
-      if (c.kind === "text" || c.kind === "image") continue;
-      const key = this.bindings.get(c.id);
-      if (!key) continue;
-      // o elemento é COMPARTILHADO entre pedaços do mesmo arquivo —
-      // só o dono do momento mexe no volume/pause dele
-      if (this.claims.get(key) !== c.id) continue;
+    const { tracks } = useProject.getState();
+    // v9.4.3 perf: mapa de faixas por id (o find() por clipe era
+    // O(clipes×faixas) por frame) e percorre só os clipes que POSSUEM um
+    // elemento agora — antes varria a timeline inteira a cada frame.
+    const trackById = this.trackByIdScratch;
+    trackById.clear();
+    for (const tr of tracks) trackById.set(tr.id, tr);
+    const byId = this.clipByIdScratch;
+    for (const [key, ownerId] of this.claims) {
+      const c = byId.get(ownerId);
+      if (!c || c.kind === "text" || c.kind === "image") continue;
       const el = this.elements.get(key);
       if (!el || !(el instanceof HTMLMediaElement)) continue;
 
-      const track = tracks.find((tr) => tr.id === c.trackId);
+      const track = trackById.get(c.trackId);
       // v9.4.2: MESMA janela do syncMedia (±0,05s) — antes o isActive usava
       // ±0,0001: nos ~50ms antes do clipe começar, o syncMedia já dava PLAY no
       // elemento mas o updateAudio via "inativo" e PAUSAVA — play/pause/play
